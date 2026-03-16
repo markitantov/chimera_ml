@@ -1,0 +1,122 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.pdb
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+.python-version
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+wheelhouse/
+MANIFEST
+
+# Unit test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.nox/
+.tox/
+.hypothesis/
+
+# Type checking / linters
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+.cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# =========================
+# IDEs / Editors
+# =========================
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs / outputs
+# =========================
+*.log
+logs/
+output/
+outputs/
+runs/
+
+# =========================
+# ML / Data artifacts
+# =========================
+# datasets / data dirs
+data/
+datasets/
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+
+# checkpoints / artifacts dirs (your project uses this)
+checkpoints/
+artifacts/
+
+# =========================
+# MLflow
+# =========================
+mlruns/
+mlartifacts/
+mlflow.db
+
+# =========================
+# HuggingFace / Transformers caches (if used)
+# =========================
+.hf_cache/
+huggingface/
+.cache/huggingface/
+.cache/torch/
+torch_cache/
+
+# =========================
+# Temporary / misc
+# =========================
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+
+# =========================
+# Local config overrides (optional)
+# =========================
+*.local.yaml
+*.local.yml
+.env
+.env.*
