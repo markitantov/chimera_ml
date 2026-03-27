@@ -1,15 +1,19 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Literal
+from typing import Literal
 
-import torch
 import numpy as np
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error, mean_squared_error, r2_score
+import torch
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    root_mean_squared_error,
+)
 
-from chimera_ml.metrics.base import BaseMetric
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import METRICS
-
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.metrics.base import BaseMetric
 
 Multioutput = Literal["raw_values", "uniform_average", "variance_weighted"]
 
@@ -53,6 +57,7 @@ class _SklearnRegressionBaseMetric(BaseMetric):
     def _stack(self) -> tuple[np.ndarray, np.ndarray]:
         if not self._y_true:
             return np.zeros((0, 1), dtype=np.float32), np.zeros((0, 1), dtype=np.float32)
+        
         y_true = np.concatenate(self._y_true, axis=0)
         y_pred = np.concatenate(self._y_pred, axis=0)
         return y_true, y_pred
@@ -60,40 +65,44 @@ class _SklearnRegressionBaseMetric(BaseMetric):
 
 @dataclass
 class SklearnMAEMetric(_SklearnRegressionBaseMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
+        
         v = mean_absolute_error(y_true, y_pred, multioutput=self.multioutput)
         return {"mae": float(v)}
 
 
 @dataclass
 class SklearnRMSEMetric(_SklearnRegressionBaseMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
+        
         v = root_mean_squared_error(y_true, y_pred, multioutput=self.multioutput)
         return {"rmse": v}
     
 
 @dataclass
 class SklearnMSEMetric(_SklearnRegressionBaseMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
+        
         v = mean_squared_error(y_true, y_pred, multioutput=self.multioutput)
         return {"mse": v}
 
 
 @dataclass
 class SklearnR2Metric(_SklearnRegressionBaseMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
+        
         v = r2_score(y_true, y_pred, multioutput=self.multioutput)
         return {"r2": float(v)}
 

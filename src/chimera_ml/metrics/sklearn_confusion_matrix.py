@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -18,7 +17,7 @@ class SklearnConfusionMatrixMetric(BaseMetric):
     Accumulates y_true/y_pred; compute() builds the matrix and returns cm_acc.
     """
 
-    normalize: Optional[str] = None  # None | 'true' | 'pred' | 'all'
+    normalize: str | None = None  # None | 'true' | 'pred' | 'all'
 
     def __post_init__(self) -> None:
         self.reset()
@@ -35,7 +34,7 @@ class SklearnConfusionMatrixMetric(BaseMetric):
         self._y_pred.extend(y_pred.tolist())
         self._y_true.extend(y_true.tolist())
 
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         if not self._y_true:
             return {}
 
@@ -43,7 +42,7 @@ class SklearnConfusionMatrixMetric(BaseMetric):
         acc = float(np.trace(self._cm) / max(np.sum(self._cm), 1.0))
         return {"cm_acc": acc}
 
-    def value(self) -> Optional[np.ndarray]:
+    def value(self) -> np.ndarray | None:
         return self._cm
     
 

@@ -55,16 +55,16 @@ class CollectPredictionsCallback(BaseCallback):
                 cached = predict_fn(loader, split=split_name)
 
             preds = getattr(cached, "preds", None)
-            if preds is None or preds.numel() == 0:
+            if preds is None or self._numel(preds) == 0:
                 continue
 
             targets = getattr(cached, "targets", None)
             metas = getattr(cached, "sample_meta", None)
 
-            n = int(preds.shape[0])
+            n = self._batch_size(preds)
             ids = self._extract_ids(metas, n)
 
-            rows = self._build_rows(preds[:n], targets[:n] if targets is not None else None, ids)
+            rows = self._build_rows(preds, targets, ids)
             if not rows:
                 continue
 
@@ -123,6 +123,34 @@ class CollectPredictionsCallback(BaseCallback):
         return out
 
     @staticmethod
+    def _numel(x: torch.Tensor | list[torch.Tensor]) -> int:
+        """Return total number of stored elements for tensor or ragged chunks."""
+        if torch.is_tensor(x):
+            return int(x.numel())
+
+        return int(sum(int(t.numel()) for t in x))
+
+    @staticmethod
+    def _batch_size(x: torch.Tensor | list[torch.Tensor]) -> int:
+        """Return total batch size across tensor or ragged chunks."""
+        if torch.is_tensor(x):
+            return int(x.shape[0])
+
+        return int(sum(int(t.shape[0]) for t in x))
+
+    @staticmethod
+    def _iter_samples(x: torch.Tensor | list[torch.Tensor]) -> list[torch.Tensor]:
+        """Flatten cache container into a list of per-sample tensors."""
+        if torch.is_tensor(x):
+            return [x[i] for i in range(int(x.shape[0]))]
+
+        out: list[torch.Tensor] = []
+        for chunk in x:
+            out.extend(chunk[i] for i in range(int(chunk.shape[0])))
+
+        return out
+
+    @staticmethod
     def _extract_ids(metas: Any, n: int) -> list[str | None] | None:
         """Extract optional sample IDs from cached metadata."""
         if isinstance(metas, list):
@@ -132,48 +160,47 @@ class CollectPredictionsCallback(BaseCallback):
 
     def _build_rows(
         self,
-        preds: torch.Tensor,
-        targets: torch.Tensor | None,
+        preds: torch.Tensor | list[torch.Tensor],
+        targets: torch.Tensor | list[torch.Tensor] | None,
         ids: list[str | None] | None,
     ) -> list[dict[str, object]]:
         """Build CSV-ready row dictionaries for regression/classification tasks."""
-        n = int(preds.shape[0])
+        pred_samples = self._iter_samples(preds)
+        target_samples = self._iter_samples(targets) if targets is not None else None
+        n = len(pred_samples)
 
         if self.task == "classification":
-            if preds.ndim != 2:
-                preds = preds.view(n, -1)
-
-            logits = preds
-            pred_class = torch.argmax(logits, dim=-1)
-            probs = torch.softmax(logits, dim=-1) if self.include_probs else None
-
             rows = []
             for i in range(n):
+                logits = pred_samples[i].view(-1)
+                pred_class = int(torch.argmax(logits).item())
                 row = {
                     "id": ids[i] if ids else None,
-                    "pred_class": int(pred_class[i].item()),
-                    "target": int(targets[i].item()) if targets is not None and targets[i].numel() == 1 else None,
+                    "pred_class": pred_class,
+                    "target": int(target_samples[i].item())
+                    if target_samples is not None and target_samples[i].numel() == 1
+                    else None,
                 }
-                if probs is not None:
-                    for c in range(int(probs.shape[1])):
-                        row[f"prob_{c}"] = float(probs[i, c].item())
+                if self.include_probs:
+                    probs = torch.softmax(logits, dim=-1)
+                    for c in range(int(probs.shape[0])):
+                        row[f"prob_{c}"] = float(probs[c].item())
 
                 rows.append(row)
 
             return rows
 
-        flat = preds.view(n, -1)
-        targ_flat = targets.view(n, -1) if targets is not None else None
-
         rows = []
         for i in range(n):
+            pred_flat = pred_samples[i].reshape(-1)
             row = {"id": ids[i] if ids else None}
-            for j in range(int(flat.shape[1])):
-                row[f"pred_{j}"] = float(flat[i, j].item())
+            for j in range(int(pred_flat.shape[0])):
+                row[f"pred_{j}"] = float(pred_flat[j].item())
 
-            if targ_flat is not None:
-                for j in range(int(targ_flat.shape[1])):
-                    row[f"target_{j}"] = float(targ_flat[i, j].item())
+            if target_samples is not None:
+                targ_flat = target_samples[i].reshape(-1)
+                for j in range(int(targ_flat.shape[0])):
+                    row[f"target_{j}"] = float(targ_flat[j].item())
 
             rows.append(row)
             
@@ -183,7 +210,7 @@ class CollectPredictionsCallback(BaseCallback):
     def _rows_to_csv_bytes(rows: list[dict[str, object]]) -> bytes:
         """Serialize row dictionaries into UTF-8 CSV bytes."""
         buf = io.StringIO()
-        fieldnames = sorted(rows[0].keys())
+        fieldnames = sorted({k for row in rows for k in row.keys()})
         w = csv.DictWriter(buf, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)

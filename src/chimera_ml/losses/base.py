@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 import torch
 
 from chimera_ml.core.batch import Batch

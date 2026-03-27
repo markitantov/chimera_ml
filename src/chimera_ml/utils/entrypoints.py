@@ -40,4 +40,7 @@ def load_entrypoint_plugins(group: str = "chimera_ml.plugins") -> None:
             if callable(obj):
                 obj()
         except Exception as e:
-            warnings.warn(f"Failed to load entry point plugin '{ep_id}': {e}")
+            warnings.warn(
+                f"Failed to load entry point plugin '{ep_id}': {e}",
+                stacklevel=2,
+            )

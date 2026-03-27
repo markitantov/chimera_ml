@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from typing import Dict, Literal, List
+from typing import Literal
 
 import torch
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+from sklearn.metrics import f1_score, precision_score, recall_score
 
-from chimera_ml.metrics.base import BaseMetric
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import METRICS
-
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.metrics.base import BaseMetric
 
 Averaging = Literal["micro", "macro", "weighted"]
 
@@ -36,7 +35,7 @@ class SklearnPRFMetric(BaseMetric):
         self._y_pred.extend(preds.tolist())
         self._y_true.extend(targets.tolist())
 
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         if not self._y_true:
             return {}
 
