@@ -1,7 +1,7 @@
 import html
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -66,29 +66,32 @@ class TelegramNotifierCallback(BaseCallback):
     request_timeout_sec: int = 15
     telegram_parse_mode: str = "HTML"
 
-    _exp_name: Optional[str] = field(init=False, default=None)
-    _last_logs: Dict[str, float] = field(init=False, default_factory=dict)
+    _exp_name: str | None = field(init=False, default=None)
+    _last_logs: dict[str, float] = field(init=False, default_factory=dict)
 
-    _best_epoch: Optional[Any] = field(init=False, default=None)
-    _best_value: Optional[float] = field(init=False, default=None)
-    _best_logs: Dict[str, float] = field(init=False, default_factory=dict)
+    _best_epoch: Any | None = field(init=False, default=None)
+    _best_value: float | None = field(init=False, default=None)
+    _best_logs: dict[str, float] = field(init=False, default_factory=dict)
+    _session: requests.Session | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.mode not in ("min", "max"):
             raise ValueError("mode must be 'min' or 'max'")
 
     def on_fit_start(self, trainer: Any) -> None:
-        self.telegram_token = _env_required(self.token_env_field)
-        self.telegram_chat_id = _env_required(self.chat_id_env_field)
+        """Initialize Telegram session and reset run-level state."""
+        self._telegram_token = _env_required(self.token_env_field)
+        self._telegram_chat_id = _env_required(self.chat_id_env_field)
 
         # Prepare Telegram API endpoint and HTTP session (reused connection).
-        self._api_url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+        self._api_url = f"https://api.telegram.org/bot{self._telegram_token}/sendMessage"
         self._session = requests.Session()
 
         # Cache MLflow experiment name if present.
-        self._exp_name: Optional[str] = None
-        if self.include_mlflow_experiment_name and getattr(trainer, "mlflow", None) is not None:
-            self._exp_name = getattr(trainer.mlflow_logger, "experiment_name", None)
+        self._exp_name = None
+        mlflow_logger = getattr(trainer, "mlflow_logger", None)
+        if self.include_mlflow_experiment_name and mlflow_logger is not None:
+            self._exp_name = getattr(mlflow_logger, "experiment_name", None)
 
         # Keep the last epoch logs (if provided by the trainer).
         self._last_logs = {}
@@ -101,7 +104,8 @@ class TelegramNotifierCallback(BaseCallback):
             return current < (best - self.min_delta)
         return current > (best + self.min_delta)
 
-    def on_epoch_end(self, trainer: Any, epoch: int, logs: Dict[str, float]) -> None:
+    def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
+        """Track last logs and best monitor value during training."""
         if not logs:
             return
 
@@ -109,10 +113,12 @@ class TelegramNotifierCallback(BaseCallback):
 
         if self.monitor not in logs:
             available = ", ".join(sorted(logs.keys()))
-            trainer.logger.warning(
+            self._warning(
+                trainer,
                 f"[TelegramNotifierCallback] monitor='{self.monitor}' not found in logs. "
                 f"Available keys: {available}"
             )
+            
             return
 
         current = float(logs[self.monitor])
@@ -180,10 +186,19 @@ class TelegramNotifierCallback(BaseCallback):
         return "\n".join(lines)
 
     def on_fit_end(self, trainer: Any) -> None:
-        # Build and send the final message.
-        text = self._build_message(trainer)
-        data = {"chat_id": self.telegram_chat_id, "text": text, "parse_mode": self.telegram_parse_mode,}
+        """Build and send the final Telegram message."""
+        if self._session is None:
+            self._warning(trainer, "[TelegramNotifierCallback] Session is not initialized; skipping send.")
+            return
 
+        text = self._build_message(trainer)
+        data = {
+            "chat_id": self._telegram_chat_id,
+            "text": text,
+            "parse_mode": self.telegram_parse_mode,
+        }
+
+        resp = None
         try:
             resp = self._session.post(self._api_url, data=data, timeout=self.request_timeout_sec)
             resp.raise_for_status()
@@ -195,11 +210,14 @@ class TelegramNotifierCallback(BaseCallback):
             except Exception:
                 body = None
 
-            trainer.logger.info(f"[TelegramNotifierCallback] Failed to send message: {e}")
+            self._warning(trainer, f"[TelegramNotifierCallback] Failed to send message: {e}")
             if status is not None:
-                trainer.logger.info(f"[TelegramNotifierCallback] HTTP status: {status}")
+                self._info(trainer, f"[TelegramNotifierCallback] HTTP status: {status}")
             if body:
-                trainer.logger.info(f"[TelegramNotifierCallback] Response body: {body}")
+                self._info(trainer, f"[TelegramNotifierCallback] Response body: {body}")
+        finally:
+            self._session.close()
+            self._session = None
 
 
 @CALLBACKS.register("telegram_notifier_callback")
