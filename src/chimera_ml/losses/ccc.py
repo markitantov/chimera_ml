@@ -1,10 +1,10 @@
 import torch
 
-from chimera_ml.losses.base import BaseLoss
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import LOSSES
-    
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.losses.base import BaseLoss
+
 
 def _ccc_1d_rho(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
     """Lin's Concordance Correlation Coefficient: https://en.wikipedia.org/wiki/Concordance_correlation_coefficient
@@ -62,7 +62,7 @@ class CCCLoss(BaseLoss):
     """
 
     def __init__(self, eps: float = 1e-12):
-        self.eps = eps
+        self.eps = float(eps)
 
     def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
         pred = output.preds

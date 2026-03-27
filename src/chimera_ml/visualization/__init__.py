@@ -1,3 +1,6 @@
-from chimera_ml.visualization.confusion_matrix import plot_confusion_matrix, fig_to_png_bytes
+from chimera_ml.visualization.confusion_matrix import fig_to_png_bytes, plot_confusion_matrix
 
-__all__ = ["plot_confusion_matrix", "fig_to_png_bytes"]
+__all__ = [
+    "fig_to_png_bytes",
+    "plot_confusion_matrix", 
+]

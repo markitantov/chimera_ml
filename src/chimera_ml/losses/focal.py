@@ -1,12 +1,11 @@
-from typing import Optional, Union
 
 import torch
 import torch.nn.functional as F
 
-from chimera_ml.losses.base import BaseLoss
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import LOSSES
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.losses.base import BaseLoss
 
 
 class FocalLoss(BaseLoss):
@@ -15,7 +14,7 @@ class FocalLoss(BaseLoss):
     def __init__(
         self,
         gamma: float = 2.0,
-        alpha: Optional[Union[float, list[float]]] = None,
+        alpha: float | list[float] | None = None,
         reduction: str = "mean",
         label_smoothing: float = 0.0,
     ):
@@ -58,10 +57,13 @@ class FocalLoss(BaseLoss):
 
         if self.reduction == "mean":
             return loss.mean()
+        
         if self.reduction == "sum":
             return loss.sum()
+        
         if self.reduction == "none":
             return loss
+        
         raise ValueError(f"Unknown reduction: {self.reduction}")
 
 

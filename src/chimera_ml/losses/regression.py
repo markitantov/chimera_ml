@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
-from chimera_ml.losses.base import BaseLoss
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import LOSSES
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.losses.base import BaseLoss
 
 
 class MSELoss(BaseLoss):

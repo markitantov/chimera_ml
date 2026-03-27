@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.types import ModelOutput
@@ -17,5 +16,5 @@ class BaseMetric(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         raise NotImplementedError
