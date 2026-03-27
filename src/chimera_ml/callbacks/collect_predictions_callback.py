@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Tuple, Literal
-
 import csv
 import io
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -10,28 +10,29 @@ from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.core.registry import CALLBACKS
 
 
-# TODO
 @dataclass
-class MLflowPredictionsCallback(BaseCallback):
-    """Log per-sample predictions as CSV artifact to MLflow.
+class CollectPredictionsCallback(BaseCallback):
+    """Log per-sample predictions as CSV artifacts to MLflow.
 
-    `splits` is a list of split selectors:
+    `splits` supports:
       - "val"  -> all validation splits (val_loaders dict, else "val")
       - "test" -> all test splits (test_loaders dict, else "test")
-      - "train"-> train
+      - "train" -> train split
       - any other string -> exact split name (searched in val/test loader dicts)
     """
-    splits: List[str] = field(default_factory=lambda: ["val"])
+
+    splits: list[str] = field(default_factory=lambda: ["val"])
     artifact_path: str = "predictions"
     filename_template: str = "preds_epoch_{epoch}.csv"
     include_probs: bool = True
     task: Literal["regression", "classification"] = "regression"
 
-    def on_fit_start(self, trainer) -> None:
-        # Ensure predictions are collected during validation so callbacks don't rerun forward passes.
+    def on_fit_start(self, trainer: Any) -> None:
+        """Ensure prediction cache collection is enabled for validation/evaluation."""
         trainer.config.collect_cache = True
 
-    def on_epoch_end(self, trainer, epoch: int, logs: Dict[str, float]) -> None:
+    def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
+        """Export cached predictions to CSV and attach them as MLflow artifacts."""
         logger = getattr(trainer, "mlflow_logger", None)
         if logger is None:
             return
@@ -41,7 +42,17 @@ class MLflowPredictionsCallback(BaseCallback):
             if cached is None:
                 if loader is None:
                     continue
-                cached = trainer.predict(loader, split=split_name)
+
+                predict_fn = getattr(trainer, "predict", None)
+                if not callable(predict_fn):
+                    self._warning(
+                        trainer,
+                        f"[MLflowPredictionsCallback] No cached predictions for split '{split_name}' "
+                        "and trainer.predict(...) is not available. Skipping export.",
+                    )
+                    continue
+
+                cached = predict_fn(loader, split=split_name)
 
             preds = getattr(cached, "preds", None)
             if preds is None or preds.numel() == 0:
@@ -64,11 +75,12 @@ class MLflowPredictionsCallback(BaseCallback):
                 filename=self.filename_template.format(epoch=epoch),
             )
 
-    def _resolve_splits(self, trainer) -> List[Tuple[str, Optional[DataLoader]]]:
-        out: List[Tuple[str, Optional[DataLoader]]] = []
+    def _resolve_splits(self, trainer: Any) -> list[tuple[str, DataLoader | None]]:
+        """Resolve configured split selectors into concrete (name, loader) pairs."""
+        out: list[tuple[str, DataLoader | None]] = []
         seen: set[str] = set()
 
-        def add(name: str, loader: Optional[DataLoader]) -> None:
+        def add(name: str, loader: DataLoader | None) -> None:
             if name and name not in seen:
                 seen.add(name)
                 out.append((name, loader))
@@ -87,6 +99,7 @@ class MLflowPredictionsCallback(BaseCallback):
                         add(k, v)
                 else:
                     add("val", getattr(trainer, "_val_loader", None))
+
                 continue
 
             if s == "test":
@@ -95,6 +108,7 @@ class MLflowPredictionsCallback(BaseCallback):
                         add(k, v)
                 else:
                     add("test", getattr(trainer, "_test_loader", None))
+
                 continue
 
             # exact split name
@@ -103,23 +117,32 @@ class MLflowPredictionsCallback(BaseCallback):
                 loader = val_loaders[s]
             elif isinstance(test_loaders, dict) and s in test_loaders:
                 loader = test_loaders[s]
+
             add(s, loader)
 
         return out
 
     @staticmethod
-    def _extract_ids(metas, n: int) -> Optional[List[Optional[str]]]:
+    def _extract_ids(metas: Any, n: int) -> list[str | None] | None:
+        """Extract optional sample IDs from cached metadata."""
         if isinstance(metas, list):
             return [m.get("id") if isinstance(m, dict) else None for m in metas[:n]]
+        
         return None
 
-    def _build_rows(self, preds: torch.Tensor, targets: Optional[torch.Tensor], ids):
+    def _build_rows(
+        self,
+        preds: torch.Tensor,
+        targets: torch.Tensor | None,
+        ids: list[str | None] | None,
+    ) -> list[dict[str, object]]:
+        """Build CSV-ready row dictionaries for regression/classification tasks."""
         n = int(preds.shape[0])
 
-        # --- CLASSIFICATION ---
         if self.task == "classification":
             if preds.ndim != 2:
                 preds = preds.view(n, -1)
+
             logits = preds
             pred_class = torch.argmax(logits, dim=-1)
             probs = torch.softmax(logits, dim=-1) if self.include_probs else None
@@ -134,10 +157,11 @@ class MLflowPredictionsCallback(BaseCallback):
                 if probs is not None:
                     for c in range(int(probs.shape[1])):
                         row[f"prob_{c}"] = float(probs[i, c].item())
+
                 rows.append(row)
+
             return rows
 
-        # --- REGRESSION (default) ---
         flat = preds.view(n, -1)
         targ_flat = targets.view(n, -1) if targets is not None else None
 
@@ -146,15 +170,18 @@ class MLflowPredictionsCallback(BaseCallback):
             row = {"id": ids[i] if ids else None}
             for j in range(int(flat.shape[1])):
                 row[f"pred_{j}"] = float(flat[i, j].item())
+
             if targ_flat is not None:
                 for j in range(int(targ_flat.shape[1])):
                     row[f"target_{j}"] = float(targ_flat[i, j].item())
+
             rows.append(row)
+            
         return rows
 
-
     @staticmethod
-    def _rows_to_csv_bytes(rows: List[Dict[str, object]]) -> bytes:
+    def _rows_to_csv_bytes(rows: list[dict[str, object]]) -> bytes:
+        """Serialize row dictionaries into UTF-8 CSV bytes."""
         buf = io.StringIO()
         fieldnames = sorted(rows[0].keys())
         w = csv.DictWriter(buf, fieldnames=fieldnames)
@@ -163,6 +190,7 @@ class MLflowPredictionsCallback(BaseCallback):
         return buf.getvalue().encode("utf-8")
 
 
-@CALLBACKS.register("mlflow_predictions_callback")
-def mlflow_predictions_callback(**params):
-    return MLflowPredictionsCallback(**params)
+@CALLBACKS.register("collect_predictions_callback")
+def collect_predictions_callback(**params):
+    """Registry factory for :class:`CollectPredictionsCallback`."""
+    return CollectPredictionsCallback(**params)
