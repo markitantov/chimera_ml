@@ -1,14 +1,15 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, Optional, Any
+from typing import Any
 
 from chimera_ml.core.registry import LOGGERS
 
 
-def _level(x: Union[int, str]) -> int:
+def _level(x: int | str) -> int:
     if isinstance(x, int):
         return x
+
     return logging._nameToLevel.get(str(x).upper(), logging.INFO)
 
 
@@ -25,8 +26,8 @@ class ConsoleFileLogger:
     log_file: str = 'train.log'
     name: str = "chimera"
     format: str = "%(asctime)s:%(levelname)s:%(message)s"
-    console_level: Union[int, str] = logging.INFO
-    file_level: Union[int, str] = logging.INFO
+    console_level: int | str = logging.INFO
+    file_level: int | str = logging.INFO
     file_mode: str = "a"
     encoding: str = "utf-8"
 
@@ -87,8 +88,8 @@ def console_file_logger(
     run_name: str = 'train',
     log_file: str = 'train.log',
     format: str = "%(asctime)s:%(levelname)s:%(message)s",
-    console_level: Union[int, str] = logging.INFO,
-    file_level: Union[int, str] = logging.INFO,
+    console_level: int | str = logging.INFO,
+    file_level: int | str = logging.INFO,
     file_mode: str = "a",
     encoding: str = "utf-8",
     **_,

@@ -73,9 +73,9 @@ runs/
 # =========================
 # ML / Data artifacts
 # =========================
-# datasets / data dirs
-data/
-datasets/
+# datasets / data dirs (project root only)
+/data/
+/datasets/
 *.h5
 *.hdf5
 *.npz

@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -8,28 +9,33 @@ class Registry:
 
     def __init__(self, name: str):
         self.name = name
-        self._items = {}
+        self._items: dict[str, Callable[..., Any]] = {}
 
     def register(self, key: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
         """Decorator to register a factory/class under a key."""
+
         def deco(obj: Callable[..., T]) -> Callable[..., T]:
             if key in self._items:
                 raise KeyError(f"{self.name}: key '{key}' already registered.")
             self._items[key] = obj
             return obj
+
         return deco
 
     def get(self, key: str) -> Callable[..., Any]:
+        """Return a registered factory by key."""
         if key not in self._items:
             known = ", ".join(sorted(self._items.keys()))
             raise KeyError(f"{self.name}: unknown key '{key}'. Known: {known}")
         return self._items[key]
 
     def create(self, key: str, **kwargs: Any) -> Any:
+        """Create an object from a registered factory."""
         factory = self.get(key)
         return factory(**kwargs)
 
     def keys(self) -> list[str]:
+        """Return sorted registry keys."""
         return sorted(self._items.keys())
 
 

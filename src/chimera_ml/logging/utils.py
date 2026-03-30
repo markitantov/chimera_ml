@@ -1,19 +1,14 @@
-import re
 from datetime import datetime
 from hashlib import sha1
 from pathlib import Path
-from typing import Optional
 from zoneinfo import ZoneInfo
-
-
-_SAFE_CHARS_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def local_datetime_tag(
     *,
     include_time: bool = True,
     fmt: str | None = None,
-    timezone: Optional[str] = None,
+    timezone: str | None = None,
 ) -> str:
     """Local date/time tag suitable for experiment/run naming.
 
@@ -33,12 +28,12 @@ def short_hash(text: str, n: int = 8) -> str:
 
 
 def generate_run_name(
-    config_path: Optional[str] = None,
-    model_name: Optional[str] = None,
-    suffix: Optional[str] = None,
+    config_path: str | None = None,
+    model_name: str | None = None,
+    suffix: str | None = None,
     include_time: bool = True,
-    datetime_format: Optional[str] = None,
-    timezone: Optional[str] = None,
+    datetime_format: str | None = None,
+    timezone: str | None = None,
 ) -> str:
     """Create a human-readable, unique MLflow run name.
     """

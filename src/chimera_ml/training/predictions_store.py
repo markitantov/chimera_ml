@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import torch
 
@@ -11,7 +11,7 @@ class EpochPredictions:
     Stored on CPU to make it cheap to access from callbacks.
     """
 
-    preds: torch.Tensor
-    targets: Optional[torch.Tensor] = None
-    sample_meta: Optional[List[Dict[str, Any]]] = None
-    features: Optional[torch.Tensor] = None
+    preds: torch.Tensor | list[torch.Tensor]
+    targets: torch.Tensor | list[torch.Tensor] | None = None
+    sample_meta: list[dict[str, Any]] | None = None
+    features: torch.Tensor | list[torch.Tensor] | None = None

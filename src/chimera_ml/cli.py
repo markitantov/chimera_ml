@@ -1,29 +1,26 @@
-from typing import Any, Callable, Optional
-from pathlib import Path
-
 import importlib
-import typer
+from typing import Any
+
 import torch
+import typer
+from torch.utils.data import DataLoader
 
-from chimera_ml.utils.seed import define_seed
+from chimera_ml.data.loader_utils import normalize_loaders
 from chimera_ml.logging.utils import generate_run_name
-
-from chimera_ml.training.yaml_config import load_yaml, ExperimentConfig
 from chimera_ml.training.builders import (
-    build_loss,
+    build_callbacks,
     build_datamodule,
     build_logger,
+    build_loss,
     build_metrics,
     build_model,
     build_optimizer,
     build_scheduler,
     build_train_config,
-    build_callbacks,
 )
+from chimera_ml.training.config import ExperimentConfig, load_yaml
 from chimera_ml.training.trainer import Trainer
-from chimera_ml.core.registry import CALLBACKS
-from chimera_ml.metrics.sklearn_confusion_matrix import SklearnConfusionMatrixMetric
-from chimera_ml.visualization.confusion_matrix import plot_confusion_matrix, fig_to_png_bytes
+from chimera_ml.utils.seed import define_seed
 
 app = typer.Typer(add_completion=False)
 
@@ -37,10 +34,33 @@ def import_object(spec: str) -> Any:
     return getattr(mod, attr)
 
 
+def _merge_eval_loaders(dm: Any) -> dict[str, DataLoader]:
+    """Merge train/val/test dataloaders into a flat split->loader mapping for evaluation."""
+    merged: dict[str, DataLoader] = {}
+
+    for prefix, raw_loaders in (
+        ("train", dm.train_dataloader()),
+        ("val", dm.val_dataloader()),
+        ("test", dm.test_dataloader()),
+    ):
+        normalized = normalize_loaders(raw_loaders, default_name=prefix)
+        for name, loader in normalized.items():
+            base_key = name if (name == prefix or name.startswith(prefix)) else f"{prefix}_{name}"
+            key = base_key
+            i = 2
+            while key in merged:
+                key = f"{base_key}_{i}"
+                i += 1
+
+            merged[key] = loader
+
+    return merged
+
+
 @app.command()
 def train(
     config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
-    class_names: Optional[str] = typer.Option(None, "--class-names", help="Comma-separated class names."),
+    class_names: str | None = typer.Option(None, "--class-names", help="Comma-separated class names."),
 ):
     """Run training from YAML config with dynamic factories."""
     cfg = ExperimentConfig(load_yaml(config_path))
@@ -49,7 +69,10 @@ def train(
     define_seed(seed)
 
     # 0) Working with experiment names
-    experiment_info = cfg.section("experiment_info").get("params")
+    experiment_info = cfg.section("experiment_info").get("params", {})
+    if "experiment_name" not in experiment_info:
+        raise ValueError("`experiment_info.params.experiment_name` is required.")
+    
     experiment_name = experiment_info["experiment_name"]
     run_name = generate_run_name(
         config_path=config_path,
@@ -78,11 +101,9 @@ def train(
 
     # 2) Build from registries
     dm = build_datamodule(cfg.section("data"))
-    model_obj = build_model(cfg.section("model"), context=getattr(dm, "get_model_context", lambda: {})())
+    model_obj = build_model(cfg.section("model"))
 
     train_cfg = build_train_config(cfg.section("train"))
-
-    print(train_cfg)
 
     mlflow_cfg = cfg.section("logging", name="mlflow_logger")
     mlflow_logger = None
@@ -132,9 +153,9 @@ def train(
 @app.command()
 def eval(
     config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
-    checkpoint_path: Optional[str] = typer.Option(None, "--checkpoint-path", help="Path to .pt checkpoint saved by ModelCheckpoint."),
-    with_features: Optional[bool] = typer.Option(None, "--with-features"),
-    class_names: Optional[str] = typer.Option(None, "--class-names", help="Comma-separated class names."),
+    checkpoint_path: str | None = typer.Option(None, "--checkpoint-path", help="Path to .pt checkpoint saved by ModelCheckpoint."),
+    with_features: bool | None = typer.Option(None, "--with-features"),
+    class_names: str | None = typer.Option(None, "--class-names", help="Comma-separated class names."),
 ):
     """Run evaluation (no training). Logs metrics and artifacts to MLflow if configured."""
     cfg = ExperimentConfig(load_yaml(config_path))
@@ -144,7 +165,7 @@ def eval(
 
     # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
     dm = build_datamodule(cfg.section("data"))
-    model_obj = build_model(cfg.section("model"), context=getattr(dm, "get_model_context", lambda: {})())
+    model_obj = build_model(cfg.section("model"))
 
     train_cfg = build_train_config(cfg.section("train"))
     train_cfg.epochs = 1
@@ -154,7 +175,7 @@ def eval(
 
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
     callbacks = build_callbacks(cfg.get("callbacks"))
-    
+
     cn = [x.strip() for x in class_names.split(",")] if class_names else None
 
     trainer = Trainer(
@@ -175,15 +196,11 @@ def eval(
         state = payload.get("model_state_dict", payload)
         trainer.model.load_state_dict(state, strict=True)
 
-    loaders = {
-        "train": dm.train_dataloader(),
-        "val": dm.val_dataloader(),
-        "test": dm.test_dataloader(),
-    }
+    loaders = _merge_eval_loaders(dm)
+    if not loaders:
+        raise ValueError("No dataloaders available for evaluation.")
 
-    loaders = {k: v for k, v in loaders.items() if v is not None}
-
-    results = trainer.evaluate(
+    trainer.evaluate(
         loaders,
         with_features=bool(with_features),
         feature_extractor=None,
