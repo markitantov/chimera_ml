@@ -1,11 +1,9 @@
-from typing import Dict, List
-
 import torch
 import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import MODELS
+from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
 
 
@@ -14,7 +12,7 @@ class GatedFusionModel(BaseModel):
 
     def __init__(
         self,
-        encoders: Dict[str, nn.Module],
+        encoders: dict[str, nn.Module],
         head: nn.Module,
         shared_dim: int,
         gate_hidden: int = 64,
@@ -43,8 +41,6 @@ class GatedFusionModel(BaseModel):
         self.proj[modality] = layer
 
     def forward(self, batch: Batch) -> ModelOutput:
-        mask_dict = batch.get_masks() if self.use_mask else None
-
         embs = []
         scores = []
         aux = {}
@@ -62,14 +58,15 @@ class GatedFusionModel(BaseModel):
                     f"Use set_projection('{m}', nn.Linear(..., {self.shared_dim})) or wrap encoder."
                 )
 
-            if mask_dict is not None and m in mask_dict:
-                mm = mask_dict[m].to(emb.device).view(-1, 1)
+            modality_mask = batch.get_masks(f"{m}_mask") if self.use_mask else None
+            if modality_mask is not None:
+                mm = modality_mask.to(emb.device).view(-1, 1)
                 emb = emb * mm
 
             score = self.gate_net(self.dropout(emb))  # (B, 1)
 
-            if mask_dict is not None and m in mask_dict:
-                mm = mask_dict[m].to(emb.device).view(-1, 1)
+            if modality_mask is not None:
+                mm = modality_mask.to(emb.device).view(-1, 1)
                 score = score + (mm - 1.0) * 1e9
 
             embs.append(emb)
@@ -94,13 +91,14 @@ class GatedFusionModel(BaseModel):
 @MODELS.register("gated_fusion_model")
 def gated_fusion_model(
     *,
-    encoders: Dict[str, nn.Module],
+    encoders: dict[str, nn.Module],
     head: nn.Module,
     shared_dim: int,
     gate_hidden: int = 64,
     dropout: float = 0.0,
     use_mask: bool = True,
-):
+) -> GatedFusionModel:
+    """Factory for gated feature-fusion model."""
     return GatedFusionModel(
         encoders=encoders,
         head=head,

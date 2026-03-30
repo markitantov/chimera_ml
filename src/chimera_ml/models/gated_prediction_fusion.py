@@ -1,11 +1,9 @@
-from typing import Dict, List
-
 import torch
 import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.core.registry import MODELS
+from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
 
 
@@ -14,7 +12,7 @@ class GatedPredictionFusionModel(BaseModel):
 
     def __init__(
         self,
-        submodels: Dict[str, BaseModel],
+        submodels: dict[str, BaseModel],
         num_classes: int,
         gate_hidden: int = 64,
         dropout: float = 0.0,
@@ -34,8 +32,6 @@ class GatedPredictionFusionModel(BaseModel):
         self.num_classes = num_classes
 
     def forward(self, batch: Batch) -> ModelOutput:
-        mask_dict = batch.get_masks() if self.use_mask else None
-
         logits_list = []
         score_list = []
         aux = {}
@@ -44,7 +40,12 @@ class GatedPredictionFusionModel(BaseModel):
             if m not in batch.inputs:
                 continue
 
-            sub_batch = Batch(inputs={m: batch.inputs[m]}, targets=batch.targets, meta=batch.meta)
+            sub_batch = Batch(
+                inputs={m: batch.inputs[m]},
+                targets=batch.targets,
+                masks=batch.masks,
+                meta=batch.meta,
+            )
             out = model(sub_batch)
             logits = out.preds
 
@@ -54,8 +55,9 @@ class GatedPredictionFusionModel(BaseModel):
             logits = self.dropout(logits)
             score = self.gate_net(logits)
 
-            if mask_dict is not None and m in mask_dict:
-                mm = mask_dict[m].to(logits.device).view(-1, 1)
+            modality_mask = batch.get_masks(f"{m}_mask") if self.use_mask else None
+            if modality_mask is not None:
+                mm = modality_mask.to(logits.device).view(-1, 1)
                 score = score + (mm - 1.0) * 1e9
 
             aux[f"logits_{m}"] = logits
@@ -78,24 +80,15 @@ class GatedPredictionFusionModel(BaseModel):
 @MODELS.register("gated_prediction_fusion_model")
 def gated_prediction_fusion_model(
     *,
-    submodels: Dict[str, BaseModel],
+    submodels: dict[str, BaseModel],
     num_classes: int | None = None,
     gate_hidden: int = 64,
     dropout: float = 0.0,
     use_mask: bool = True,
-    context: dict | None = None,
-):
-    """Notes
-    -----
-    ``num_classes`` can be passed explicitly via params, or inferred from
-    ``context["num_classes"]`` if a builder provides it.
-    """
-
+) -> GatedPredictionFusionModel:
+    """Factory for gated prediction-fusion model."""
     if num_classes is None:
-        if context is None or "num_classes" not in context:
-            raise ValueError("gated_prediction_fusion requires 'num_classes' param or context['num_classes']")
-        num_classes = int(context["num_classes"])
-
+        raise ValueError("`num_classes` is required for gated_prediction_fusion_model.")
     return GatedPredictionFusionModel(
         submodels=submodels,
         num_classes=int(num_classes),

@@ -2,7 +2,14 @@ from dataclasses import dataclass
 
 import torch
 
+from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.callbacks.collect_predictions_callback import CollectPredictionsCallback
+from chimera_ml.core.batch import Batch
+from chimera_ml.core.types import ModelOutput
+from chimera_ml.losses.base import BaseLoss
+from chimera_ml.metrics.sklearn_regression import SklearnMAEMetric
+from chimera_ml.training.config import TrainConfig
+from chimera_ml.training.trainer import Trainer
 
 
 class _LoggerStub:
@@ -35,11 +42,10 @@ class _TrainerStub:
         self.config = type("Cfg", (), {})()
         self.mlflow_logger = _MLflowStub()
         self.logger = _LoggerStub()
-        self._train_loader = object()
-        self._val_loader = object()
-        self._test_loader = object()
+        self._train_loaders = {"train": object()}
         self._val_loaders = {"val_a": object(), "val_b": object()}
         self._test_loaders = {"test_a": object()}
+        self._loaders = {}
         self._cache: dict[str, _Cached] = {}
         self.predict_calls: list[str] = []
 
@@ -174,3 +180,147 @@ def test_collect_predictions_handles_ragged_cached_tensors():
     assert "pred_0" in text
     assert "pred_1" in text
     assert "target_0" in text
+
+
+class _SeqModel(torch.nn.Module):
+    def forward(self, batch: Batch) -> ModelOutput:
+        return ModelOutput(preds=batch.inputs["x"])
+
+
+class _MSELoss(BaseLoss):
+    def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
+        return torch.mean((output.preds - batch.targets) ** 2)
+
+
+def _seq_batch(t: int) -> Batch:
+    x = torch.arange(0, 2 * t, dtype=torch.float32).view(2, t, 1)
+    y = x + 0.5
+    return Batch(
+        inputs={"x": x},
+        targets=y,
+        masks={"x_mask": torch.ones(2)},
+        meta={"sample_meta": [{"id": f"{t}-0"}, {"id": f"{t}-1"}]},
+    )
+
+
+def _seq_batch_equal_target(t: int) -> Batch:
+    x = torch.arange(0, 2 * t, dtype=torch.float32).view(2, t, 1)
+    return Batch(
+        inputs={"x": x},
+        targets=x.clone(),
+        masks={"x_mask": torch.ones(2)},
+        meta={"sample_meta": [{"id": f"eq-{t}-0"}, {"id": f"eq-{t}-1"}]},
+    )
+
+
+class _CacheMAEOnValCallback(BaseCallback):
+    def __init__(self, split: str = "val") -> None:
+        self.split = split
+        self.last_mae: float | None = None
+
+    @staticmethod
+    def _as_chunks(x: torch.Tensor | list[torch.Tensor]) -> list[torch.Tensor]:
+        if torch.is_tensor(x):
+            return [x]
+        return list(x)
+
+    def on_epoch_end(self, trainer, epoch: int, logs: dict[str, float]) -> None:
+        cached = trainer.get_cached_predictions(self.split)
+        if cached is None or cached.targets is None:
+            raise AssertionError(f"No cached preds/targets for split '{self.split}'.")
+
+        preds_chunks = self._as_chunks(cached.preds)
+        target_chunks = self._as_chunks(cached.targets)
+        if len(preds_chunks) != len(target_chunks):
+            raise AssertionError("Cached preds/targets chunks mismatch.")
+
+        metric = SklearnMAEMetric()
+        metric.reset()
+        for pred_chunk, target_chunk in zip(preds_chunks, target_chunks, strict=True):
+            # Flatten each chunk to keep shape-compatible updates for ragged sequence lengths.
+            out = ModelOutput(preds=pred_chunk.reshape(-1))
+            batch = Batch(inputs={}, targets=target_chunk.reshape(-1))
+            metric.update(out, batch)
+
+        values = metric.compute()
+        mae = float(values["mae"])
+        self.last_mae = mae
+        logs[f"{self.split}/cache_mae"] = mae
+
+
+def test_collect_predictions_integration_uses_trainer_ragged_cache():
+    model = _SeqModel()
+    optimizer = torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=1e-3)
+    trainer = Trainer(
+        model=model,
+        loss_fn=_MSELoss(),
+        optimizer=optimizer,
+        metrics=[],
+        config=TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu"),
+        mlflow_logger=_MLflowStub(),
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    trainer._run_epoch(
+        loader=[_seq_batch(3), _seq_batch(5)],
+        device=torch.device("cpu"),
+        scaler=scaler,
+        train=False,
+        epoch=1,
+        split="val_seq",
+    )
+
+    cached = trainer.get_cached_predictions("val_seq")
+    assert cached is not None
+    assert isinstance(cached.preds, list)
+    assert isinstance(cached.targets, list)
+
+    callback = CollectPredictionsCallback(splits=["val_seq"], task="regression")
+    callback.on_epoch_end(trainer, epoch=7, logs={})
+
+    assert trainer.mlflow_logger is not None
+    assert len(trainer.mlflow_logger.calls) == 1
+    data, artifact_path, filename = trainer.mlflow_logger.calls[0]
+    text = data.decode("utf-8")
+    assert artifact_path == "predictions/val_seq"
+    assert filename == "preds_epoch_7.csv"
+    assert "id" in text
+    assert "pred_4" in text
+    assert "target_4" in text
+
+
+def test_validation_cache_callback_computes_mae_from_ragged_predictions():
+    model = _SeqModel()
+    optimizer = torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=1e-3)
+    trainer = Trainer(
+        model=model,
+        loss_fn=_MSELoss(),
+        optimizer=optimizer,
+        metrics=[],
+        config=TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu"),
+        mlflow_logger=None,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    trainer._run_epoch(
+        loader=[_seq_batch_equal_target(3), _seq_batch_equal_target(5)],
+        device=torch.device("cpu"),
+        scaler=scaler,
+        train=False,
+        epoch=1,
+        split="val_seq",
+    )
+
+    callback = _CacheMAEOnValCallback(split="val_seq")
+    logs: dict[str, float] = {}
+    callback.on_epoch_end(trainer, epoch=1, logs=logs)
+
+    assert callback.last_mae is not None
+    assert callback.last_mae == 0.0
+    assert "val_seq/cache_mae" in logs

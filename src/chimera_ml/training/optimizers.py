@@ -9,8 +9,9 @@ def adamw_optimizer(
     model: torch.nn.Module, 
     lr: float = 1e-3, 
     weight_decay: float = 0.0, 
-    **kwargs
-):
+    **kwargs,
+) -> torch.optim.AdamW:
+    """Build AdamW optimizer for model parameters."""
     return torch.optim.AdamW(
         model.parameters(), 
         lr=float(lr), 
@@ -25,8 +26,9 @@ def adam_optimizer(
     model: torch.nn.Module, 
     lr: float = 1e-3, 
     weight_decay: float = 0.0, 
-    **kwargs
-):
+    **kwargs,
+) -> torch.optim.Adam:
+    """Build Adam optimizer for model parameters."""
     return torch.optim.Adam(
         model.parameters(), 
         lr=float(lr), 
@@ -44,7 +46,8 @@ def sgd_optimizer(
     momentum: float = 0.0,
     nesterov: bool = False,
     **kwargs,
-):
+) -> torch.optim.SGD:
+    """Build SGD optimizer for model parameters."""
     return torch.optim.SGD(
         model.parameters(),
         lr=float(lr),

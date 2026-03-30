@@ -1,31 +1,33 @@
 import inspect
-from typing import Any, Dict, List, Optional, Mapping
+from collections.abc import Mapping
+from typing import Any
+
+import torch
 
 from chimera_ml.core.registry import (
-    MODELS,
-    DATAMODULES,
-    LOSSES,
-    METRICS,
-    OPTIMIZERS,
-    SCHEDULERS,
     CALLBACKS,
     COLLATES,
+    DATAMODULES,
     LOGGERS,
+    LOSSES,
+    METRICS,
+    MODELS,
+    OPTIMIZERS,
+    SCHEDULERS,
 )
-
 from chimera_ml.training.config import TrainConfig
 
 
 def build_from_registry(
     registry: Any,
-    cfg: Optional[Dict[str, Any]],
+    cfg: dict[str, Any] | None,
     *,
-    default_name: Optional[str] = None,
+    default_name: str | None = None,
     allow_none: bool = False,
     normalize_name: bool = True,
     params_key: str = "params",
     name_key: str = "name",
-    inject: Optional[Mapping[str, Any]] = None,
+    inject: Mapping[str, Any] | None = None,
     inject_overrides: bool = True,
     smart_inject: bool = False,
 ) -> Any:
@@ -51,12 +53,12 @@ def build_from_registry(
         params_key/name_key:
             Keys used in cfg.
         inject:
-            Runtime dependencies (e.g. model_params, optimizer, context) merged into params.
+            Runtime dependencies (e.g. model_params, optimizer) merged into params.
         inject_overrides:
             If True, inject values override cfg params on conflicts.
         smart_inject:
             If True, only pass injected keys that the factory accepts (by signature introspection).
-            Useful when you want to inject `context` universally, but some factories don't accept it.
+            Useful when you want to inject `param` universally, but some factories don't accept it.
 
     Returns:
         Built object (factory(**kwargs)) or None (if allow_none and cfg/default implies None).
@@ -113,38 +115,46 @@ def build_from_registry(
     return factory(**kwargs)
 
 
-def build_loss(cfg: Dict[str, Any]):
+def build_loss(cfg: dict[str, Any]) -> Any:
+    """Build loss function from the losses registry."""
     return build_from_registry(LOSSES, cfg)
 
 
-def build_metrics(cfg_list: list[Dict[str, Any]]):
+def build_metrics(cfg_list: list[dict[str, Any]]) -> list[Any]:
+    """Build all metrics from metric configs."""
     return [build_from_registry(METRICS, mcfg) for mcfg in cfg_list]
 
 
-def build_datamodule(cfg: dict) -> object:
+def build_datamodule(cfg: dict[str, Any]) -> object:
+    """Build a datamodule from registry config."""
     return build_from_registry(DATAMODULES, cfg)
 
 
-def build_model(cfg: Dict[str, Any], *, context: Optional[Dict[str, Any]] = None) -> Any:
-    return build_from_registry(
-        MODELS,
-        cfg,
-        inject={"context": context},
-        smart_inject=True,
-    )
+def build_model(cfg: dict[str, Any]) -> Any:
+    """Build model from the models registry."""
+    return build_from_registry(MODELS, cfg)
 
 
-def build_optimizer(cfg: Optional[Dict[str, Any]], model) -> Any:
+def build_optimizer(cfg: dict[str, Any] | None, model: torch.nn.Module) -> torch.optim.Optimizer:
+    """Build optimizer, defaulting to AdamW when config is not provided."""
     return build_from_registry(
         OPTIMIZERS,
         cfg,
-        default_name="adamw",
+        default_name="adamw_optimizer",
         inject={"model": model},
         inject_overrides=True,
     )
 
 
-def build_scheduler(cfg: Optional[Dict[str, Any]], optimizer) -> Any | None:
+def build_scheduler(
+    cfg: dict[str, Any] | None,
+    optimizer: torch.optim.Optimizer,
+) -> (
+    torch.optim.lr_scheduler.LRScheduler
+    | torch.optim.lr_scheduler.ReduceLROnPlateau
+    | None
+):
+    """Build scheduler from config or return `None`."""
     return build_from_registry(
         SCHEDULERS,
         cfg,
@@ -154,25 +164,28 @@ def build_scheduler(cfg: Optional[Dict[str, Any]], optimizer) -> Any | None:
     )
 
 
-def build_callbacks(cfg_list: Optional[List[Dict[str, Any]]]) -> List[Any]:
+def build_callbacks(cfg_list: list[dict[str, Any]] | None) -> list[Any]:
+    """Build callbacks from callback configs."""
     if not cfg_list:
         return []
     return [build_from_registry(CALLBACKS, ccfg) for ccfg in cfg_list]
 
 
-def build_collate(cfg: Optional[Dict[str, Any]]) -> Any:
+def build_collate(cfg: dict[str, Any] | None) -> Any:
+    """Build collate callable, defaulting to `masking_collate`."""
     return build_from_registry(
         COLLATES,
         cfg,
-        default_name="masking",
+        default_name="masking_collate",
     )
 
 
 def build_logger(
-    cfg: Optional[Dict[str, Any]],
+    cfg: dict[str, Any] | None,
     *,
-    inject: Optional[Dict[str, Any]] = None,
+    inject: dict[str, Any] | None = None,
 ) -> Any | None:
+    """Build optional logger with runtime injection."""
     return build_from_registry(
         LOGGERS,
         cfg,
@@ -183,6 +196,7 @@ def build_logger(
     )
 
 
-def build_train_config(cfg: Dict[str, Any]) -> TrainConfig:
+def build_train_config(cfg: dict[str, Any]) -> TrainConfig:
+    """Build `TrainConfig` from yaml section."""
     params = cfg.get("params", {}) or {}
     return TrainConfig(**params)

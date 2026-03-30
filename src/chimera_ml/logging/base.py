@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class BaseLogger(ABC):
@@ -10,12 +8,12 @@ class BaseLogger(ABC):
     """
 
     @abstractmethod
-    def start(self, params: Optional[Dict[str, Any]] = None) -> None:
+    def start(self, params: dict[str, Any] | None = None) -> None:
         """Start logging session (safe to call multiple times)."""
         return
 
     @abstractmethod
-    def log_metrics(self, metrics: Dict[str, float], step: int) -> None:
+    def log_metrics(self, metrics: dict[str, float], step: int) -> None:
         """Log scalar metrics at given step."""
         return
 
@@ -25,7 +23,7 @@ class BaseLogger(ABC):
         return
 
     # Optional capability: artifacts
-    def log_artifact(self, path: str, artifact_path: Optional[str] = None) -> None:
+    def log_artifact(self, path: str, artifact_path: str | None = None) -> None:
         """Log a file as an artifact (default: no-op)."""
         return
 
