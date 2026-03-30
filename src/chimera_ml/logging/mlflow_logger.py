@@ -13,8 +13,7 @@ def _import_mlflow() -> Any:
         import mlflow  # type: ignore
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "Optional dependency 'mlflow' is not installed. "
-            "Install it with: pip install mlflow"
+            "Optional dependency 'mlflow' is not installed. Install it with: pip install mlflow"
         ) from e
     return mlflow
 
@@ -22,8 +21,8 @@ def _import_mlflow() -> Any:
 @dataclass
 class MLflowLogger(BaseLogger):
     tracking_uri: str | None = None
-    experiment_name: str | None = 'chimera'
-    run_name: str | None = 'train'
+    experiment_name: str | None = "chimera"
+    run_name: str | None = "train"
     config_path: str | None = None
 
     def __post_init__(self) -> None:
@@ -75,7 +74,7 @@ class MLflowLogger(BaseLogger):
         path = os.path.join("/tmp/chimera_ml_artifacts", filename)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
-            
+
         self._mlflow.log_artifact(path, artifact_path=artifact_path)
 
     def end(self) -> None:

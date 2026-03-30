@@ -22,7 +22,7 @@ class EarlyStoppingCallback(BaseCallback):
 
         if self.mode not in ("min", "max"):
             raise ValueError("mode must be 'min' or 'max'")
-        
+
         if self.patience < 1:
             raise ValueError("patience must be >= 1")
 
@@ -30,7 +30,7 @@ class EarlyStoppingCallback(BaseCallback):
         """Return True if current metric improves beyond `min_delta`."""
         if self.mode == "min":
             return current < (best - self.min_delta)
-        
+
         return current > (best + self.min_delta)
 
     def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
@@ -40,7 +40,7 @@ class EarlyStoppingCallback(BaseCallback):
             self._warning(
                 trainer,
                 f"[EarlyStoppingCallback] monitor='{self.monitor}' not found in logs. "
-                f"Available keys: {available}"
+                f"Available keys: {available}",
             )
 
             return
@@ -53,9 +53,9 @@ class EarlyStoppingCallback(BaseCallback):
             self._info(
                 trainer,
                 f"[EarlyStoppingCallback] epoch={epoch} {self.monitor}={current:.6f} "
-                f"(best init). Countdown: {self._countdown}"
+                f"(best init). Countdown: {self._countdown}",
             )
-            
+
             return
 
         if self._is_improvement(current, self._best):
@@ -65,7 +65,7 @@ class EarlyStoppingCallback(BaseCallback):
             self._info(
                 trainer,
                 f"[EarlyStoppingCallback] epoch={epoch} {self.monitor}={current:.6f} "
-                f"(improved). Reset countdown to {self._countdown}"
+                f"(improved). Reset countdown to {self._countdown}",
             )
         else:
             self._bad_epochs += 1
@@ -75,7 +75,7 @@ class EarlyStoppingCallback(BaseCallback):
                 trainer,
                 f"[EarlyStoppingCallback] epoch={epoch} {self.monitor}={current:.6f} "
                 f"(no improvement). Bad epochs: {self._bad_epochs}/{self.patience}. "
-                f"Countdown: {self._countdown}"
+                f"Countdown: {self._countdown}",
             )
 
             if self._bad_epochs >= self.patience:
@@ -84,7 +84,7 @@ class EarlyStoppingCallback(BaseCallback):
                 self._info(
                     trainer,
                     f"[EarlyStoppingCallback] Stopping: no improvement in '{self.monitor}' "
-                    f"for {self.patience} epochs. Best={self._best:.6f}, last={current:.6f}"
+                    f"for {self.patience} epochs. Best={self._best:.6f}, last={current:.6f}",
                 )
 
 

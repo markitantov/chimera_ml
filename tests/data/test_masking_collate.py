@@ -41,9 +41,7 @@ def test_masking_collate_uses_explicit_sequence_masks_from_meta():
         {
             "inputs": {"audio": torch.randn(2, 3)},
             "target": torch.randn(2, 1),
-            "meta": {
-                "masks": {"sequence_mask": torch.tensor([True, False])}
-            },
+            "meta": {"masks": {"sequence_mask": torch.tensor([True, False])}},
         },
         {
             "inputs": {"audio": torch.randn(2, 3)},

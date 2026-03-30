@@ -19,10 +19,10 @@ def sanitize_split_name(name: str) -> str:
 
 
 def normalize_loaders(
-        loaders: DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None, 
-        *, 
-        default_name: str
-    ) -> dict[str, DataLoader]:
+    loaders: DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None,
+    *,
+    default_name: str,
+) -> dict[str, DataLoader]:
     """Normalize dataloader containers into a `name -> loader` dictionary."""
     if loaders is None:
         return {}

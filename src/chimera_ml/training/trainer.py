@@ -1,6 +1,7 @@
 import inspect
 import logging
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -51,20 +52,33 @@ class Trainer:
 
     def fit(
         self,
-        train_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...],
-        val_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...] | None = None,
+        train_loaders: DataLoader
+        | Mapping[str, DataLoader]
+        | list[DataLoader]
+        | tuple[DataLoader, ...],
+        val_loaders: DataLoader
+        | Mapping[str, DataLoader]
+        | list[DataLoader]
+        | tuple[DataLoader, ...]
+        | None = None,
     ) -> None:
         """Run full training loop across epochs with optional validation splits."""
         device = torch.device(self.config.device if torch.cuda.is_available() else "cpu")
         self.model.to(device)
 
         # Expose loaders for callbacks (e.g., predictions logger)
-        self._train_loaders: dict[str, DataLoader] = normalize_loaders(train_loaders, default_name="train")
-        self._val_loaders: dict[str, DataLoader] = normalize_loaders(val_loaders, default_name="val")
+        self._train_loaders: dict[str, DataLoader] = normalize_loaders(
+            train_loaders, default_name="train"
+        )
+        self._val_loaders: dict[str, DataLoader] = normalize_loaders(
+            val_loaders, default_name="val"
+        )
         self._test_loaders: dict[str, DataLoader] = {}
         self._loaders: dict[str, DataLoader] = {}
         if not self._train_loaders:
-            raise ValueError("No train loaders provided. DataModule.train_dataloader() returned empty.")
+            raise ValueError(
+                "No train loaders provided. DataModule.train_dataloader() returned empty."
+            )
 
         use_amp = bool(self.config.mixed_precision) and (device.type == "cuda")
         scaler = torch.amp.GradScaler(device=device.type, enabled=use_amp)
@@ -83,12 +97,12 @@ class Trainer:
                 name = pg.get("name", f"group{i}")
                 params[f"optimizer_lr/{name}"] = float(pg.get("lr", 0.0))
                 params[f"optimizer_weight_decay/{name}"] = float(pg.get("weight_decay", 0.0))
-            
+
             self.mlflow_logger.start(params=params)
 
         for cb in self.callbacks:
             cb.on_fit_start(self)
-        
+
         if self.logger:
             run_name = getattr(self.logger, "run_name", None)
             log_path = getattr(self.logger, "log_path", None)
@@ -96,7 +110,7 @@ class Trainer:
                 self.logger.info("🚀 Run %s started.", run_name)
             else:
                 self.logger.info("🚀 Run started.")
-            
+
             if log_path is not None:
                 self.logger.info("📸 Logging to: %s", log_path)
         else:
@@ -120,7 +134,9 @@ class Trainer:
             )
 
             if self.mlflow_logger:
-                self.mlflow_logger.log_metrics({f"train/{k}": v for k, v in train_logs.items()}, step=epoch)
+                self.mlflow_logger.log_metrics(
+                    {f"train/{k}": v for k, v in train_logs.items()}, step=epoch
+                )
 
             logs_for_callbacks = {f"train/{k}": v for k, v in train_logs.items()}
 
@@ -136,15 +152,24 @@ class Trainer:
                     )
 
                     if self.mlflow_logger:
-                        self.mlflow_logger.log_metrics({f"{split_name}/{k}": v for k, v in val_logs.items()}, step=epoch)
+                        self.mlflow_logger.log_metrics(
+                            {f"{split_name}/{k}": v for k, v in val_logs.items()}, step=epoch
+                        )
 
                     logs_for_callbacks.update({f"{split_name}/{k}": v for k, v in val_logs.items()})
 
                     # Confusion matrix (if metric is present) for this split
-                    cm_metric = next((m for m in self.metrics if isinstance(m, SklearnConfusionMatrixMetric)), None)
+                    cm_metric = next(
+                        (m for m in self.metrics if isinstance(m, SklearnConfusionMatrixMetric)),
+                        None,
+                    )
                     if cm_metric is not None:
                         cm = cm_metric.value()
-                        if isinstance(cm, np.ndarray) and cm.ndim == 2 and cm.shape[0] == cm.shape[1]:
+                        if (
+                            isinstance(cm, np.ndarray)
+                            and cm.ndim == 2
+                            and cm.shape[0] == cm.shape[1]
+                        ):
                             fig = plot_confusion_matrix(
                                 cm,
                                 labels=self.class_names,
@@ -239,14 +264,14 @@ class Trainer:
 
         for cb in self.callbacks:
             cb.on_epoch_end(self, 1, results)
-            cb.on_fit_end(self)    
+            cb.on_fit_end(self)
 
         return results
 
     def get_cached_predictions(self, split: str) -> EpochPredictions | None:
         """Return cached predictions for a split from the latest evaluation epoch."""
         return self.predictions_cache.get(split)
-    
+
     def _extract_features(
         self,
         out: ModelOutput,
@@ -325,7 +350,9 @@ class Trainer:
 
             has_targets = batch.targets is not None
             if train and not has_targets:
-                raise ValueError("Training batch has no targets. For inference use Trainer.predict() or evaluate(train=False).")
+                raise ValueError(
+                    "Training batch has no targets. For inference use Trainer.predict() or evaluate(train=False)."
+                )
 
             with torch.set_grad_enabled(train):
                 with torch.amp.autocast(device_type=device.type, enabled=use_amp):
@@ -339,16 +366,24 @@ class Trainer:
 
                     if self.config.grad_clip_norm is not None:
                         scaler.unscale_(self.optimizer)
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), self.config.grad_clip_norm
+                        )
 
                     scaler.step(self.optimizer)
                     scaler.update()
                     self.global_step += 1
 
-                    if self.scheduler is not None and self.config.use_scheduler and not self.config.scheduler_step_per_epoch:
+                    if (
+                        self.scheduler is not None
+                        and self.config.use_scheduler
+                        and not self.config.scheduler_step_per_epoch
+                    ):
                         self._scheduler_step(None)
 
-            batch_size = int(out.preds.shape[0]) if hasattr(out, "preds") and out.preds is not None else 0
+            batch_size = (
+                int(out.preds.shape[0]) if hasattr(out, "preds") and out.preds is not None else 0
+            )
             num_samples += batch_size
 
             if loss is not None:
@@ -374,8 +409,10 @@ class Trainer:
                         feats = self._extract_features(out, batch, feature_extractor)
                         feats = feats.detach().cpu()
                         if feats.shape[0] != take:
-                            raise ValueError(f"features batch size {feats.shape[0]} != preds batch size {take}")
-                        
+                            raise ValueError(
+                                f"features batch size {feats.shape[0]} != preds batch size {take}"
+                            )
+
                         feats_chunks.append(feats[:take])
 
                     if batch.meta and isinstance(batch.meta.get("sample_meta"), list):
@@ -386,7 +423,9 @@ class Trainer:
 
             if train:
                 if self.mlflow_logger and (self.global_step % self.config.log_every_steps == 0):
-                    self.mlflow_logger.log_metrics({"train_step/loss": avg_loss}, step=self.global_step)
+                    self.mlflow_logger.log_metrics(
+                        {"train_step/loss": avg_loss}, step=self.global_step
+                    )
 
                 for cb in self.callbacks:
                     cb.on_batch_end(self, self.global_step, {"train_step/loss": avg_loss})
@@ -407,14 +446,13 @@ class Trainer:
                 if (with_features and feats_chunks)
                 else None
             )
-            self.predictions_cache[split] = EpochPredictions(preds=preds, targets=targets, sample_meta=metas, features=feats)
+            self.predictions_cache[split] = EpochPredictions(
+                preds=preds, targets=targets, sample_meta=metas, features=feats
+            )
 
         if not train:
-            metrics_str = " | ".join(
-                f"{k}: {v:.4f}"
-                for k, v in metrics_out.items()
-            )
-            
+            metrics_str = " | ".join(f"{k}: {v:.4f}" for k, v in metrics_out.items())
+
             if self.logger:
                 self.logger.info(f"[{split} epoch {epoch}] {metrics_str}")
             else:
@@ -447,13 +485,11 @@ class Trainer:
         total_steps = 0
         total_samples = 0
 
-        per_loss = {name: 0.0 for name in loaders}
-        per_steps = {name: 0 for name in loaders}
-        per_samples = {name: 0 for name in loaders}
+        per_loss = dict.fromkeys(loaders, 0.0)
+        per_steps = dict.fromkeys(loaders, 0)
+        per_samples = dict.fromkeys(loaders, 0)
 
-        total_steps_expected = estimate_train_epoch_steps(
-            loaders, mode=mode, stop_on=stop_on
-        )
+        total_steps_expected = estimate_train_epoch_steps(loaders, mode=mode, stop_on=stop_on)
 
         pbar = tqdm(
             iter_mixed_train_batches(
@@ -474,25 +510,33 @@ class Trainer:
         for loader_name, batch_raw in pbar:
             batch = self._to_device(batch_raw, device)
             if batch.targets is None:
-                raise ValueError("Training batch has no targets. For inference use Trainer.predict() or evaluate(train=False).")
+                raise ValueError(
+                    "Training batch has no targets. For inference use Trainer.predict() or evaluate(train=False)."
+                )
 
             with torch.set_grad_enabled(True):
                 with torch.amp.autocast(device_type=device.type, enabled=use_amp):
                     out = self.model(batch)
                     loss = self.loss_fn(out, batch)
-                
+
                 self.optimizer.zero_grad(set_to_none=True)
                 scaler.scale(loss).backward()
 
                 if self.config.grad_clip_norm is not None:
                     scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.config.grad_clip_norm
+                    )
 
                 scaler.step(self.optimizer)
                 scaler.update()
                 self.global_step += 1
 
-                if self.scheduler is not None and self.config.use_scheduler and not self.config.scheduler_step_per_epoch:
+                if (
+                    self.scheduler is not None
+                    and self.config.use_scheduler
+                    and not self.config.scheduler_step_per_epoch
+                ):
                     self._scheduler_step(None)
 
             bs = int(out.preds.shape[0]) if hasattr(out, "preds") and out.preds is not None else 0
@@ -548,7 +592,7 @@ class Trainer:
         metrics_str = " | ".join(
             f"{k}: {v:.4f}"
             for k, v in metrics_out.items()
-                if "/" not in k  # optionally skip per-loader summaries like "train0/loss"
+            if "/" not in k  # optionally skip per-loader summaries like "train0/loss"
         )
 
         if self.logger:
@@ -557,7 +601,7 @@ class Trainer:
             print(f"[train epoch {epoch}] {metrics_str}")
 
         return metrics_out
-    
+
     def _to_device(self, batch: Batch, device: torch.device) -> Batch:
         """Move batch tensors to target device, preserving nested masks/meta."""
         inputs = {k: v.to(device) for k, v in batch.inputs.items()}
@@ -566,7 +610,7 @@ class Trainer:
         meta = self._move_to_device(batch.meta, device)
 
         return Batch(inputs=inputs, targets=targets, masks=masks, meta=meta)
-    
+
     def _move_to_device(self, obj: Any, device: torch.device) -> Any:
         """Recursively move all torch.Tensors inside obj to device."""
         if torch.is_tensor(obj):
@@ -598,7 +642,7 @@ class Trainer:
                 # required positional or named 'metrics'
                 if p1.default is inspect._empty or p1.name == "metrics":
                     return True
-                
+
             return False
         except Exception:
             return False
@@ -614,12 +658,10 @@ class Trainer:
         if needs_metric:
             if logs is None or not monitor or monitor not in logs:
                 return
-            
+
             metric = logs[monitor]
-            try:
+            with suppress(Exception):
                 metric = float(metric)
-            except Exception:
-                pass
             self.scheduler.step(metric)
         else:
             self.scheduler.step()

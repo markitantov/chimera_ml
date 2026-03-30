@@ -41,7 +41,7 @@ class TelegramNotifierCallback(BaseCallback):
     """
     Sends a Telegram message when training finishes (on_fit_end).
     Tracks best epoch using the same monitor logic as EarlyStoppingCallback.
-    
+
     Notes:
     - Grabs MLflow experiment name if available (trainer.mlflow_logger.experiment_name).
     - Optionally includes trainer progress info (epoch/global_step) if present.
@@ -116,9 +116,9 @@ class TelegramNotifierCallback(BaseCallback):
             self._warning(
                 trainer,
                 f"[TelegramNotifierCallback] monitor='{self.monitor}' not found in logs. "
-                f"Available keys: {available}"
+                f"Available keys: {available}",
             )
-            
+
             return
 
         current = float(logs[self.monitor])
@@ -150,15 +150,23 @@ class TelegramNotifierCallback(BaseCallback):
             global_step = getattr(trainer, "global_step", None)
 
             if last_epoch is not None:
-                lines.append(f"<b>Last epoch:</b> <code>{html.escape(_format_scalar(last_epoch))}</code>")
+                lines.append(
+                    f"<b>Last epoch:</b> <code>{html.escape(_format_scalar(last_epoch))}</code>"
+                )
             if global_step is not None:
-                lines.append(f"<b>Global step:</b> <code>{html.escape(_format_scalar(global_step))}</code>")
+                lines.append(
+                    f"<b>Global step:</b> <code>{html.escape(_format_scalar(global_step))}</code>"
+                )
 
         if self._best_value is not None:
-            lines.append(f"<b>Best epoch:</b> <code>{html.escape(_format_scalar(self._best_epoch))}</code>")
+            lines.append(
+                f"<b>Best epoch:</b> <code>{html.escape(_format_scalar(self._best_epoch))}</code>"
+            )
             lines.append(f"<b>Monitor:</b> <code>{html.escape(self.monitor)}</code>")
             lines.append(f"<b>Mode:</b> <code>{html.escape(self.mode)}</code>")
-            lines.append(f"<b>Best value:</b> <code>{html.escape(_format_scalar(self._best_value))}</code>")
+            lines.append(
+                f"<b>Best value:</b> <code>{html.escape(_format_scalar(self._best_value))}</code>"
+            )
 
             if self.include_best_logs and self._best_logs:
                 lines.append("<b>Metrics at best epoch:</b>")
@@ -188,7 +196,9 @@ class TelegramNotifierCallback(BaseCallback):
     def on_fit_end(self, trainer: Any) -> None:
         """Build and send the final Telegram message."""
         if self._session is None:
-            self._warning(trainer, "[TelegramNotifierCallback] Session is not initialized; skipping send.")
+            self._warning(
+                trainer, "[TelegramNotifierCallback] Session is not initialized; skipping send."
+            )
             return
 
         text = self._build_message(trainer)

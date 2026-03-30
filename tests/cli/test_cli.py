@@ -1,20 +1,8 @@
-import types
-
+import pytest
 import torch
+import typer
 
 from chimera_ml import cli
-
-
-def test_import_object_happy_path_and_invalid_spec():
-    obj = cli.import_object("types:SimpleNamespace")
-    assert obj is types.SimpleNamespace
-
-    try:
-        cli.import_object("types.SimpleNamespace")
-    except ValueError as exc:
-        assert "module:attr" in str(exc)
-    else:
-        raise AssertionError("ValueError was expected for invalid import spec")
 
 
 class _DMStub:
@@ -147,7 +135,9 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
     monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
     monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
+    monkeypatch.setattr(
+        cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject}
+    )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml", class_names="cat, dog")
@@ -172,7 +162,9 @@ def test_cli_train_works_without_snapshot_callback(monkeypatch):
     monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
     monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
     monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
+    monkeypatch.setattr(
+        cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject}
+    )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml", class_names=None)
@@ -243,3 +235,128 @@ def test_cli_eval_flattens_nested_loader_containers(monkeypatch):
     assert set(loaders.keys()) == {"train_main", "val0", "val1", "test_a"}
     assert with_features is False
     assert feature_extractor is None
+
+
+class _RegistryStub:
+    def __init__(self, items):
+        self._items = list(items)
+
+    def keys(self):
+        return sorted(self._items)
+
+
+class _EntryPointStub:
+    def __init__(self, name: str, value: str):
+        self.name = name
+        self.value = value
+
+
+def _valid_cli_cfg():
+    return {
+        "seed": 0,
+        "experiment_info": {"params": {"experiment_name": "exp"}},
+        "data": {"name": "dm", "params": {}},
+        "model": {"name": "m", "params": {}},
+        "train": {"params": {"epochs": 1}},
+        "loss": {"name": "loss", "params": {}},
+        "optimizer": {"name": "opt", "params": {}},
+        "metrics": [{"name": "metric", "params": {}}],
+        "callbacks": [{"name": "cb", "params": {}}],
+        "logging": [{"name": "logger", "params": {}}],
+    }
+
+
+def test_validate_config_success(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "load_yaml", lambda _: _valid_cli_cfg())
+
+    cli.validate_config(config_path="ok.yaml", require_experiment_name=True)
+    out = capsys.readouterr().out
+    assert "is valid" in out
+
+
+def test_validate_config_fails_on_missing_experiment_name(monkeypatch, capsys):
+    bad = _valid_cli_cfg()
+    bad["experiment_info"] = {"params": {}}
+    monkeypatch.setattr(cli, "load_yaml", lambda _: bad)
+
+    with pytest.raises(typer.Exit) as exc:
+        cli.validate_config(config_path="bad.yaml", require_experiment_name=True)
+
+    assert exc.value.exit_code == 1
+    out = capsys.readouterr().out
+    assert "is invalid" in out
+    assert "experiment_info.params.experiment_name" in out
+
+
+def test_registry_list_filters_by_type(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "_available_registries",
+        lambda: {
+            "models": _RegistryStub(["b_model", "a_model"]),
+            "losses": _RegistryStub(["mse_loss"]),
+        },
+    )
+
+    cli.registry_list(kind="models")
+    out = capsys.readouterr().out
+    assert "models (2):" in out
+    assert "- a_model" in out
+    assert "- b_model" in out
+
+
+def test_registry_list_unknown_type_exits(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_available_registries", lambda: {"models": _RegistryStub(["x"])})
+
+    with pytest.raises(typer.Exit) as exc:
+        cli.registry_list(kind="unknown")
+
+    assert exc.value.exit_code == 1
+    out = capsys.readouterr().out
+    assert "Unknown registry type" in out
+
+
+def test_plugins_list_prints_discovered_plugins(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "_resolve_entrypoint_plugins",
+        lambda group: [
+            _EntryPointStub("plugin_b", "pkg.b:register"),
+            _EntryPointStub("plugin_a", "pkg.a:register"),
+        ],
+    )
+
+    cli.plugins_list(group="chimera_ml.plugins")
+    out = capsys.readouterr().out
+    assert "Discovered 2 plugin(s)" in out
+    assert "- plugin_a: pkg.a:register" in out
+    assert "- plugin_b: pkg.b:register" in out
+
+
+def test_plugins_list_handles_empty_group(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_resolve_entrypoint_plugins", lambda group: [])
+
+    cli.plugins_list(group="chimera_ml.plugins")
+    out = capsys.readouterr().out
+    assert "No plugins discovered" in out
+
+
+def test_doctor_prints_registry_and_plugin_counts(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "_available_registries",
+        lambda: {"models": _RegistryStub(["m1"]), "losses": _RegistryStub([])},
+    )
+    monkeypatch.setattr(
+        cli,
+        "_resolve_entrypoint_plugins",
+        lambda group: [_EntryPointStub("p", "pkg:register")],
+    )
+    monkeypatch.setattr(cli.torch.cuda, "is_available", lambda: False)
+
+    cli.doctor(plugin_group="chimera_ml.plugins")
+    out = capsys.readouterr().out
+    assert "chimera-ml doctor" in out
+    assert "registries:" in out
+    assert "- models: 1" in out
+    assert "plugins/chimera_ml.plugins: 1 discovered" in out

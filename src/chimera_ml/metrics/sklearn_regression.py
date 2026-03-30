@@ -38,18 +38,13 @@ class _SklearnRegressionBaseMetric(BaseMetric):
         y_true = batch.targets.detach()
 
         # Flatten to (B, D)
-        if y_pred.ndim == 1:
-            y_pred = y_pred.view(-1, 1)
-        else:
-            y_pred = y_pred.view(y_pred.shape[0], -1)
-
-        if y_true.ndim == 1:
-            y_true = y_true.view(-1, 1)
-        else:
-            y_true = y_true.view(y_true.shape[0], -1)
+        y_pred = y_pred.view(-1, 1) if y_pred.ndim == 1 else y_pred.view(y_pred.shape[0], -1)
+        y_true = y_true.view(-1, 1) if y_true.ndim == 1 else y_true.view(y_true.shape[0], -1)
 
         if y_pred.shape != y_true.shape:
-            raise ValueError(f"Regression metric: preds shape {tuple(y_pred.shape)} must match targets shape {tuple(y_true.shape)}")
+            raise ValueError(
+                f"Regression metric: preds shape {tuple(y_pred.shape)} must match targets shape {tuple(y_true.shape)}"
+            )
 
         self._y_pred.append(y_pred.cpu().numpy())
         self._y_true.append(y_true.cpu().numpy())
@@ -57,7 +52,7 @@ class _SklearnRegressionBaseMetric(BaseMetric):
     def _stack(self) -> tuple[np.ndarray, np.ndarray]:
         if not self._y_true:
             return np.zeros((0, 1), dtype=np.float32), np.zeros((0, 1), dtype=np.float32)
-        
+
         y_true = np.concatenate(self._y_true, axis=0)
         y_pred = np.concatenate(self._y_pred, axis=0)
         return y_true, y_pred
@@ -69,7 +64,7 @@ class SklearnMAEMetric(_SklearnRegressionBaseMetric):
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
-        
+
         v = mean_absolute_error(y_true, y_pred, multioutput=self.multioutput)
         return {"mae": float(v)}
 
@@ -80,10 +75,10 @@ class SklearnRMSEMetric(_SklearnRegressionBaseMetric):
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
-        
+
         v = root_mean_squared_error(y_true, y_pred, multioutput=self.multioutput)
         return {"rmse": v}
-    
+
 
 @dataclass
 class SklearnMSEMetric(_SklearnRegressionBaseMetric):
@@ -91,7 +86,7 @@ class SklearnMSEMetric(_SklearnRegressionBaseMetric):
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
-        
+
         v = mean_squared_error(y_true, y_pred, multioutput=self.multioutput)
         return {"mse": v}
 
@@ -102,10 +97,9 @@ class SklearnR2Metric(_SklearnRegressionBaseMetric):
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
             return {}
-        
+
         v = r2_score(y_true, y_pred, multioutput=self.multioutput)
         return {"r2": float(v)}
-
 
 
 @METRICS.register("mae_metric")

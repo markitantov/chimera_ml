@@ -48,7 +48,7 @@ class SnapshotCallback(BaseCallback):
 
             if cfg_copy_path is not None and cfg_copy_path.exists():
                 mlflow_logger.log_artifact(str(cfg_copy_path), artifact_path="configs")
-            
+
         except Exception as exc:
             self._warning(trainer, f"[SnapshotCallback] Failed to log snapshot artifacts: {exc}")
 

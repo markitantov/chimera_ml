@@ -70,13 +70,14 @@ class TrainConfig:
     device: str = "cuda"  # "cuda"|"cpu"
 
     # Multiple train loaders
-    train_loader_mode: str = "single"  # How to sample when train_loaders has multiple loaders: 
-                                            # single|round_robin|weighted
-    train_stop_on: str = "min"              # When to end an epoch in multi-loader mode: 
-                                            # min=stop on first exhausted, max=stop on last exhausted
-    train_loader_weights: dict[str, float] | None = None  # Per-loader sampling weights for weighted mode: 
-                                                 # {loader_name: weight}
-
+    train_loader_mode: str = "single"  # How to sample when train_loaders has multiple loaders:
+    # single|round_robin|weighted
+    train_stop_on: str = "min"  # When to end an epoch in multi-loader mode:
+    # min=stop on first exhausted, max=stop on last exhausted
+    train_loader_weights: dict[str, float] | None = (
+        None  # Per-loader sampling weights for weighted mode:
+    )
+    # {loader_name: weight}
 
     # Scheduler
     use_scheduler: bool = False

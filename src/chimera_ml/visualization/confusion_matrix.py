@@ -37,7 +37,7 @@ def plot_confusion_matrix(
 
     if labels is None:
         labels = [str(i) for i in range(n_classes)]
-        
+
     if len(labels) != n_classes:
         raise ValueError(f"labels length must be {n_classes}, got {len(labels)}")
 

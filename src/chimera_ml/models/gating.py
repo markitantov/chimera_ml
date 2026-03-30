@@ -23,7 +23,7 @@ class GatedFusionModel(BaseModel):
         self.encoders = nn.ModuleDict(encoders)
         self.use_mask = use_mask
 
-        self.proj = nn.ModuleDict({m: nn.Identity() for m in encoders.keys()})
+        self.proj = nn.ModuleDict({m: nn.Identity() for m in encoders})
 
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
@@ -80,13 +80,13 @@ class GatedFusionModel(BaseModel):
         S = torch.stack(scores, dim=0)  # (M, B, 1)
 
         A = torch.softmax(S, dim=0)  # (M, B, 1)
-        fused = (A * E).sum(dim=0)   # (B, D)
+        fused = (A * E).sum(dim=0)  # (B, D)
 
         aux["gates"] = A.squeeze(-1).transpose(0, 1)  # (B, M)
 
         preds = self.head(self.dropout(fused))
         return ModelOutput(preds=preds, aux=aux)
-    
+
 
 @MODELS.register("gated_fusion_model")
 def gated_fusion_model(

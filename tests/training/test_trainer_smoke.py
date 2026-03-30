@@ -98,7 +98,13 @@ def _make_trainer(
     loss_fn = _MSELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     metric = _MeanPredMetric()
-    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu", log_every_steps=1)
+    cfg = TrainConfig(
+        epochs=1,
+        mixed_precision=False,
+        use_scheduler=False,
+        device="cpu",
+        log_every_steps=1,
+    )
     return Trainer(
         model=model,
         loss_fn=loss_fn,
@@ -148,7 +154,9 @@ def test_trainer_evaluate_returns_prefixed_metrics():
 
 @pytest.mark.parametrize("which_present", ["only_mlflow", "only_console"])
 def test_trainer_fit_smoke_runs_with_partial_loggers(which_present: str):
-    mlflow_logger: BaseLogger | None = _MemoryMLflowLogger() if which_present == "only_mlflow" else None
+    mlflow_logger: BaseLogger | None = (
+        _MemoryMLflowLogger() if which_present == "only_mlflow" else None
+    )
     console_logger = _MemoryConsoleLogger() if which_present == "only_console" else None
     trainer = _make_trainer(mlflow_logger=mlflow_logger, logger=console_logger)
 
@@ -165,7 +173,8 @@ def test_trainer_fit_smoke_runs_with_partial_loggers(which_present: str):
 
 def _register_test_custom_logger() -> str:
     key = "test_custom_memory_logger"
-    if key not in LOGGERS.keys():
+    registry_keys = LOGGERS.keys()
+    if key not in registry_keys:
         @LOGGERS.register(key)
         def _factory(**_):
             return _MemoryMLflowLogger()

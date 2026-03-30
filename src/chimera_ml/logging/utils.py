@@ -14,10 +14,7 @@ def local_datetime_tag(
 
     By default includes both date and time to avoid collisions.
     """
-    if timezone:
-        dt = datetime.now(tz=ZoneInfo(timezone))
-    else:
-        dt = datetime.now().astimezone()
+    dt = datetime.now(tz=ZoneInfo(timezone)) if timezone else datetime.now().astimezone()
     if fmt:
         return dt.strftime(fmt)
     return dt.strftime("%Y-%m-%d_%H-%M") if include_time else dt.strftime("%Y-%m-%d")
@@ -35,14 +32,15 @@ def generate_run_name(
     datetime_format: str | None = None,
     timezone: str | None = None,
 ) -> str:
-    """Create a human-readable, unique MLflow run name.
-    """
+    """Create a human-readable, unique MLflow run name."""
     parts = []
 
     if config_path:
         parts.append(Path(config_path).stem)
 
-    parts.append(local_datetime_tag(include_time=include_time, fmt=datetime_format, timezone=timezone))
+    parts.append(
+        local_datetime_tag(include_time=include_time, fmt=datetime_format, timezone=timezone)
+    )
 
     if model_name:
         parts.append(model_name)
@@ -58,5 +56,4 @@ def generate_run_name(
         except Exception:
             pass
 
-    name = "_".join([p for p in parts if p])
-    return name
+    return "_".join([p for p in parts if p])

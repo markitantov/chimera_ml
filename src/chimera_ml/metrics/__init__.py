@@ -15,12 +15,12 @@ from chimera_ml.metrics.sklearn_regression import mae_metric, mse_metric, r2_met
 
 __all__ = [
     "BaseMetric",
+    "confusion_matrix_metric",
+    "mae_metric",
+    "mse_metric",
     "prf_macro_metric",
     "prf_micro_metric",
     "prf_weighted_metric",
-    "confusion_matrix_metric",
-    "mae_metric", 
-    "mse_metric", 
     "r2_metric",
-    "rmse_metric", 
+    "rmse_metric",
 ]

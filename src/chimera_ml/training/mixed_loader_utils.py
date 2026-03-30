@@ -56,7 +56,9 @@ def iter_mixed_train_batches(
         active = set(names)
         while active:
             active_names = [n for n in names if n in active]
-            ws = torch.tensor([float(weights_cfg.get(n, 1.0)) for n in active_names], dtype=torch.float32)
+            ws = torch.tensor(
+                [float(weights_cfg.get(n, 1.0)) for n in active_names], dtype=torch.float32
+            )
             ws = torch.clamp(ws, min=0.0)
             if float(ws.sum().item()) <= 0:
                 ws = torch.ones_like(ws)
@@ -78,7 +80,7 @@ def iter_mixed_train_batches(
 def _safe_len(x: Any) -> int | None:
     """Return `len(x)` as `int` when available, otherwise `None`."""
     try:
-        return int(len(x))
+        return len(x)
     except Exception:
         return None
 

@@ -56,7 +56,13 @@ def _trainer() -> Trainer:
     model = _TinyModel()
     loss = _MSELoss()
     opt = torch.optim.SGD(model.parameters(), lr=1e-3)
-    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=True, scheduler_monitor="val/loss", device="cpu")
+    cfg = TrainConfig(
+        epochs=1,
+        mixed_precision=False,
+        use_scheduler=True,
+        scheduler_monitor="val/loss",
+        device="cpu",
+    )
     return Trainer(
         model=model,
         loss_fn=loss,
@@ -192,7 +198,12 @@ class _SeqModel(torch.nn.Module):
 def _seq_batch(t: int) -> Batch:
     x = torch.arange(0, 2 * t, dtype=torch.float32).view(2, t, 1)
     y = x + 0.5
-    return Batch(inputs={"x": x}, targets=y, masks=None, meta={"sample_meta": [{"id": f"{t}-0"}, {"id": f"{t}-1"}]})
+    return Batch(
+        inputs={"x": x},
+        targets=y,
+        masks=None,
+        meta={"sample_meta": [{"id": f"{t}-0"}, {"id": f"{t}-1"}]},
+    )
 
 
 def test_trainer_run_epoch_keeps_ragged_cache_for_variable_sequence_length():

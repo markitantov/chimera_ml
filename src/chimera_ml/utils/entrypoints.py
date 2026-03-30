@@ -22,10 +22,11 @@ def load_entrypoint_plugins(group: str = "chimera_ml.plugins") -> None:
 
     try:
         eps = entry_points()
-        if hasattr(eps, "select"):
-            selected = list(eps.select(group=group))
-        else:  # pragma: no cover (older API)
-            selected = list(eps.get(group, []))  # type: ignore[attr-defined]
+        selected = (
+            list(eps.select(group=group))
+            if hasattr(eps, "select")
+            else list(eps.get(group, []))  # type: ignore[attr-defined]
+        )
     except Exception:
         return
 

@@ -20,10 +20,11 @@ class ConsoleFileLogger:
     - Clears previous handlers (no duplicates)
     - Disables propagation (avoids double printing)
     """
+
     log_path: str | Path
-    experiment_name: str = 'chimera'
-    run_name: str = 'train'
-    log_file: str = 'train.log'
+    experiment_name: str = "chimera"
+    run_name: str = "train"
+    log_file: str = "train.log"
     name: str = "chimera"
     format: str = "%(asctime)s:%(levelname)s:%(message)s"
     console_level: int | str = logging.INFO
@@ -32,12 +33,16 @@ class ConsoleFileLogger:
     encoding: str = "utf-8"
 
     def __post_init__(self) -> None:
-        self.log_path = Path(self.log_path) / self.experiment_name / self.run_name / Path(self.log_file)
+        self.log_path = (
+            Path(self.log_path) / self.experiment_name / self.run_name / Path(self.log_file)
+        )
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
         formatter = logging.Formatter(self.format)
 
-        file_handler = logging.FileHandler(self.log_path, mode=self.file_mode, encoding=self.encoding)
+        file_handler = logging.FileHandler(
+            self.log_path, mode=self.file_mode, encoding=self.encoding
+        )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(_level(self.file_level))
 
@@ -84,9 +89,9 @@ def console_file_logger(
     *,
     log_path: str,
     name: str = "chimera",
-    experiment_name: str = 'chimera',
-    run_name: str = 'train',
-    log_file: str = 'train.log',
+    experiment_name: str = "chimera",
+    run_name: str = "train",
+    log_file: str = "train.log",
     format: str = "%(asctime)s:%(levelname)s:%(message)s",
     console_level: int | str = logging.INFO,
     file_level: int | str = logging.INFO,
@@ -106,4 +111,3 @@ def console_file_logger(
         file_mode=file_mode,
         encoding=encoding,
     )
-

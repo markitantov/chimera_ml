@@ -9,21 +9,21 @@ from chimera_ml.losses.base import BaseLoss
 def _ccc_1d_rho(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
     """Lin's Concordance Correlation Coefficient: https://en.wikipedia.org/wiki/Concordance_correlation_coefficient
     Measures the agreement between two variables
-    
+
     It is a product of
     - precision (pearson correlation coefficient) and
     - accuracy (closeness to 45 degree line)
-    
+
     Interpretation
     - rho =  1: perfect agreement
     - rho =  0: no agreement
     - rho = -1: perfect disagreement
-    
+
     Args:
         x (torch.Tensor): Input tensor
         y (torch.Tensor): Target tensor
         eps (float, optional): Avoiding division by zero. Defaults to 1e-8.
-    
+
     Returns:
         torch.Tensor: CCC value
     Notes:
@@ -40,14 +40,13 @@ def _ccc_1d_rho(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-12) -> torch.T
     vy = y - y_m
 
     # Pearson correlation (rho)
-    denom_rho = torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps
+    denom_rho = torch.sqrt(torch.sum(vx**2)) * torch.sqrt(torch.sum(vy**2)) + eps
     rho = torch.sum(vx * vy) / denom_rho
 
     x_s = x.std(unbiased=False)
     y_s = y.std(unbiased=False)
 
-    ccc = (2.0 * rho * x_s * y_s) / (x_s ** 2 + y_s ** 2 + (x_m - y_m) ** 2 + eps)
-    return ccc
+    return (2.0 * rho * x_s * y_s) / (x_s**2 + y_s**2 + (x_m - y_m) ** 2 + eps)
 
 
 class CCCLoss(BaseLoss):
@@ -68,18 +67,13 @@ class CCCLoss(BaseLoss):
         pred = output.preds
         target = batch.targets
 
-        if pred.ndim == 1:
-            pred = pred.view(-1, 1)
-        else:
-            pred = pred.view(pred.shape[0], -1)
-
-        if target.ndim == 1:
-            target = target.view(-1, 1)
-        else:
-            target = target.view(target.shape[0], -1)
+        pred = pred.view(-1, 1) if pred.ndim == 1 else pred.view(pred.shape[0], -1)
+        target = target.view(-1, 1) if target.ndim == 1 else target.view(target.shape[0], -1)
 
         if pred.shape != target.shape:
-            raise ValueError(f"CCCLoss: preds shape {tuple(pred.shape)} must match targets shape {tuple(target.shape)}")
+            raise ValueError(
+                f"CCCLoss: preds shape {tuple(pred.shape)} must match targets shape {tuple(target.shape)}"
+            )
 
         ccc_vals = []
         for d in range(pred.shape[1]):

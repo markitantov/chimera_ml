@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn.functional as F
 
@@ -57,13 +56,13 @@ class FocalLoss(BaseLoss):
 
         if self.reduction == "mean":
             return loss.mean()
-        
+
         if self.reduction == "sum":
             return loss.sum()
-        
+
         if self.reduction == "none":
             return loss
-        
+
         raise ValueError(f"Unknown reduction: {self.reduction}")
 
 

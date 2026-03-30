@@ -7,7 +7,7 @@ from chimera_ml.models.gating import gated_fusion_model
 __all__ = [
     "BaseModel",
     "feature_fusion_model",
-    "prediction_fusion_model",
-    "gated_prediction_fusion_model",
     "gated_fusion_model",
+    "gated_prediction_fusion_model",
+    "prediction_fusion_model",
 ]

@@ -48,7 +48,7 @@ class FeatureFusionModel(BaseModel):
         fused = self.dropout(fused)
         preds = self.head(fused)
         return ModelOutput(preds=preds, aux=aux)
-    
+
 
 @MODELS.register("feature_fusion_model")
 def feature_fusion_model(
@@ -113,7 +113,7 @@ class PredictionFusionModel(BaseModel):
             raise ValueError(f"Unknown fusion strategy: {self.fusion}")
 
         return ModelOutput(preds=preds, aux=aux)
-    
+
 
 @MODELS.register("prediction_fusion_model")
 def prediction_fusion_model(

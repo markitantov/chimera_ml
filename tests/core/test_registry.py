@@ -23,6 +23,7 @@ def test_registry_duplicate_key_raises():
         return 1
 
     with pytest.raises(KeyError):
+
         @reg.register("x")
         def _b():
             return 2

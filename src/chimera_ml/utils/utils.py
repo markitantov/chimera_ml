@@ -29,5 +29,5 @@ def zip_sources(zip_path: Path, base_dir: Path, include: list[str]) -> None:
 
                 if any(part in _SKIP_DIRS for part in p.parts):
                     continue
-                
+
                 zf.write(p, str(p.relative_to(base_dir)))

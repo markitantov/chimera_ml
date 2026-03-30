@@ -45,11 +45,7 @@ class MaskingCollate:
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Pad/stack modality tensors and produce modality-presence masks."""
         modality_names = sorted(
-            {
-                modality
-                for sample in batch
-                for modality in dict(sample.get("inputs", {})).keys()
-            }
+            {modality for sample in batch for modality in dict(sample.get("inputs", {}))}
         )
 
         batch_size = len(batch)
@@ -172,7 +168,7 @@ class MaskingCollate:
                 continue
 
             extracted.append(torch.as_tensor(raw_sequence_mask).to(dtype=torch.bool).flatten())
-        
+
         return extracted
 
     def _pad_or_stack(self, tensors: Sequence[torch.Tensor | None]) -> torch.Tensor | None:
@@ -214,9 +210,9 @@ class MaskingCollate:
                     "Cannot stack tensors with different shapes when pad_sequences=False. "
                     "Enable pad_sequences for variable-length data."
                 )
-            
+
             output[idx] = tensor
-        
+
         return output
 
     @staticmethod
@@ -237,7 +233,7 @@ class MaskingCollate:
         for key in _TARGET_KEYS:
             if key in sample:
                 return MaskingCollate._as_tensor_or_none(sample.get(key))
-            
+
         return None
 
 

@@ -44,7 +44,7 @@ class SklearnConfusionMatrixMetric(BaseMetric):
 
     def value(self) -> np.ndarray | None:
         return self._cm
-    
+
 
 @METRICS.register("confusion_matrix_metric")
 def confusion_matrix_metric(**params):

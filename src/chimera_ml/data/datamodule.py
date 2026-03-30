@@ -62,12 +62,16 @@ class DataModule:
         # Single Dataset
         return self._make_loader(datasets, shuffle=shuffle, drop_last=drop_last)
 
-    def train_dataloader(self) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
+    def train_dataloader(
+        self,
+    ) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
         """Return train dataloaders or `None` when train dataset is absent."""
         if self.train_dataset is None:
             return None
 
-        return self._make_loaders(self.train_dataset, shuffle=self.shuffle_train, drop_last=self.drop_last_train)
+        return self._make_loaders(
+            self.train_dataset, shuffle=self.shuffle_train, drop_last=self.drop_last_train
+        )
 
     def val_dataloader(self) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
         """Return validation dataloaders or `None` when val dataset is absent."""
@@ -76,7 +80,9 @@ class DataModule:
 
         return self._make_loaders(self.val_dataset, shuffle=False, drop_last=False)
 
-    def test_dataloader(self) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
+    def test_dataloader(
+        self,
+    ) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
         """Return test dataloaders or `None` when test dataset is absent."""
         if self.test_dataset is None:
             return None

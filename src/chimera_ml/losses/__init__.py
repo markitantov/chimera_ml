@@ -7,10 +7,10 @@ from chimera_ml.losses.regression import mae_loss, mse_loss
 
 __all__ = [
     "BaseLoss",
+    "bce_with_logits_loss",
     "ccc_loss",
     "cross_entropy_loss",
     "focal_loss",
-    "bce_with_logits_loss",
     "mae_loss",
     "mse_loss",
 ]

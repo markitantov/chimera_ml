@@ -26,9 +26,7 @@ class _TrainerStub:
         self.model = torch.nn.Linear(2, 1)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-3)
         self.scheduler = (
-            torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1)
-            if with_scheduler
-            else None
+            torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1) if with_scheduler else None
         )
         self.global_step = 7
         self.logger = _LoggerStub() if with_logger else None

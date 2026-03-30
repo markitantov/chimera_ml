@@ -40,17 +40,20 @@ class SklearnPRFMetric(BaseMetric):
             return {}
 
         precision = precision_score(
-            self._y_true, self._y_pred,
+            self._y_true,
+            self._y_pred,
             average=self.average,
             zero_division=self.zero_division,
         )
         recall = recall_score(
-            self._y_true, self._y_pred,
+            self._y_true,
+            self._y_pred,
             average=self.average,
             zero_division=self.zero_division,
         )
         f1 = f1_score(
-            self._y_true, self._y_pred,
+            self._y_true,
+            self._y_pred,
             average=self.average,
             zero_division=self.zero_division,
         )
@@ -61,7 +64,7 @@ class SklearnPRFMetric(BaseMetric):
             f"{prefix}_recall": float(recall),
             f"{prefix}_f1": float(f1),
         }
-    
+
 
 @METRICS.register("prf_macro_metric")
 def prf_macro_metric(**params):

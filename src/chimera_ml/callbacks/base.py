@@ -31,20 +31,20 @@ class BaseCallback:
 
     def on_fit_start(self, trainer: Any) -> None:
         """Called once before the fit/eval loop starts."""
-        return None
+        return
 
     def on_epoch_start(self, trainer: Any, epoch: int) -> None:
         """Called at the beginning of each epoch."""
-        return None
+        return
 
     def on_batch_end(self, trainer: Any, global_step: int, logs: dict[str, float]) -> None:
         """Called after each training batch."""
-        return None
+        return
 
     def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
         """Called after each epoch with aggregated logs."""
-        return None
+        return
 
     def on_fit_end(self, trainer: Any) -> None:
         """Called once after the fit/eval loop ends."""
-        return None
+        return

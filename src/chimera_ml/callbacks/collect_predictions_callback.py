@@ -220,7 +220,7 @@ class CollectPredictionsCallback(BaseCallback):
     def _rows_to_csv_bytes(rows: list[dict[str, object]]) -> bytes:
         """Serialize row dictionaries into UTF-8 CSV bytes."""
         buf = io.StringIO()
-        fieldnames = sorted({k for row in rows for k in row.keys()})
+        fieldnames = sorted({k for row in rows for k in row})
         w = csv.DictWriter(buf, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)

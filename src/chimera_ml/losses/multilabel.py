@@ -9,6 +9,7 @@ from chimera_ml.losses.base import BaseLoss
 
 class BCEWithLogitsLoss(BaseLoss):
     """Multi-label classification loss for logits + multi-hot targets."""
+
     def __init__(self, pos_weight: torch.Tensor | None = None, reduction: str = "mean"):
         self._loss = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction=reduction)
 

@@ -9,6 +9,7 @@ from chimera_ml.losses.base import BaseLoss
 
 class MSELoss(BaseLoss):
     """MSE for regression. Expects output.preds same shape as targets."""
+
     def __init__(self, reduction: str = "mean"):
         self._loss = nn.MSELoss(reduction=reduction)
 
@@ -18,6 +19,7 @@ class MSELoss(BaseLoss):
 
 class MAELoss(BaseLoss):
     """MAE (L1) for regression."""
+
     def __init__(self, reduction: str = "mean"):
         self._loss = nn.L1Loss(reduction=reduction)
 
