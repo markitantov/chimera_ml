@@ -112,6 +112,14 @@ def _config_for_train():
     }
 
 
+def _config_for_train_without_snapshot():
+    cfg = _config_for_train()
+    cfg["callbacks"] = [
+        {"name": "checkpoint_callback", "params": {}},
+    ]
+    return cfg
+
+
 def _config_for_eval():
     return {
         "seed": 321,
@@ -147,6 +155,29 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     assert _TrainerStub.last_init is not None
     assert _TrainerStub.last_init["class_names"] == ["cat", "dog"]
     assert _TrainerStub.last_init["scheduler"] == "sch"
+    assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
+
+
+def test_cli_train_works_without_snapshot_callback(monkeypatch):
+    model = _ModelStub()
+
+    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_train_without_snapshot())
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
+    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+
+    cli.train(config_path="cfg.yaml", class_names=None)
+
+    assert _TrainerStub.last_init is not None
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
 
 

@@ -89,12 +89,16 @@ def train(
         run_name=run_name,
     )
 
+    snapshot_cfg = cfg.section("callbacks", name="snapshot_callback")
+    snapshot_params = snapshot_cfg.get("params", {}) if snapshot_cfg else {}
+    save_snapshot_config = bool(snapshot_params.get("save_config"))
+
     cfg.patch_params_at(
         "callbacks",
         names=["snapshot_callback"],
         experiment_name=experiment_name,
         run_name=run_name,
-        config_path=config_path if cfg.section("callbacks", name="snapshot_callback").get("params").get("save_config") else None
+        config_path=config_path if save_snapshot_config else None,
     )
 
     # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
