@@ -301,6 +301,7 @@ def train(
     ),
 ):
     """Run training from YAML config with dynamic factories."""
+    typer.echo(f"[train] Loading config: {config_path}")
     cfg = ExperimentConfig(load_yaml(config_path))
 
     seed = int(cfg.get("seed", 0))
@@ -319,6 +320,7 @@ def train(
         datetime_format=experiment_info.get("datetime_format", "%Y-%m-%d_%H-%M"),
         timezone=experiment_info.get("timezone", None),
     )
+    typer.echo(f"[train] Experiment: {experiment_name} | Run: {run_name}")
 
     cfg.patch_params_at(
         "callbacks",
@@ -342,10 +344,18 @@ def train(
     # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
 
     # 2) Build from registries
+    typer.echo("[train] Building datamodule and model...")
     dm = build_datamodule(cfg.section("data"))
     model_obj = build_model(cfg.section("model"))
 
     train_cfg = build_train_config(cfg.section("train"))
+
+    logger_cfg = cfg.section("logging", name="console_file_logger")
+    logger = None
+    if logger_cfg:
+        logger = build_logger(
+            logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name}
+        )
 
     mlflow_cfg = cfg.section("logging", name="mlflow_logger")
     mlflow_logger = None
@@ -357,13 +367,6 @@ def train(
                 "experiment_name": experiment_name,
                 "run_name": run_name,
             },
-        )
-
-    logger_cfg = cfg.section("logging", name="console_file_logger")
-    logger = None
-    if logger_cfg:
-        logger = build_logger(
-            logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name}
         )
 
     loss_fn = build_loss(cfg.section("loss"))
@@ -391,7 +394,9 @@ def train(
     train_loader = dm.train_dataloader()
     val_loaders = dm.val_dataloader()
 
+    typer.echo("[train] Starting fit...")
     trainer.fit(train_loader, val_loaders=val_loaders)
+    typer.echo("[train] Done.")
 
 
 @app.command()
@@ -408,12 +413,14 @@ def eval(
     ),
 ):
     """Run evaluation (no training). Logs metrics and artifacts to MLflow if configured."""
+    typer.echo(f"[eval] Loading config: {config_path}")
     cfg = ExperimentConfig(load_yaml(config_path))
 
     seed = int(cfg.get("seed", 0))
     define_seed(seed)
 
     # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
+    typer.echo("[eval] Building datamodule and model...")
     dm = build_datamodule(cfg.section("data"))
     model_obj = build_model(cfg.section("model"))
 
@@ -442,6 +449,7 @@ def eval(
     )
 
     if checkpoint_path:
+        typer.echo(f"[eval] Loading checkpoint: {checkpoint_path}")
         payload = torch.load(checkpoint_path, map_location="cpu")
         state = payload.get("model_state_dict", payload)
         trainer.model.load_state_dict(state, strict=True)
@@ -450,8 +458,10 @@ def eval(
     if not loaders:
         raise ValueError("No dataloaders available for evaluation.")
 
+    typer.echo(f"[eval] Running evaluation on {len(loaders)} loader(s): {', '.join(sorted(loaders))}")
     trainer.evaluate(
         loaders,
         with_features=bool(with_features),
         feature_extractor=None,
     )
+    typer.echo("[eval] Done.")
