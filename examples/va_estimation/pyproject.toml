@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chimera-ml-va-estimation"
+version = "0.1.0"
+description = "Valence/Arousal estimation example plugin for chimera_ml"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "chimera-ml>=0.1.0",
+  "torch==2.10.0",
+  "torchaudio==2.10.0",
+  "torchvision==0.25.0",
+  "torchcodec==0.10.0",
+  "transformers",
+  "soundfile",
+  "pandas",
+  "graphql-core",
+  "mlflow",
+]
+
+[project.entry-points."chimera_ml.plugins"]
+va_estimation = "chimera_plugin:register"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["chimera_plugin", "utils", "train"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -5,17 +5,15 @@ import warnings
 
 _MODULES_TO_REGISTER: tuple[str, ...] = (
     "audio.data.audio_va_datamodule",
-    "audio.data.audio_va_test_datamodule",
     "audio.models.wavlm_s2s_model",
     "audio.loss.audio_ccc_mse_loss",
     "audio.optimizers.adamw_two_group_optimizer",
+    "audio.schedulers.named_reduceonplateau_scheduler",
     "audio.callbacks.audio_framewise_callback",
     "audio.callbacks.audio_windowwise_callback",
     "audio.callbacks.audio_unfreeze_backbone_callback",
-    "callbacks.ema_callback",
     "metrics.va_ccc_metric",
     "fusion.data.fusion_va_datamodule",
-    "fusion.data.fusion_va_test_datamodule",
     "fusion.models.fusion_model",
     "fusion.loss.fusion_ccc_mse_loss",
     "fusion.callbacks.fusion_framewise_callback",

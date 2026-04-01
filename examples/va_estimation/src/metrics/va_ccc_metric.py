@@ -1,11 +1,11 @@
 
 import torch
+from utils import ccc_1d
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import METRICS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.metrics.base import BaseMetric
-from utils import ccc_1d
 
 
 class VACCCMetric(BaseMetric):

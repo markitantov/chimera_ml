@@ -11,10 +11,10 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from utils import TensorMetricAdapter
 
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.core.registry import CALLBACKS, METRICS
-from utils import TensorMetricAdapter
 
 
 @dataclass

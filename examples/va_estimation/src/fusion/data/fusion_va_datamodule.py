@@ -1,10 +1,11 @@
 from pathlib import Path
 from typing import Any
 
-from chimera_ml.core.registry import DATAMODULES
-from chimera_ml.data.datamodule import DataModule
 from fusion.data.fusion_masking_collate import fusion_masking_collate
 from fusion.data.fusion_va_dataset import FusionVADataset
+
+from chimera_ml.core.registry import DATAMODULES
+from chimera_ml.data.datamodule import DataModule
 
 
 def split_mods(modalities: dict[str, dict[str, Any]] | None, split: str) -> tuple[dict[str, int], dict[str, Path]]:

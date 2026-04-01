@@ -1,7 +1,8 @@
 import sys
 
-from chimera_ml.cli import app as chimera_main
 import chimera_plugin
+
+from chimera_ml.cli import app as chimera_main
 
 
 def main() -> None:
