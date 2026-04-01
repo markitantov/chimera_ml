@@ -3,8 +3,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-import requests
-
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.core.registry import CALLBACKS
 
@@ -34,6 +32,18 @@ def _format_metric(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.10g}"
     return str(value)
+
+
+def _import_requests() -> Any:
+    """Import requests lazily and raise actionable error if missing."""
+    try:
+        import requests  # type: ignore
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "Dependency 'requests' is not installed. "
+            "Install it with: pip install requests"
+        ) from e
+    return requests
 
 
 @dataclass
@@ -72,7 +82,8 @@ class TelegramNotifierCallback(BaseCallback):
     _best_epoch: Any | None = field(init=False, default=None)
     _best_value: float | None = field(init=False, default=None)
     _best_logs: dict[str, float] = field(init=False, default_factory=dict)
-    _session: requests.Session | None = field(init=False, default=None)
+    _requests: Any | None = field(init=False, default=None)
+    _session: Any | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.mode not in ("min", "max"):
@@ -82,10 +93,11 @@ class TelegramNotifierCallback(BaseCallback):
         """Initialize Telegram session and reset run-level state."""
         self._telegram_token = _env_required(self.token_env_field)
         self._telegram_chat_id = _env_required(self.chat_id_env_field)
+        self._requests = _import_requests()
 
         # Prepare Telegram API endpoint and HTTP session (reused connection).
         self._api_url = f"https://api.telegram.org/bot{self._telegram_token}/sendMessage"
-        self._session = requests.Session()
+        self._session = self._requests.Session()
 
         # Cache MLflow experiment name if present.
         self._exp_name = None
@@ -208,11 +220,15 @@ class TelegramNotifierCallback(BaseCallback):
             "parse_mode": self.telegram_parse_mode,
         }
 
+        request_exception_cls: type[BaseException] = Exception
+        if self._requests is not None:
+            request_exception_cls = getattr(self._requests, "RequestException", Exception)
+
         resp = None
         try:
             resp = self._session.post(self._api_url, data=data, timeout=self.request_timeout_sec)
             resp.raise_for_status()
-        except requests.RequestException as e:
+        except request_exception_cls as e:
             status = getattr(resp, "status_code", None) if "resp" in locals() else None
             body = None
             try:

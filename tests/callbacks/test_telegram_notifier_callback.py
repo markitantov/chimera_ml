@@ -1,7 +1,6 @@
 import importlib
 
 import pytest
-import requests
 
 from chimera_ml.callbacks.telegram_notifier_callback import TelegramNotifierCallback
 
@@ -44,7 +43,7 @@ class _ResponseStub:
 
     def raise_for_status(self):
         if not self._ok:
-            raise requests.HTTPError("bad status")
+            raise RuntimeError("bad status")
 
 
 class _SessionStub:
@@ -61,6 +60,14 @@ class _SessionStub:
         self.closed = True
 
 
+class _RequestsStub:
+    def __init__(self, session):
+        self._session = session
+
+    def Session(self):
+        return self._session
+
+
 def test_telegram_on_fit_start_requires_env_vars(monkeypatch):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
@@ -74,7 +81,7 @@ def test_telegram_callback_no_logger_and_failed_request_does_not_crash(monkeypat
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
     session = _SessionStub(ok=False)
-    monkeypatch.setattr(telegram_module.requests, "Session", lambda: session)
+    monkeypatch.setattr(telegram_module, "_import_requests", lambda: _RequestsStub(session))
 
     trainer = _TrainerStub(with_logger=False)
     cb = TelegramNotifierCallback()
@@ -90,7 +97,7 @@ def test_telegram_callback_uses_mlflow_logger_experiment_name(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
     session = _SessionStub(ok=True)
-    monkeypatch.setattr(telegram_module.requests, "Session", lambda: session)
+    monkeypatch.setattr(telegram_module, "_import_requests", lambda: _RequestsStub(session))
 
     trainer = _TrainerStub(with_logger=True, with_mlflow=True)
     cb = TelegramNotifierCallback()
@@ -108,7 +115,7 @@ def test_telegram_callback_without_mlflow_does_not_render_experiment(monkeypatch
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
     session = _SessionStub(ok=True)
-    monkeypatch.setattr(telegram_module.requests, "Session", lambda: session)
+    monkeypatch.setattr(telegram_module, "_import_requests", lambda: _RequestsStub(session))
 
     trainer = _TrainerStub(with_logger=True, with_mlflow=False)
     cb = TelegramNotifierCallback()
@@ -125,7 +132,7 @@ def test_telegram_monitor_missing_logs_warning(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
     session = _SessionStub(ok=True)
-    monkeypatch.setattr(telegram_module.requests, "Session", lambda: session)
+    monkeypatch.setattr(telegram_module, "_import_requests", lambda: _RequestsStub(session))
 
     trainer = _TrainerStub(with_logger=True, with_mlflow=True)
     cb = TelegramNotifierCallback(monitor="val/loss")

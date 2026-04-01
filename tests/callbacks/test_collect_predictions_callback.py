@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import torch
 
 from chimera_ml.callbacks.base import BaseCallback
@@ -8,6 +6,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.losses.base import BaseLoss
 from chimera_ml.metrics.regression_metric import MAEMetric
+from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.trainer import Trainer
 
@@ -30,13 +29,6 @@ class _MLflowStub:
         self.calls.append((data, artifact_path, filename))
 
 
-@dataclass
-class _Cached:
-    preds: torch.Tensor
-    targets: torch.Tensor | None = None
-    sample_meta: list[dict[str, object]] | None = None
-
-
 class _TrainerStub:
     def __init__(self):
         self.config = type("Cfg", (), {})()
@@ -46,15 +38,15 @@ class _TrainerStub:
         self._val_loaders = {"val_a": object(), "val_b": object()}
         self._test_loaders = {"test_a": object()}
         self._loaders = {}
-        self._cache: dict[str, _Cached] = {}
+        self._cache: dict[str, CachedSplitOutputs] = {}
         self.predict_calls: list[str] = []
 
-    def get_cached_predictions(self, split: str):
+    def get_cached_split_outputs(self, split: str):
         return self._cache.get(split)
 
     def predict(self, loader, split: str):
         self.predict_calls.append(split)
-        return _Cached(
+        return CachedSplitOutputs(
             preds=torch.tensor([[1.0, 0.0], [0.0, 1.0]]),
             targets=torch.tensor([0, 1]),
             sample_meta=[{"id": "p0"}, {"id": "p1"}],
@@ -72,7 +64,7 @@ def test_collect_predictions_sets_collect_cache_on_fit_start():
 
 def test_collect_predictions_regression_uses_cache_and_logs_csv_bytes():
     trainer = _TrainerStub()
-    trainer._cache["val_a"] = _Cached(
+    trainer._cache["val_a"] = CachedSplitOutputs(
         preds=torch.tensor([[0.1, 0.2], [0.3, 0.4]]),
         targets=torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
         sample_meta=[{"id": "a"}, {"id": "b"}],
@@ -91,7 +83,7 @@ def test_collect_predictions_regression_uses_cache_and_logs_csv_bytes():
 
 def test_collect_predictions_classification_adds_probabilities_when_enabled():
     trainer = _TrainerStub()
-    trainer._cache["test"] = _Cached(
+    trainer._cache["test"] = CachedSplitOutputs(
         preds=torch.tensor([[2.0, 1.0], [0.1, 3.0]]),
         targets=torch.tensor([0, 1]),
         sample_meta=[{"id": "x"}, {"id": "y"}],
@@ -160,7 +152,7 @@ def test_collect_predictions_skips_when_no_mlflow_logger():
 
 def test_collect_predictions_handles_ragged_cached_tensors():
     trainer = _TrainerStub()
-    trainer._cache["val_a"] = _Cached(
+    trainer._cache["val_a"] = CachedSplitOutputs(
         preds=[
             torch.tensor([[[0.1], [0.2]], [[0.3], [0.4]]]),
             torch.tensor([[[0.5]], [[0.6]]]),
@@ -225,7 +217,7 @@ class _CacheMAEOnValCallback(BaseCallback):
         return list(x)
 
     def on_epoch_end(self, trainer, epoch: int, logs: dict[str, float]) -> None:
-        cached = trainer.get_cached_predictions(self.split)
+        cached = trainer.get_cached_split_outputs(self.split)
         if cached is None or cached.targets is None:
             raise AssertionError(f"No cached preds/targets for split '{self.split}'.")
 
@@ -273,7 +265,7 @@ def test_collect_predictions_integration_uses_trainer_ragged_cache():
         split="val_seq",
     )
 
-    cached = trainer.get_cached_predictions("val_seq")
+    cached = trainer.get_cached_split_outputs("val_seq")
     assert cached is not None
     assert isinstance(cached.preds, list)
     assert isinstance(cached.targets, list)

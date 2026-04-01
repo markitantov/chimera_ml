@@ -5,8 +5,6 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -18,15 +16,13 @@ from chimera_ml.data.loader_utils import normalize_loaders
 from chimera_ml.logging.base import BaseLogger
 from chimera_ml.losses.base import BaseLoss
 from chimera_ml.metrics.base import BaseMetric
-from chimera_ml.metrics.confusion_matrix_metric import ConfusionMatrixMetric
 from chimera_ml.models.base import BaseModel
+from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.mixed_loader_utils import (
     estimate_train_epoch_steps,
     iter_mixed_train_batches,
 )
-from chimera_ml.training.predictions_store import EpochPredictions
-from chimera_ml.visualization.confusion_matrix import fig_to_png_bytes, plot_confusion_matrix
 
 FeatureExtractor = Callable[[BaseModel, Batch, ModelOutput], torch.Tensor]
 
@@ -48,7 +44,7 @@ class Trainer:
     stop_training: bool = False
 
     global_step: int = 0
-    predictions_cache: dict[str, EpochPredictions] = field(default_factory=dict)
+    cached_outputs: dict[str, CachedSplitOutputs] = field(default_factory=dict)
 
     def fit(
         self,
@@ -158,35 +154,6 @@ class Trainer:
 
                     logs_for_callbacks.update({f"{split_name}/{k}": v for k, v in val_logs.items()})
 
-                    # Confusion matrix (if metric is present) for this split
-                    cm_metric = next(
-                        (m for m in self.metrics if isinstance(m, ConfusionMatrixMetric)),
-                        None,
-                    )
-                    if cm_metric is not None:
-                        cm = cm_metric.value()
-                        if (
-                            isinstance(cm, np.ndarray)
-                            and cm.ndim == 2
-                            and cm.shape[0] == cm.shape[1]
-                        ):
-                            fig = plot_confusion_matrix(
-                                cm,
-                                labels=self.class_names,
-                                title=f"{split_name} Confusion Matrix (epoch {epoch})",
-                            )
-
-                            try:
-                                png = fig_to_png_bytes(fig)
-                                if self.mlflow_logger:
-                                    self.mlflow_logger.log_artifact_bytes(
-                                        png,
-                                        artifact_path=f"figures/{split_name}",
-                                        filename=f"confusion_matrix_epoch_{epoch}.png",
-                                    )
-                            finally:
-                                plt.close(fig)
-
             if self.mlflow_logger:
                 for g in self.optimizer.param_groups:
                     name = g.get("name", "group")
@@ -268,9 +235,9 @@ class Trainer:
 
         return results
 
-    def get_cached_predictions(self, split: str) -> EpochPredictions | None:
+    def get_cached_split_outputs(self, split: str) -> CachedSplitOutputs | None:
         """Return cached predictions for a split from the latest evaluation epoch."""
-        return self.predictions_cache.get(split)
+        return self.cached_outputs.get(split)
 
     def _extract_features(
         self,
@@ -327,7 +294,7 @@ class Trainer:
 
         # reset cached predictions for this split/epoch
         if not train and self.config.collect_cache:
-            self.predictions_cache.pop(split, None)
+            self.cached_outputs.pop(split, None)
 
         collect_preds = (not train) and bool(self.config.collect_cache)
 
@@ -446,7 +413,7 @@ class Trainer:
                 if (with_features and feats_chunks)
                 else None
             )
-            self.predictions_cache[split] = EpochPredictions(
+            self.cached_outputs[split] = CachedSplitOutputs(
                 preds=preds, targets=targets, sample_meta=metas, features=feats
             )
 

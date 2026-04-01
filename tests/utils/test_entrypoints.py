@@ -22,10 +22,6 @@ class _EntryPointsSelectStub:
         return self._items
 
 
-class _EntryPointsLegacyStub(dict):
-    pass
-
-
 def test_load_entrypoint_plugins_calls_callable_once(monkeypatch):
     ep._LOADED.clear()
     called = {"n": 0}
@@ -39,20 +35,6 @@ def test_load_entrypoint_plugins_calls_callable_once(monkeypatch):
     ep.load_entrypoint_plugins("chimera_ml.plugins")
     ep.load_entrypoint_plugins("chimera_ml.plugins")
 
-    assert called["n"] == 1
-
-
-def test_load_entrypoint_plugins_supports_legacy_get_api(monkeypatch):
-    ep._LOADED.clear()
-    called = {"n": 0}
-
-    def _register():
-        called["n"] += 1
-
-    eps = _EntryPointsLegacyStub({"chimera_ml.plugins": [_EntryPointStub("plugin_b", _register)]})
-    monkeypatch.setattr(importlib.metadata, "entry_points", lambda: eps)
-
-    ep.load_entrypoint_plugins("chimera_ml.plugins")
     assert called["n"] == 1
 
 

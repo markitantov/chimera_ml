@@ -166,7 +166,7 @@ def test_trainer_run_epoch_collects_cache_and_handles_target_errors():
 
     assert "loss" in metrics
     assert "num_samples" in metrics
-    cached = tr.get_cached_predictions("val")
+    cached = tr.get_cached_split_outputs("val")
     assert cached is not None
     assert cached.preds.shape[0] == 2
     assert cached.features is not None and cached.features.shape[0] == 2
@@ -234,7 +234,7 @@ def test_trainer_run_epoch_keeps_ragged_cache_for_variable_sequence_length():
         with_features=True,
     )
 
-    cached = tr.get_cached_predictions("val_seq")
+    cached = tr.get_cached_split_outputs("val_seq")
     assert cached is not None
     assert isinstance(cached.preds, list)
     assert isinstance(cached.targets, list)

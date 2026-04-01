@@ -1,245 +1,169 @@
 # Chimera ML
 
-`Chimera ML (Cross-modal HIerarchical Merging of Embeddings and Representations)` is a lightweight training framework for configurable uni-modal and multi-modal experiments.
-It is built around a small set of registries and a YAML-driven CLI, so project-specific code lives in an external plugin package while training, evaluation, logging, checkpointing, and callback orchestration stay inside the library.
+`Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations)` is a lightweight framework for training and evaluating configurable uni-modal and multi-modal models.
 
-This README reflects the current usage pattern of the library:
+The core idea is simple:
 
-```bash
-chimera_ml train --config-path path/to/cfg.yaml
-chimera_ml eval --config-path path/to/cfg.yaml --checkpoint-path path/to/checkpoint.pt
-```
+- the library provides runtime infrastructure (trainer, logging, callbacks, registry builders),
+- task-specific components (datamodules, models, losses, metrics, callbacks) live in external plugin packages,
+- experiments are driven by YAML configs and CLI commands.
 
-## What the library does
+## Requirements
 
-`Chimera ML` provides:
-
-- registry-based construction of datamodules, models, losses, metrics, optimizers, schedulers, callbacks, collates, and loggers;
-- YAML-driven experiment setup;
-- a PyTorch training loop with mixed precision, gradient clipping, schedulers, and callback hooks;
-- evaluation over `train` / `val` / `test` loaders;
-- checkpointing and snapshotting;
-- console and MLflow logging;
-- support for multimodal batches and modality-aware collation;
-- plugin loading through Python entry points, so external projects can register their own components without modifying the library itself.
-
-The intended workflow is:
-
-1. `Chimera ML` is installed as a reusable library.
-2. A task-specific project defines and registers its own datamodules, models, losses, callbacks, etc.
-3. YAML configs reference those components by name.
-4. The CLI reads the config, builds everything from registries, and runs training or evaluation.
-
----
+- Python `>=3.12,<3.13`
+- PyTorch `>=2.2,<3.0`
 
 ## Installation
 
-### 1. Install the library itself
-
-Inside the `chimera_ml` repository:
+Install from PyPI:
 
 ```bash
-poetry install
+pip install chimera-ml
 ```
 
-This installs the package and exposes the CLI entry point:
+or:
 
 ```bash
-chimera_ml
+poetry add chimera-ml
 ```
 
-### 2. Install it in a project that uses custom components
+By default, the package includes MLflow, matplotlib, and requests dependencies.
 
-A typical project depends on `Chimera ML` as a local package:
-
-```toml
-[tool.poetry.dependencies]
-chimera-ml = { path = "../chimera_ml", develop = true }
-```
-
-Then install project dependencies:
+Install from source (development):
 
 ```bash
-poetry install
+poetry install --with dev
 ```
 
-That is the setup used in the ABAW project as well: the task repository contains task-specific code, while `Chimera ML` provides the training runtime.
-
----
-
-## High-level architecture
-
-The framework is built around registries defined in `chimera_ml.core.registry`:
-
-- `DATAMODULES`
-- `MODELS`
-- `LOSSES`
-- `METRICS`
-- `OPTIMIZERS`
-- `SCHEDULERS`
-- `CALLBACKS`
-- `COLLATES`
-- `LOGGERS`
-
-Each registry maps a string name from YAML to a factory function or class constructor.
-
-At runtime the CLI does the following:
-
-1. loads the YAML config;
-2. sets the random seed;
-3. creates the experiment / run name;
-4. builds the datamodule from `data.name` and `data.params`;
-5. optionally asks the datamodule for model context via `get_model_context()`;
-6. builds the model from `model.name` and `model.params`;
-7. builds loss, metrics, optimizer, scheduler, loggers, and callbacks;
-8. runs training or evaluation using `Trainer`.
-
-This means the library itself does not need to know anything about a specific task such as emotion recognition, audiovisual fusion, or sequence-to-sequence regression. All task-specific behavior is provided by registered components.
-
----
-
-## How component registration works
-
-### Built-in components
-
-Some components are shipped with `chimera_ml` itself, for example:
-
-- optimizers from `chimera_ml.training.optimizers`
-- schedulers from `chimera_ml.training.schedulers`
-- callbacks like `checkpoint_callback`, `early_stopping_callback`, `snapshot_callback`
-- built-in fusion models
-- basic regression / classification losses and metrics
-
-These are registered automatically when `chimera_ml` is imported.
-
-### Project-specific components
-
-External projects register their own components using the registry decorators.
-
-Example: registering a datamodule
-
-```python
-from chimera_ml.core.registry import DATAMODULES
-
-@DATAMODULES.register("my_custom_datamodule")
-def my_custom_datamodule(**params):
-    return MyCustomDatamodule(**params)
-```
-
-Example: registering a model
-
-```python
-from chimera_ml.core.registry import MODELS
-
-@MODELS.register("my_model")
-def my_model(**params):
-    return MyModel(**params)
-```
-
-Example: registering a custom callback
-
-```python
-from chimera_ml.core.registry import CALLBACKS
-
-@CALLBACKS.register("my_custom_callback")
-def my_custom_callback(**params):
-    return MyCustomCallback(**params)
-```
-
-After that, YAML can reference these names directly.
-
----
-
-## How plugin loading works
-
-For external projects, the recommended mechanism is Python entry points.
-
-In the task-specific project's `pyproject.toml`:
-
-```toml
-[tool.poetry.plugins."chimera_ml.plugins"]
-my_project = "chimera_plugin:register"
-```
-
-Then the project provides a function like:
-
-```python
-# chimera_plugin.py
-
-def register():
-    import my_project.datamodules
-    import my_project.models
-    import my_project.losses
-    import my_project.metrics
-    import my_project.callbacks
-```
-
-The goal of that function is simply to import modules that execute registration decorators.
-
-When `Chimera ML` starts, it loads all entry points from the `chimera_ml.plugins` group. If an entry point resolves to a callable, it is executed automatically.
-
-This is why commands such as:
+CLI entry points:
 
 ```bash
-chimera_ml train --config-path path/to/cfg.yaml
+chimera-ml --help
+chimera_ml --help
 ```
 
-can construct components that do not exist inside the `chimera_ml` repository itself, as long as the project plugin is installed and registered.
+Both names are available; docs use `chimera-ml`.
 
----
+## Quick Start
 
-## YAML config structure
+1. Install `chimera-ml`.
+2. Install your task plugin package (example below).
+3. Run train/eval with YAML config.
 
-The framework expects a config with sections similar to the following:
+Example plugin from this repo:
+
+```bash
+pip install -e examples/va_estimation
+chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path path/to/last.pt
+```
+
+## CLI
+
+Main commands:
+
+```bash
+chimera-ml validate-config --config-path <config.yaml>
+chimera-ml doctor
+chimera-ml train --config-path <config.yaml> [--class-names "cat,dog,..."]
+chimera-ml eval --config-path <config.yaml> [--checkpoint-path <ckpt.pt>] [--with-features] [--class-names "..."]
+chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules]
+chimera-ml plugins list [--group chimera_ml.plugins]
+```
+
+`validate-config`:
+
+- checks config structure and required sections without starting training.
+
+`doctor`:
+
+- prints quick environment diagnostics (Python, torch, CUDA, MLflow, registry/plugin counts).
+
+`train`:
+
+- requires `experiment_info.params.experiment_name`,
+- generates `run_name` via `generate_run_name(...)`,
+- patches `checkpoint_callback` and `snapshot_callback` params with experiment/run data,
+- builds all components from registries and runs `Trainer.fit(...)`.
+
+`eval`:
+
+- builds datamodule/model/loss/metrics/callbacks from the same config style,
+- optionally loads checkpoint (`model_state_dict` or raw state dict),
+- evaluates over merged `train`/`val`/`test` loader splits when available.
+
+`registry list`:
+
+- prints currently registered keys (including keys loaded from plugins).
+
+`plugins list`:
+
+- prints discovered Python entry points for plugin group `chimera_ml.plugins`.
+
+## YAML Config Model
+
+Top-level sections used by runtime:
+
+- `seed`
+- `experiment_info` (required for `train`)
+- `data`
+- `model`
+- `train`
+- `loss`
+- `optimizer`
+- `scheduler` (optional)
+- `metrics` (list)
+- `logging` (list)
+- `callbacks` (list)
+
+Minimal skeleton:
 
 ```yaml
 seed: 0
 
 experiment_info:
   params:
-    experiment_name: "10th_ABAW"
-    run_name: "wavlm"
+    experiment_name: "my_experiment"
+    include_time: true
     datetime_format: "%Y-%m-%d_%H-%M"
+    timezone: "UTC"
 
 data:
-  name: "my_custom_datamodule"
-  params:
-    ...
+  name: "my_datamodule"
+  params: {}
 
 model:
-  name: "my_module"
-  params:
-    ...
+  name: "my_model"
+  params: {}
 
 train:
   params:
-    epochs: 50
-    ...
+    epochs: 10
+    device: "cuda"
+    mixed_precision: true
+    use_scheduler: true
+    scheduler_step_per_epoch: true
+    scheduler_monitor: "val/loss"
+
+loss:
+  name: "mse_loss"
+  params: {}
 
 optimizer:
   name: "adamw_optimizer"
   params:
-    ...
+    lr: 1e-3
 
-loss:
-  name: "mse_loss"
+scheduler:
+  name: "steplr_scheduler"
   params:
-    ...
+    step_size: 10
+    gamma: 0.5
 
 metrics:
-  - name: "va_ccc_metric"
-    params: 
-    ...
-
-callbacks:
-  - name: "checkpoint_callback"
-    params:
-      log_path: "logs"
-      monitor: "val_framewise/va_ccc_metric"
-      mode: "max"
-  - name: "my_custom_callback"
-    params:
-      ...
+  - name: "mae_metric"
+    params: {}
 
 logging:
   - name: "console_file_logger"
@@ -247,87 +171,213 @@ logging:
       log_path: "logs"
   - name: "mlflow_logger"
     params:
-      tracking_uri: "mlruns"
+      tracking_uri: "sqlite:///logs/mlflow.db"
+
+callbacks:
+  - name: "checkpoint_callback"
+    params:
+      monitor: "val/loss"
+      mode: "min"
 ```
 
-### Section semantics
+## TrainConfig Parameters
 
-- `data`: builds a datamodule from the `DATAMODULES` registry.
-- `model`: builds a model from the `MODELS` registry.
-- `optimizer`: builds an optimizer and injects the current model.
-- `scheduler`: optional, receives the already built optimizer.
-- `loss`: builds a loss object.
-- `metrics`: list of metric configs.
-- `callbacks`: list of callback configs.
-- `logging`: list-based section; can contain multiple loggers.
-- `train.params`: converted into `TrainConfig`.
+`train.params` is mapped to `TrainConfig`:
 
-### Important note about names
+- `epochs` (default `10`)
+- `grad_clip_norm` (default `null`)
+- `mixed_precision` (default `false`)
+- `log_every_steps` (default `50`)
+- `device` (default `"cuda"`)
+- `train_loader_mode`: `single | round_robin | weighted` (default `single`)
+- `train_stop_on`: `min | max` (default `min`)
+- `train_loader_weights` (optional mapping for weighted mode)
+- `use_scheduler` (default `false`)
+- `scheduler_step_per_epoch` (default `true`)
+- `scheduler_monitor` (optional metric key)
+- `collect_cache` (default `true`)
 
-Registry keys are lowercased by the builder, so YAML names should be treated as case-insensitive, but in practice it is best to keep them lowercase and consistent.
+## Data Contract
 
----
+The trainer expects `Batch` objects:
 
-## CLI usage
+```python
+Batch(
+    inputs={"modality": tensor, ...},
+    targets=tensor_or_none,
+    masks={"sequence_mask": ..., "audio_mask": ..., ...} or None,
+    meta={"sample_meta": [...], ...} or None,
+)
+```
 
-### Training
+Built-in `MaskingCollate` (`masking_collate`) supports variable-length multimodal inputs and creates:
 
-Use:
+- padded modality tensors,
+- `sequence_mask`,
+- per-modality masks like `{modality}_mask`,
+- optional legacy `meta["masks"]`.
+
+## Plugin System
+
+On `import chimera_ml`, the library calls `register_all()`:
+
+- loads built-in modules that register built-in components,
+- loads external entry points from group `chimera_ml.plugins`,
+- executes callable entry points once per process.
+
+Plugin declaration (recommended, PEP 621 style):
+
+```toml
+[project.entry-points."chimera_ml.plugins"]
+my_project = "my_project.chimera_plugin:register"
+```
+
+Typical `register()` function:
+
+```python
+def register():
+    import my_project.data
+    import my_project.models
+    import my_project.losses
+    import my_project.metrics
+    import my_project.callbacks
+```
+
+Import side effects execute registry decorators.
+
+## Built-In Registry Keys
+
+Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty by default.
+
+`MODELS`:
+
+- `feature_fusion_model`
+- `prediction_fusion_model`
+- `gated_fusion_model`
+- `gated_prediction_fusion_model`
+
+`LOSSES`:
+
+- `mse_loss`
+- `mae_loss`
+- `cross_entropy_loss`
+- `focal_loss`
+- `bce_with_logits_loss`
+- `ccc_loss`
+
+`METRICS`:
+
+- `mae_metric`
+- `mse_metric`
+- `rmse_metric`
+- `r2_metric`
+- `prf_macro_metric`
+- `prf_micro_metric`
+- `prf_weighted_metric`
+- `confusion_matrix_metric`
+
+`OPTIMIZERS`:
+
+- `adamw_optimizer`
+- `adam_optimizer`
+- `sgd_optimizer`
+
+`SCHEDULERS`:
+
+- `steplr_scheduler`
+- `cosineannealinglr_scheduler`
+- `reduceonplateau_scheduler`
+
+`CALLBACKS`:
+
+- `checkpoint_callback`
+- `collect_predictions_callback`
+- `early_stopping_callback`
+- `snapshot_callback`
+- `telegram_notifier_callback`
+
+`LOGGERS`:
+
+- `console_file_logger`
+- `mlflow_logger`
+
+`COLLATES`:
+
+- `masking_collate`
+
+## Training and Evaluation Behavior
+
+- Mixed precision uses `torch.amp.autocast` and `GradScaler` on CUDA.
+- Training supports one or many train loaders.
+- Multi-loader scheduling modes:
+  - `single`: first loader only.
+  - `round_robin`: cycle loaders.
+  - `weighted`: stochastic sampling with loader weights.
+- Validation/test loaders are normalized to stable split keys (`normalize_loaders`).
+- Metrics are stateful (`reset -> update -> compute`).
+- Optional prediction cache (`CachedSplitOutputs`) stores CPU preds/targets/features for callbacks.
+
+## Logging and Artifacts
+
+`console_file_logger`:
+
+- logs to console + file under `<log_path>/<experiment_name>/<run_name>/`.
+
+`mlflow_logger`:
+
+- logs params/metrics,
+- supports file/text/bytes artifact logging,
+- logs config artifact when `config_path` is provided.
+
+`plot_confusion_matrix_callback`:
+
+- builds confusion matrix figures from cached predictions,
+- logs PNG artifacts to MLflow per split (`figures/<split>/...`).
+
+`telegram_notifier_callback`:
+
+- sends final run status to Telegram via Bot API.
+
+## Callback Lifecycle
+
+Callbacks follow:
+
+- `on_fit_start`
+- `on_epoch_start`
+- `on_batch_end`
+- `on_epoch_end`
+- `on_fit_end`
+
+Highlights:
+
+- `checkpoint_callback`: monitor-based top-k and `last.pt`.
+- `early_stopping_callback`: monitor, mode, patience, min_delta.
+- `snapshot_callback`: code/config snapshots (`code.zip`, config copy).
+- `collect_predictions_callback`: CSV prediction artifacts to MLflow.
+- `plot_confusion_matrix_callback`: confusion matrix PNG artifacts to MLflow.
+- `telegram_notifier_callback`: final Telegram notification via env vars.
+
+## Repository Example
+
+`examples/va_estimation` is a full plugin package using entry points and task-specific components. Use it as a template for new projects.
+
+## Development
+
+Quality checks:
 
 ```bash
-chimera_ml train --config-path path/to/cfg.yaml
+poetry run ruff check src tests
+poetry run pytest
 ```
 
-This command:
+See `CONTRIBUTING.md` for contribution details.
 
-- loads the training config;
-- creates the datamodule and model;
-- builds optimizer, scheduler, loss, metrics, callbacks, and loggers;
-- runs `Trainer.fit(...)`;
-- saves checkpoints through `checkpoint_callback` if configured.
+## Publishing
 
-### Evaluation
+PyPI publishing is automated via GitHub Actions workflow:
 
-Use:
+- `.github/workflows/publish.yml` (triggered by GitHub Release `published`).
 
-```bash
-chimera_ml eval --config-path path/to/cfg.yaml --checkpoint-path path/to/checkpoint.pt
-```
+Release checklist:
 
-This command:
-
-- loads the config;
-- builds the same datamodule and model;
-- restores model weights from `checkpoint_path`;
-- runs evaluation on every available split returned by the datamodule;
-- executes callbacks in eval mode as well.
-
-This matches the intended usage in downstream projects, for example:
-
-```bash
-chimera_ml train --config-path path/to/cfg.yaml
-```
-
-and
-
-```bash
-chimera_ml eval \
-  --config-path path/to/cfg.yaml \
-  --checkpoint-path path/to/checkpoint.pt
-```
-
-### Optional CLI flags
-
-`train` supports:
-
-- `--config-path`
-- `--class-names`
-
-`eval` supports:
-
-- `--config-path`
-- `--checkpoint-path`
-- `--with-features`
-- `--class-names`
-
-`--with-features` is useful if your model exposes features in `ModelOutput.aux["features"]` or if a callback expects extracted representations.
+- see `RELEASING.md`.

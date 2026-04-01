@@ -38,7 +38,7 @@ class CollectPredictionsCallback(BaseCallback):
             return
 
         for split_name, loader in self._resolve_splits(trainer):
-            cached = trainer.get_cached_predictions(split_name)
+            cached = trainer.get_cached_split_outputs(split_name)
             if cached is None:
                 if loader is None:
                     continue

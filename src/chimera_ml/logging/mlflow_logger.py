@@ -13,7 +13,7 @@ def _import_mlflow() -> Any:
         import mlflow  # type: ignore
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "Optional dependency 'mlflow' is not installed. Install it with: pip install mlflow"
+            "Dependency 'mlflow' is not installed. Install it with: pip install mlflow"
         ) from e
     return mlflow
 

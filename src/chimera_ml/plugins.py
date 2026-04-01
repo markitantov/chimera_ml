@@ -21,14 +21,14 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "chimera_ml.callbacks.checkpoint_callback",
     "chimera_ml.callbacks.collect_predictions_callback",
     "chimera_ml.callbacks.early_stopping_callback",
+    "chimera_ml.callbacks.plot_confusion_matrix_callback",
     "chimera_ml.callbacks.snapshot_callback",
     "chimera_ml.callbacks.telegram_notifier_callback",
     "chimera_ml.data.masking_collate",
 )
 
-
 def register_all() -> None:
-    """Register all built-in components and optional entrypoint plugins."""
+    """Register all built-in components and entrypoint plugins."""
     for mod in _BUILTIN_MODULES:
         importlib.import_module(mod)
 
