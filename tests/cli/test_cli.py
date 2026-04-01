@@ -173,6 +173,82 @@ def test_cli_train_works_without_snapshot_callback(monkeypatch):
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
 
 
+def test_cli_train_initializes_console_logger_before_mlflow(monkeypatch):
+    model = _ModelStub()
+    logger_call_order: list[str] = []
+
+    def _build_logger(cfg, inject=None):
+        logger_call_order.append(cfg["name"])
+        return {"name": cfg["name"], "inject": inject}
+
+    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_train())
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
+    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_logger", _build_logger)
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+
+    cli.train(config_path="cfg.yaml", class_names=None)
+
+    assert logger_call_order == ["console_file_logger", "mlflow_logger"]
+    assert _TrainerStub.last_init is not None
+    assert _TrainerStub.last_init["logger"]["name"] == "console_file_logger"
+    assert _TrainerStub.last_init["mlflow_logger"]["name"] == "mlflow_logger"
+
+
+def test_cli_train_creates_logs_dir_before_mlflow_init(monkeypatch, tmp_path):
+    model = _ModelStub()
+    cfg = _config_for_train()
+    cfg["logging"] = [
+        {"name": "mlflow_logger", "params": {"tracking_uri": "sqlite:///logs/mlflow.db"}},
+        {
+            "name": "console_file_logger",
+            "params": {
+                "log_path": "logs",
+                "log_file": "train.log",
+                "console_level": "INFO",
+                "file_level": "INFO",
+            },
+        },
+    ]
+
+    original_build_logger = cli.build_logger
+
+    def _build_logger_wrapper(logger_cfg, inject=None):
+        if logger_cfg["name"] == "mlflow_logger":
+            expected_logs_dir = tmp_path / "logs" / "exp" / "run_name"
+            assert expected_logs_dir.exists()
+            return {"name": "mlflow_logger", "inject": inject}
+
+        return original_build_logger(logger_cfg, inject=inject)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "load_yaml", lambda _: cfg)
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
+    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_logger", _build_logger_wrapper)
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+
+    cli.train(config_path="cfg.yaml", class_names=None)
+
+    assert (tmp_path / "logs" / "exp" / "run_name").exists()
+
+
 def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):
     model = _ModelStub()
 
