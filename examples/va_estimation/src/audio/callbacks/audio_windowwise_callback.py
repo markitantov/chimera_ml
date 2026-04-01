@@ -147,8 +147,7 @@ class AudioWindowWiseCallback(BaseCallback):
     # ---------------- main hook ----------------
     @torch.no_grad()
     def on_epoch_end(self, trainer, epoch: int, logs: dict[str, float]) -> None:
-        cache = getattr(trainer, "predictions_cache", None)
-        cached = cache.get(self.loader_name)
+        cached = trainer.get_cached_split_outputs(self.loader_name)
         if cached is None:
             return
 

@@ -41,17 +41,17 @@ def audio_va_datamodule(
     augment_params = dict(augment_params or {})
 
     train_ds = None
-    # train_ds = AudioVADataset(
-    #     csv_path=train_csv, 
-    #     wav_root=dataset_path / "train",
-    #     filter_non_speech=bool(filter_non_speech),
-    #     labeled=True,
-    #     split="train",
-    #     augment=augment,
-    #     augment_params=augment_params,
-    #     s2s=s2s,
-    #     s2s_steps=s2s_steps
-    # )
+    train_ds = AudioVADataset(
+        csv_path=train_csv, 
+        wav_root=dataset_path / "train",
+        filter_non_speech=bool(filter_non_speech),
+        labeled=True,
+        split="train",
+        augment=augment,
+        augment_params=augment_params,
+        s2s=s2s,
+        s2s_steps=s2s_steps
+    )
 
     val_ds = None
     if val_csv:

@@ -22,7 +22,7 @@ class FusionFrameWiseCallback(BaseCallback):
     """
     Reruns inference on a chosen loader at epoch end and computes framewise metrics.
 
-    Works with variable-length windows without using trainer.predictions_cache.
+    Works with variable-length windows without relying on trainer cache internals.
 
     Steps:
       1) Iterate loader -> model(batch) -> get window preds [B,T,2] and optional feats [B,T,D] / [B,D]
