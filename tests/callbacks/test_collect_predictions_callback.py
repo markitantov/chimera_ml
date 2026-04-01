@@ -7,7 +7,7 @@ from chimera_ml.callbacks.collect_predictions_callback import CollectPredictions
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.losses.base import BaseLoss
-from chimera_ml.metrics.sklearn_regression import SklearnMAEMetric
+from chimera_ml.metrics.regression_metric import MAEMetric
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.trainer import Trainer
 
@@ -234,7 +234,7 @@ class _CacheMAEOnValCallback(BaseCallback):
         if len(preds_chunks) != len(target_chunks):
             raise AssertionError("Cached preds/targets chunks mismatch.")
 
-        metric = SklearnMAEMetric()
+        metric = MAEMetric()
         metric.reset()
         for pred_chunk, target_chunk in zip(preds_chunks, target_chunks, strict=True):
             # Flatten each chunk to keep shape-compatible updates for ragged sequence lengths.

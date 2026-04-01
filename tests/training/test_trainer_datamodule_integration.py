@@ -6,7 +6,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.data.datamodule import DataModule
 from chimera_ml.losses.base import BaseLoss
-from chimera_ml.metrics.sklearn_classification import SklearnPRFMetric
+from chimera_ml.metrics.prf_metric import PRFMetric
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.trainer import Trainer
 
@@ -95,7 +95,7 @@ def test_integration_datamodule_train_and_validate_with_micro_f1():
         model=model,
         loss_fn=_CrossEntropyLoss(),
         optimizer=torch.optim.SGD(model.parameters(), lr=0.25),
-        metrics=[SklearnPRFMetric(average="micro")],
+        metrics=[PRFMetric(average="micro")],
         config=TrainConfig(
             epochs=6,
             mixed_precision=False,

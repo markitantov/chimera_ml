@@ -1,17 +1,17 @@
 """Metrics package.
 
-Only sklearn-based metrics are exposed and registered by default.
+Built-in metrics are exposed and registered by default.
 Importing this package ensures registry decorators are executed.
 """
 
 from chimera_ml.metrics.base import BaseMetric
-from chimera_ml.metrics.sklearn_classification import (
+from chimera_ml.metrics.confusion_matrix_metric import confusion_matrix_metric
+from chimera_ml.metrics.prf_metric import (
     prf_macro_metric,
     prf_micro_metric,
     prf_weighted_metric,
 )
-from chimera_ml.metrics.sklearn_confusion_matrix import confusion_matrix_metric
-from chimera_ml.metrics.sklearn_regression import mae_metric, mse_metric, r2_metric, rmse_metric
+from chimera_ml.metrics.regression_metric import mae_metric, mse_metric, r2_metric, rmse_metric
 
 __all__ = [
     "BaseMetric",

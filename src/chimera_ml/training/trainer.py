@@ -18,7 +18,7 @@ from chimera_ml.data.loader_utils import normalize_loaders
 from chimera_ml.logging.base import BaseLogger
 from chimera_ml.losses.base import BaseLoss
 from chimera_ml.metrics.base import BaseMetric
-from chimera_ml.metrics.sklearn_confusion_matrix import SklearnConfusionMatrixMetric
+from chimera_ml.metrics.confusion_matrix_metric import ConfusionMatrixMetric
 from chimera_ml.models.base import BaseModel
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.mixed_loader_utils import (
@@ -160,7 +160,7 @@ class Trainer:
 
                     # Confusion matrix (if metric is present) for this split
                     cm_metric = next(
-                        (m for m in self.metrics if isinstance(m, SklearnConfusionMatrixMetric)),
+                        (m for m in self.metrics if isinstance(m, ConfusionMatrixMetric)),
                         None,
                     )
                     if cm_metric is not None:
