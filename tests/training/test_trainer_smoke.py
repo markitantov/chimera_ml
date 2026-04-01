@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -59,6 +60,19 @@ class _MeanPredMetric(BaseMetric):
         return {"mean_pred": float(sum(self._vals) / len(self._vals))}
 
 
+class _VectorMetric(BaseMetric):
+    def reset(self) -> None:
+        self._seen = 0
+
+    def update(self, output: ModelOutput, batch: Batch) -> None:
+        self._seen += 1
+
+    def compute(self):
+        if self._seen <= 0:
+            return {}
+        return {"vector_metric": np.asarray([1.0, 2.0], dtype=np.float32)}
+
+
 class _MemoryMLflowLogger(BaseLogger):
     def __init__(self) -> None:
         self.started = 0
@@ -69,6 +83,24 @@ class _MemoryMLflowLogger(BaseLogger):
         self.started += 1
 
     def log_metrics(self, metrics: dict[str, float], step: int) -> None:
+        self.logged.append((dict(metrics), int(step)))
+
+    def end(self) -> None:
+        self.ended += 1
+
+
+class _StrictScalarMLflowLogger(BaseLogger):
+    def __init__(self) -> None:
+        self.started = 0
+        self.ended = 0
+        self.logged: list[tuple[dict[str, float], int]] = []
+
+    def start(self, params: dict[str, object] | None = None) -> None:
+        self.started += 1
+
+    def log_metrics(self, metrics: dict[str, float], step: int) -> None:
+        for value in metrics.values():
+            assert isinstance(value, (float, int))
         self.logged.append((dict(metrics), int(step)))
 
     def end(self) -> None:
@@ -194,3 +226,37 @@ def test_trainer_fit_smoke_runs_with_registered_custom_logger():
     assert custom_logger.started == 1
     assert custom_logger.ended == 1
     assert len(custom_logger.logged) > 0
+
+
+def test_trainer_fit_skips_non_scalar_metrics_for_mlflow():
+    model = _TinyModel()
+    loss_fn = _MSELoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    cfg = TrainConfig(
+        epochs=1,
+        mixed_precision=False,
+        use_scheduler=False,
+        device="cpu",
+        log_every_steps=1,
+    )
+    mlflow_logger = _StrictScalarMLflowLogger()
+    trainer = Trainer(
+        model=model,
+        loss_fn=loss_fn,
+        optimizer=optimizer,
+        metrics=[_VectorMetric()],
+        config=cfg,
+        mlflow_logger=mlflow_logger,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+
+    trainer.fit(_make_loader(4, batch_size=2), val_loaders={"val": _make_loader(2, batch_size=2)})
+
+    assert mlflow_logger.started == 1
+    assert mlflow_logger.ended == 1
+    assert len(mlflow_logger.logged) > 0
+    all_logged_keys = {k for metrics, _ in mlflow_logger.logged for k in metrics}
+    assert "train/vector_metric" not in all_logged_keys
+    assert "val/vector_metric" not in all_logged_keys

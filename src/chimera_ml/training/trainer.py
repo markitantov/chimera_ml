@@ -129,9 +129,11 @@ class Trainer:
             )
 
             if self.mlflow_logger:
-                self.mlflow_logger.log_metrics(
-                    {f"train/{k}": v for k, v in train_logs.items()}, step=epoch
+                train_metrics = self._prepare_metrics_for_mlflow(
+                    {f"train/{k}": v for k, v in train_logs.items()}
                 )
+                if train_metrics:
+                    self.mlflow_logger.log_metrics(train_metrics, step=epoch)
 
             logs_for_callbacks = {f"train/{k}": v for k, v in train_logs.items()}
 
@@ -147,9 +149,11 @@ class Trainer:
                     )
 
                     if self.mlflow_logger:
-                        self.mlflow_logger.log_metrics(
-                            {f"{split_name}/{k}": v for k, v in val_logs.items()}, step=epoch
+                        val_metrics = self._prepare_metrics_for_mlflow(
+                            {f"{split_name}/{k}": v for k, v in val_logs.items()}
                         )
+                        if val_metrics:
+                            self.mlflow_logger.log_metrics(val_metrics, step=epoch)
 
                     logs_for_callbacks.update({f"{split_name}/{k}": v for k, v in val_logs.items()})
 
@@ -606,6 +610,18 @@ class Trainer:
             return f"{float(value):.4f}"
         except Exception:
             return str(value)
+
+    def _prepare_metrics_for_mlflow(self, metrics: Mapping[str, object]) -> dict[str, float]:
+        """Keep only scalar-convertible metrics for MLflow logging."""
+        out: dict[str, float] = {}
+        for key, value in metrics.items():
+            formatted = self._format_metric_for_log(value)
+            try:
+                out[key] = float(formatted)
+            except Exception:
+                # Skip non-scalar metrics (vectors/arrays/complex objects).
+                continue
+        return out
 
     @staticmethod
     def _scheduler_needs_metric(scheduler: object) -> bool:
