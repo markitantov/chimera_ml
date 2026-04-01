@@ -4,6 +4,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.losses.base import BaseLoss
 from chimera_ml.metrics.base import BaseMetric
+from chimera_ml.metrics.regression_metric import MAEMetric
 from chimera_ml.training.config import TrainConfig
 from chimera_ml.training.trainer import Trainer
 
@@ -50,6 +51,14 @@ class _SchedulerNoMetric:
 
     def step(self):
         self.calls += 1
+
+
+class _SchedulerOneMetricArg:
+    def __init__(self):
+        self.calls = []
+
+    def step(self, metric):
+        self.calls.append(metric)
 
 
 def _trainer() -> Trainer:
@@ -149,6 +158,17 @@ def test_trainer_scheduler_helpers_cover_metric_and_non_metric():
     assert s_nom.calls == 1
 
 
+def test_trainer_scheduler_single_metric_arg_signature_is_supported():
+    tr = _trainer()
+    s = _SchedulerOneMetricArg()
+
+    assert tr._scheduler_needs_metric(s) is True
+
+    tr.scheduler = s
+    tr._scheduler_step({"val/loss": 0.123})
+    assert s.calls and float(s.calls[0]) == 0.123
+
+
 def test_trainer_run_epoch_collects_cache_and_handles_target_errors():
     tr = _trainer()
     scaler = torch.amp.GradScaler(device="cpu", enabled=False)
@@ -240,3 +260,34 @@ def test_trainer_run_epoch_keeps_ragged_cache_for_variable_sequence_length():
     assert isinstance(cached.targets, list)
     assert isinstance(cached.features, list)
     assert len(cached.preds) == 2
+
+
+def test_trainer_run_epoch_accepts_raw_values_regression_metrics_without_crashing():
+    model = _TinyModel()
+    loss = _MSELoss()
+    opt = torch.optim.SGD(model.parameters(), lr=1e-3)
+    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu")
+    tr = Trainer(
+        model=model,
+        loss_fn=loss,
+        optimizer=opt,
+        metrics=[MAEMetric(multioutput="raw_values")],
+        config=cfg,
+        mlflow_logger=None,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    metrics = tr._run_epoch(
+        loader=[_batch()],
+        device=torch.device("cpu"),
+        scaler=scaler,
+        train=False,
+        epoch=1,
+        split="val",
+    )
+
+    assert "mae" in metrics
+    assert not isinstance(metrics["mae"], float)

@@ -54,7 +54,16 @@ def iter_mixed_train_batches(
         weights_cfg = train_loader_weights or {}
         iters = {n: iter(loaders[n]) for n in names}
         active = set(names)
+        min_steps_budget: int | None = None
+        if stop_on == "min":
+            lengths = [_safe_len(loaders[n]) for n in names]
+            if all(v is not None for v in lengths):
+                min_steps_budget = min(int(v) for v in lengths if v is not None)
+        yielded = 0
         while active:
+            if min_steps_budget is not None and yielded >= min_steps_budget:
+                return
+
             active_names = [n for n in names if n in active]
             ws = torch.tensor(
                 [float(weights_cfg.get(n, 1.0)) for n in active_names], dtype=torch.float32
@@ -66,6 +75,7 @@ def iter_mixed_train_batches(
             chosen = active_names[idx]
             try:
                 yield chosen, next(iters[chosen])
+                yielded += 1
             except StopIteration:
                 if stop_on == "min":
                     return

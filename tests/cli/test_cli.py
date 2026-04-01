@@ -140,10 +140,9 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
-    cli.train(config_path="cfg.yaml", class_names="cat, dog")
+    cli.train(config_path="cfg.yaml")
 
     assert _TrainerStub.last_init is not None
-    assert _TrainerStub.last_init["class_names"] == ["cat", "dog"]
     assert _TrainerStub.last_init["scheduler"] == "sch"
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
 
@@ -167,7 +166,7 @@ def test_cli_train_works_without_snapshot_callback(monkeypatch):
     )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
-    cli.train(config_path="cfg.yaml", class_names=None)
+    cli.train(config_path="cfg.yaml")
 
     assert _TrainerStub.last_init is not None
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
@@ -195,7 +194,7 @@ def test_cli_train_initializes_console_logger_before_mlflow(monkeypatch):
     monkeypatch.setattr(cli, "build_logger", _build_logger)
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
-    cli.train(config_path="cfg.yaml", class_names=None)
+    cli.train(config_path="cfg.yaml")
 
     assert logger_call_order == ["console_file_logger", "mlflow_logger"]
     assert _TrainerStub.last_init is not None
@@ -244,7 +243,7 @@ def test_cli_train_creates_logs_dir_before_mlflow_init(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "build_logger", _build_logger_wrapper)
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
-    cli.train(config_path="cfg.yaml", class_names=None)
+    cli.train(config_path="cfg.yaml")
 
     assert (tmp_path / "logs" / "exp" / "run_name").exists()
 
@@ -268,11 +267,9 @@ def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):
         config_path="cfg_eval.yaml",
         checkpoint_path="ckpt.pt",
         with_features=True,
-        class_names="c1,c2",
     )
 
     assert _TrainerStub.last_init is not None
-    assert _TrainerStub.last_init["class_names"] == ["c1", "c2"]
     assert _TrainerStub.last_init["mlflow_logger"] is None
     assert _TrainerStub.last_init["logger"] is None
     assert _TrainerStub.last_eval is not None
@@ -298,12 +295,12 @@ def test_cli_eval_flattens_nested_loader_containers(monkeypatch):
     monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
     monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+    monkeypatch.setattr(cli.torch, "load", lambda *args, **kwargs: {"model_state_dict": {}})
 
     cli.eval(
         config_path="cfg_eval.yaml",
-        checkpoint_path=None,
+        checkpoint_path="ckpt.pt",
         with_features=False,
-        class_names=None,
     )
 
     assert _TrainerStub.last_eval is not None
@@ -311,6 +308,35 @@ def test_cli_eval_flattens_nested_loader_containers(monkeypatch):
     assert set(loaders.keys()) == {"train_main", "val0", "val1", "test_a"}
     assert with_features is False
     assert feature_extractor is None
+
+
+def test_cli_eval_uses_weights_only_when_loading_checkpoint(monkeypatch):
+    model = _ModelStub()
+    seen_kwargs: dict[str, object] = {}
+
+    def _fake_torch_load(*args, **kwargs):
+        seen_kwargs.update(kwargs)
+        return {"model_state_dict": {}}
+
+    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_eval())
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMEvalStub())
+    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+    monkeypatch.setattr(cli.torch, "load", _fake_torch_load)
+
+    cli.eval(
+        config_path="cfg_eval.yaml",
+        checkpoint_path="ckpt.pt",
+        with_features=False,
+    )
+
+    assert seen_kwargs.get("weights_only") is True
 
 
 class _RegistryStub:

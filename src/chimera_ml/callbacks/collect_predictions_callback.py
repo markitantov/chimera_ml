@@ -6,6 +6,7 @@ from typing import Any, Literal
 import torch
 from torch.utils.data import DataLoader
 
+from chimera_ml.callbacks._utils import resolve_splits
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.core.registry import CALLBACKS
 
@@ -77,60 +78,7 @@ class CollectPredictionsCallback(BaseCallback):
 
     def _resolve_splits(self, trainer: Any) -> list[tuple[str, DataLoader | None]]:
         """Resolve configured split selectors into concrete (name, loader) pairs."""
-        out: list[tuple[str, DataLoader | None]] = []
-        seen: set[str] = set()
-
-        def add(name: str, loader: DataLoader | None) -> None:
-            if name and name not in seen:
-                seen.add(name)
-                out.append((name, loader))
-
-        train_loaders = getattr(trainer, "_train_loaders", None)
-        val_loaders = getattr(trainer, "_val_loaders", None)
-        test_loaders = getattr(trainer, "_test_loaders", None)
-        all_loaders = getattr(trainer, "_loaders", None)
-
-        for s in self.splits or ["val"]:
-            if s == "train":
-                if isinstance(train_loaders, dict) and train_loaders:
-                    for k, v in train_loaders.items():
-                        add(k, v)
-                elif isinstance(all_loaders, dict):
-                    add("train", all_loaders.get("train"))
-                continue
-
-            if s == "val":
-                if isinstance(val_loaders, dict) and val_loaders:
-                    for k, v in val_loaders.items():
-                        add(k, v)
-                elif isinstance(all_loaders, dict):
-                    add("val", all_loaders.get("val"))
-
-                continue
-
-            if s == "test":
-                if isinstance(test_loaders, dict) and test_loaders:
-                    for k, v in test_loaders.items():
-                        add(k, v)
-                elif isinstance(all_loaders, dict):
-                    add("test", all_loaders.get("test"))
-
-                continue
-
-            # exact split name
-            loader = None
-            if isinstance(train_loaders, dict) and s in train_loaders:
-                loader = train_loaders[s]
-            elif isinstance(val_loaders, dict) and s in val_loaders:
-                loader = val_loaders[s]
-            elif isinstance(test_loaders, dict) and s in test_loaders:
-                loader = test_loaders[s]
-            elif isinstance(all_loaders, dict) and s in all_loaders:
-                loader = all_loaders[s]
-
-            add(s, loader)
-
-        return out
+        return resolve_splits(trainer, self.splits)
 
     @staticmethod
     def _numel(x: torch.Tensor | list[torch.Tensor]) -> int:

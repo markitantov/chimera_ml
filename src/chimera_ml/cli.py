@@ -296,9 +296,6 @@ def train(
     config_path: str = typer.Option(
         ..., "--config-path", "-c", help="Path to experiment YAML config."
     ),
-    class_names: str | None = typer.Option(
-        None, "--class-names", help="Comma-separated class names."
-    ),
 ):
     """Run training from YAML config with dynamic factories."""
     typer.echo(f"[train] Loading config: {config_path}")
@@ -376,8 +373,6 @@ def train(
     scheduler = build_scheduler(cfg.get("scheduler"), optimizer)
     callbacks = build_callbacks(cfg.get("callbacks"))
 
-    cn = [x.strip() for x in class_names.split(",")] if class_names else None
-
     trainer = Trainer(
         model=model_obj,
         loss_fn=loss_fn,
@@ -386,7 +381,6 @@ def train(
         config=train_cfg,
         mlflow_logger=mlflow_logger,
         logger=logger,
-        class_names=cn,
         callbacks=callbacks,
         scheduler=scheduler,
     )
@@ -404,13 +398,10 @@ def eval(
     config_path: str = typer.Option(
         ..., "--config-path", "-c", help="Path to experiment YAML config."
     ),
-    checkpoint_path: str | None = typer.Option(
-        None, "--checkpoint-path", help="Path to .pt checkpoint saved by ModelCheckpoint."
+    checkpoint_path: str = typer.Option(
+        ..., "--checkpoint-path", help="Path to .pt checkpoint saved by ModelCheckpoint."
     ),
     with_features: bool | None = typer.Option(None, "--with-features"),
-    class_names: str | None = typer.Option(
-        None, "--class-names", help="Comma-separated class names."
-    ),
 ):
     """Run evaluation (no training). Logs metrics and artifacts to MLflow if configured."""
     typer.echo(f"[eval] Loading config: {config_path}")
@@ -433,8 +424,6 @@ def eval(
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
     callbacks = build_callbacks(cfg.get("callbacks"))
 
-    cn = [x.strip() for x in class_names.split(",")] if class_names else None
-
     trainer = Trainer(
         model=model_obj,
         loss_fn=loss_fn,
@@ -443,16 +432,14 @@ def eval(
         config=train_cfg,
         mlflow_logger=None,
         logger=None,
-        class_names=cn,
         callbacks=callbacks,
         scheduler=None,
     )
 
-    if checkpoint_path:
-        typer.echo(f"[eval] Loading checkpoint: {checkpoint_path}")
-        payload = torch.load(checkpoint_path, map_location="cpu")
-        state = payload.get("model_state_dict", payload)
-        trainer.model.load_state_dict(state, strict=True)
+    typer.echo(f"[eval] Loading checkpoint: {checkpoint_path}")
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    state = payload.get("model_state_dict", payload)
+    trainer.model.load_state_dict(state, strict=True)
 
     loaders = _merge_eval_loaders(dm)
     if not loaders:

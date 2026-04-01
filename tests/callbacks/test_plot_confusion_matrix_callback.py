@@ -39,7 +39,6 @@ class _TrainerStub:
         self.config = SimpleNamespace(collect_cache=False)
         self.mlflow_logger = _MLflowStub() if with_mlflow else None
         self.logger = _LoggerStub()
-        self.class_names = ["neg", "pos"]
         self._train_loaders = {}
         self._val_loaders = {"val": object()}
         self._test_loaders = {}
@@ -57,7 +56,7 @@ class _TrainerStub:
 
 def test_plot_confusion_matrix_callback_enables_cache_collection():
     trainer = _TrainerStub()
-    cb = PlotConfusionMatrixCallback()
+    cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_fit_start(trainer)
     assert trainer.config.collect_cache is True
 
@@ -81,7 +80,7 @@ def test_plot_confusion_matrix_callback_logs_artifact(monkeypatch):
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
     monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
 
-    cb = PlotConfusionMatrixCallback()
+    cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_epoch_end(trainer, epoch=3, logs={})
 
     assert trainer.mlflow_logger is not None
@@ -106,11 +105,141 @@ def test_plot_confusion_matrix_callback_uses_concat_chunks_for_cached_lists(monk
     monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", lambda **kwargs: {"fig": "ok"})
 
-    cb = PlotConfusionMatrixCallback()
+    cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_epoch_end(trainer, epoch=2, logs={})
 
     assert trainer.mlflow_logger is not None
     assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_2.png")]
+
+
+def test_plot_confusion_matrix_callback_handles_ragged_sequence_chunks(monkeypatch):
+    trainer = _TrainerStub()
+    trainer.cached_outputs["val"] = CachedSplitOutputs(
+        preds=[
+            torch.tensor([[[0.1, 0.9], [0.8, 0.2]]], dtype=torch.float32),
+            torch.tensor([[[0.6, 0.4], [0.3, 0.7], [0.2, 0.8]]], dtype=torch.float32),
+        ],
+        targets=[
+            torch.tensor([[1, 1]], dtype=torch.long),
+            torch.tensor([[0, 1, 0]], dtype=torch.long),
+        ],
+    )
+
+    class _PlotLib:
+        @staticmethod
+        def close(fig):
+            return None
+
+    captured: dict[str, object] = {}
+
+    def _plot(cm, labels, title):
+        captured["cm"] = cm
+        captured["labels"] = labels
+        captured["title"] = title
+        return {"fig": "ok"}
+
+    monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
+    monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
+    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+
+    cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
+    cb.on_epoch_end(trainer, epoch=5, logs={})
+
+    assert trainer.mlflow_logger is not None
+    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_5.png")]
+    assert np.array_equal(captured["cm"], np.array([[1, 1], [1, 2]], dtype=np.int64))
+    assert captured["labels"] == ["neg", "pos"]
+    assert captured["title"] == "val Confusion Matrix (epoch 5)"
+
+
+def test_plot_confusion_matrix_callback_supports_five_classes(monkeypatch):
+    trainer = _TrainerStub()
+    trainer.cached_outputs["val"] = CachedSplitOutputs(
+        preds=torch.tensor(
+            [
+                [0.9, 0.1, 0.0, 0.0, 0.0],  # -> 0
+                [0.0, 0.7, 0.2, 0.1, 0.0],  # -> 1
+                [0.0, 0.1, 0.8, 0.1, 0.0],  # -> 2
+                [0.0, 0.1, 0.1, 0.7, 0.1],  # -> 3
+                [0.0, 0.0, 0.1, 0.2, 0.7],  # -> 4
+            ],
+            dtype=torch.float32,
+        ),
+        targets=torch.tensor([0, 1, 2, 3, 4], dtype=torch.long),
+    )
+
+    class _PlotLib:
+        @staticmethod
+        def close(fig):
+            return None
+
+    captured: dict[str, object] = {}
+
+    def _plot(cm, labels, title):
+        captured["cm"] = cm
+        captured["labels"] = labels
+        captured["title"] = title
+        return {"fig": "ok"}
+
+    monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
+    monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
+    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+
+    cb = PlotConfusionMatrixCallback(class_names=["c0", "c1", "c2", "c3", "c4"])
+    cb.on_epoch_end(trainer, epoch=6, logs={})
+
+    assert trainer.mlflow_logger is not None
+    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_6.png")]
+    assert np.array_equal(captured["cm"], np.eye(5, dtype=np.int64))
+    assert captured["labels"] == ["c0", "c1", "c2", "c3", "c4"]
+    assert captured["title"] == "val Confusion Matrix (epoch 6)"
+
+
+def test_plot_confusion_matrix_callback_supports_seven_classes_with_ragged_chunks(monkeypatch):
+    trainer = _TrainerStub()
+
+    def _logits_for_classes(classes: list[int]) -> torch.Tensor:
+        logits = torch.full((len(classes), 7), -5.0, dtype=torch.float32)
+        for i, cls in enumerate(classes):
+            logits[i, cls] = 5.0
+        return logits
+
+    trainer.cached_outputs["val"] = CachedSplitOutputs(
+        preds=[
+            _logits_for_classes([0, 1, 2, 3]).unsqueeze(0),  # [1,4,7]
+            _logits_for_classes([4, 5, 6]).unsqueeze(0),  # [1,3,7]
+        ],
+        targets=[
+            torch.tensor([[0, 1, 2, 3]], dtype=torch.long),  # [1,4]
+            torch.tensor([[4, 5, 6]], dtype=torch.long),  # [1,3]
+        ],
+    )
+
+    class _PlotLib:
+        @staticmethod
+        def close(fig):
+            return None
+
+    captured: dict[str, object] = {}
+
+    def _plot(cm, labels, title):
+        captured["cm"] = cm
+        captured["labels"] = labels
+        captured["title"] = title
+        return {"fig": "ok"}
+
+    monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
+    monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
+    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+
+    cb = PlotConfusionMatrixCallback(class_names=[f"c{i}" for i in range(7)])
+    cb.on_epoch_end(trainer, epoch=7, logs={})
+
+    assert trainer.mlflow_logger is not None
+    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_7.png")]
+    assert np.array_equal(captured["cm"], np.eye(7, dtype=np.int64))
+    assert captured["labels"] == [f"c{i}" for i in range(7)]
+    assert captured["title"] == "val Confusion Matrix (epoch 7)"
 
 
 def test_plot_confusion_matrix_callback_no_mlflow_is_noop(monkeypatch):

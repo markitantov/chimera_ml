@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from chimera_ml.callbacks._utils import resolve_splits
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.core.registry import CALLBACKS
 from chimera_ml.metrics._utils import compute_confusion_matrix
@@ -30,6 +31,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
     """Render confusion matrix figures and log them as MLflow artifacts."""
 
     splits: list[str] = field(default_factory=lambda: ["val"])
+    class_names: list[str] | None = None
     artifact_path: str = "figures"
     filename_template: str = "confusion_matrix_epoch_{epoch}.png"
     title_template: str = "{split} Confusion Matrix (epoch {epoch})"
@@ -47,7 +49,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
         plt = _import_pyplot()
 
         for split_name in self._resolve_splits(trainer):
-            cached = self._get_cached_split_outputs(trainer, split_name)
+            cached = trainer.get_cached_split_outputs(split_name)
             if cached is None or cached.targets is None:
                 continue
 
@@ -63,7 +65,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
             try:
                 fig = _plot_confusion_matrix(
                     cm=cm,
-                    labels=getattr(trainer, "class_names", None),
+                    labels=self.class_names,
                     title=self.title_template.format(split=split_name, epoch=epoch),
                 )
                 logger.log_artifact_bytes(
@@ -82,55 +84,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
 
     def _resolve_splits(self, trainer: Any) -> list[str]:
         """Resolve configured split selectors into concrete split names."""
-        resolved: list[str] = []
-        seen: set[str] = set()
-
-        train_loaders = getattr(trainer, "_train_loaders", None)
-        val_loaders = getattr(trainer, "_val_loaders", None)
-        test_loaders = getattr(trainer, "_test_loaders", None)
-        all_loaders = getattr(trainer, "_loaders", None)
-
-        def add(name: str) -> None:
-            if name and name not in seen:
-                seen.add(name)
-                resolved.append(name)
-
-        for split in self.splits or ["val"]:
-            if split == "train":
-                if isinstance(train_loaders, dict) and train_loaders:
-                    for name in train_loaders:
-                        add(name)
-                elif isinstance(all_loaders, dict) and "train" in all_loaders:
-                    add("train")
-                continue
-
-            if split == "val":
-                if isinstance(val_loaders, dict) and val_loaders:
-                    for name in val_loaders:
-                        add(name)
-                elif isinstance(all_loaders, dict) and "val" in all_loaders:
-                    add("val")
-                continue
-
-            if split == "test":
-                if isinstance(test_loaders, dict) and test_loaders:
-                    for name in test_loaders:
-                        add(name)
-                elif isinstance(all_loaders, dict) and "test" in all_loaders:
-                    add("test")
-                continue
-
-            add(split)
-
-        return resolved
-
-    @staticmethod
-    def _get_cached_split_outputs(trainer: Any, split: str) -> CachedSplitOutputs | None:
-        getter = getattr(trainer, "get_cached_split_outputs", None)
-        if not callable(getter):
-            return None
-
-        return getter(split)
+        return [name for name, _ in resolve_splits(trainer, self.splits)]
 
     @classmethod
     def _extract_class_indices(
@@ -138,16 +92,53 @@ class PlotConfusionMatrixCallback(BaseCallback):
     ) -> tuple[Any | None, Any | None]:
         preds = CachedSplitOutputs._concat_chunks(cached.preds)
         targets = CachedSplitOutputs._concat_chunks(cached.targets)
-        if preds is None or targets is None:
+        if preds is not None and targets is not None:
+            y_true, y_pred = cls._extract_indices_from_tensor_pair(preds, targets)
+            if y_true is None or y_pred is None:
+                return None, None
+            return y_true.numpy(), y_pred.numpy()
+
+        pred_chunks = cls._as_chunks(cached.preds)
+        target_chunks = cls._as_chunks(cached.targets)
+        if not pred_chunks or not target_chunks:
             return None, None
 
+        y_true_chunks: list[torch.Tensor] = []
+        y_pred_chunks: list[torch.Tensor] = []
+
+        for pred_chunk, target_chunk in zip(pred_chunks, target_chunks, strict=False):
+            y_true, y_pred = cls._extract_indices_from_tensor_pair(pred_chunk, target_chunk)
+            if y_true is None or y_pred is None:
+                continue
+            y_true_chunks.append(y_true)
+            y_pred_chunks.append(y_pred)
+
+        if not y_true_chunks or not y_pred_chunks:
+            return None, None
+
+        return torch.cat(y_true_chunks, dim=0).numpy(), torch.cat(y_pred_chunks, dim=0).numpy()
+
+    @staticmethod
+    def _as_chunks(
+        value: torch.Tensor | list[torch.Tensor] | None,
+    ) -> list[torch.Tensor]:
+        if value is None:
+            return []
+        if torch.is_tensor(value):
+            return [value.detach().cpu()]
+        return [chunk.detach().cpu() for chunk in value if torch.is_tensor(chunk)]
+
+    @staticmethod
+    def _extract_indices_from_tensor_pair(
+        preds: torch.Tensor, targets: torch.Tensor
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         y_pred = (
             preds.view(-1).to(torch.long)
             if preds.ndim <= 1
             else preds.argmax(dim=-1).view(-1).to(torch.long)
         )
 
-        if targets.ndim > 1 and targets.shape[-1] > 1:
+        if PlotConfusionMatrixCallback._targets_are_one_hot_like(targets, preds):
             y_true = targets.argmax(dim=-1).view(-1).to(torch.long)
         else:
             y_true = targets.view(-1).to(torch.long)
@@ -156,7 +147,33 @@ class PlotConfusionMatrixCallback(BaseCallback):
         if n == 0:
             return None, None
 
-        return y_true[:n].numpy(), y_pred[:n].numpy()
+        return y_true[:n], y_pred[:n]
+
+    @staticmethod
+    def _targets_are_one_hot_like(targets: torch.Tensor, preds: torch.Tensor) -> bool:
+        if targets.ndim <= 1 or targets.shape[-1] <= 1:
+            return False
+
+        if preds.ndim <= 1:
+            return False
+
+        if targets.ndim != preds.ndim:
+            return False
+
+        if targets.shape[-1] != preds.shape[-1]:
+            return False
+
+        if targets.dtype.is_floating_point:
+            return True
+
+        if targets.dtype in (torch.bool, torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64):
+            as_long = targets.to(torch.long)
+            if int(as_long.min().item()) < 0 or int(as_long.max().item()) > 1:
+                return False
+            row_sums = as_long.sum(dim=-1)
+            return bool(torch.all(row_sums == 1).item())
+
+        return False
 
 
 def _plot_confusion_matrix(

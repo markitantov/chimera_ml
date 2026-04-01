@@ -72,6 +72,23 @@ def test_iter_mixed_train_batches_weighted_with_non_positive_weights_falls_back_
     assert [name for name, _ in got] == ["b"]
 
 
+def test_iter_mixed_train_batches_weighted_min_does_not_exceed_shortest_epoch_budget(monkeypatch):
+    loaders = {"a": [1], "b": [10, 20, 30]}
+
+    # Keep sampling the longer loader; stop_on=min should still end after min loader budget.
+    monkeypatch.setattr(torch, "multinomial", lambda *_args, **_kwargs: torch.tensor([1]))
+    got = list(
+        iter_mixed_train_batches(
+            loaders,
+            mode="weighted",
+            stop_on="min",
+            train_loader_weights={"a": 1.0, "b": 1.0},
+        )
+    )
+    assert len(got) == 1
+    assert [name for name, _ in got] == ["b"]
+
+
 class _NoLenIterable:
     def __iter__(self):
         yield 1

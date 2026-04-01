@@ -38,7 +38,6 @@ class Trainer:
     config: TrainConfig
     mlflow_logger: BaseLogger | None = None
     logger: logging.Logger | None = None
-    class_names: list[str] | None = None
     callbacks: list[BaseCallback] = field(default_factory=list)
     scheduler: object | None = None
     stop_training: bool = False
@@ -418,7 +417,9 @@ class Trainer:
             )
 
         if not train:
-            metrics_str = " | ".join(f"{k}: {v:.4f}" for k, v in metrics_out.items())
+            metrics_str = " | ".join(
+                f"{k}: {self._format_metric_for_log(v)}" for k, v in metrics_out.items()
+            )
 
             if self.logger:
                 self.logger.info(f"[{split} epoch {epoch}] {metrics_str}")
@@ -557,7 +558,7 @@ class Trainer:
             metrics_out.update(metric.compute())
 
         metrics_str = " | ".join(
-            f"{k}: {v:.4f}"
+            f"{k}: {self._format_metric_for_log(v)}"
             for k, v in metrics_out.items()
             if "/" not in k  # optionally skip per-loader summaries like "train0/loss"
         )
@@ -594,23 +595,46 @@ class Trainer:
         return obj
 
     @staticmethod
+    def _format_metric_for_log(value: object) -> str:
+        """Format scalar metric values and safely stringify vectors/arrays."""
+        if torch.is_tensor(value):
+            if value.ndim == 0:
+                return f"{float(value.item()):.4f}"
+            return str(value.detach().cpu().tolist())
+
+        try:
+            return f"{float(value):.4f}"
+        except Exception:
+            return str(value)
+
+    @staticmethod
     def _scheduler_needs_metric(scheduler: object) -> bool:
         """
         True if scheduler.step() expects a metric (e.g., ReduceLROnPlateau).
-        Works generically via signature inspection.
+        Works generically via bound-method signature inspection.
         """
         try:
-            sig = inspect.signature(scheduler.step)
-            params = list(sig.parameters.values())
-            # params[0] is usually 'self'
-            # ReduceLROnPlateau: step(metrics, epoch=None) -> requires metrics
-            if len(params) >= 2:
-                p1 = params[0]
-                # required positional or named 'metrics'
-                if p1.default is inspect._empty or p1.name == "metrics":
-                    return True
+            step = getattr(scheduler, "step", None)
+            if not callable(step):
+                return False
 
-            return False
+            sig = inspect.signature(step)
+            params = list(sig.parameters.values())
+
+            # For bound methods, `self` is already bound and omitted from signature.
+            positional = [
+                p
+                for p in params
+                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ]
+            if not positional:
+                return False
+
+            first = positional[0]
+            if first.default is inspect.Signature.empty:
+                return True
+
+            return first.name in {"metric", "metrics"}
         except Exception:
             return False
 

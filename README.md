@@ -66,8 +66,8 @@ Main commands:
 ```bash
 chimera-ml validate-config --config-path <config.yaml>
 chimera-ml doctor
-chimera-ml train --config-path <config.yaml> [--class-names "cat,dog,..."]
-chimera-ml eval --config-path <config.yaml> [--checkpoint-path <ckpt.pt>] [--with-features] [--class-names "..."]
+chimera-ml train --config-path <config.yaml>
+chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
 chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules]
 chimera-ml plugins list [--group chimera_ml.plugins]
 ```
