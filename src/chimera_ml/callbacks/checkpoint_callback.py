@@ -52,15 +52,19 @@ class CheckpointCallback(BaseCallback):
             "model_state_dict": trainer.model.state_dict(),
             "optimizer_state_dict": trainer.optimizer.state_dict(),
         }
-        
+
         if trainer.scheduler is not None:
             payload["scheduler_state_dict"] = trainer.scheduler.state_dict()
 
-        name = "last.pt" if is_last else self.filename_template.format(
-            epoch=epoch,
-            step=step,
-            monitor=self.monitor.replace("/", "_"),
-            value=monitor_value,
+        name = (
+            "last.pt"
+            if is_last
+            else self.filename_template.format(
+                epoch=epoch,
+                step=step,
+                monitor=self.monitor.replace("/", "_"),
+                value=monitor_value,
+            )
         )
 
         assert self._resolved_dirpath is not None
@@ -78,9 +82,7 @@ class CheckpointCallback(BaseCallback):
         if self.monitor not in logs:
             available = ", ".join(sorted(logs.keys()))
             self._warning(
-                trainer,
-                f"[CheckpointCallback] monitor='{self.monitor}' not found in logs. "
-                f"Available keys: {available}"
+                trainer, f"[CheckpointCallback] monitor='{self.monitor}' not found in logs. Available keys: {available}"
             )
             return
 

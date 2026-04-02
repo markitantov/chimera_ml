@@ -22,9 +22,7 @@ def resolve_splits(
     test_loaders = getattr(trainer, "_test_loaders", None)
     all_loaders = getattr(trainer, "_loaders", None)
 
-    selectors: list[str] = (
-        [splits] if isinstance(splits, str) else list(splits) if splits else ["val"]
-    )
+    selectors: list[str] = [splits] if isinstance(splits, str) else list(splits) if splits else ["val"]
 
     for split in selectors:
         if split == "train":

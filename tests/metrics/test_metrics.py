@@ -59,15 +59,9 @@ def test_classification_metrics_match_sklearn(
     m = metric.compute()
     prefix = average
 
-    expected_precision = sklearn_metrics.precision_score(
-        y_true, y_pred, average=average, zero_division=zero_division
-    )
-    expected_recall = sklearn_metrics.recall_score(
-        y_true, y_pred, average=average, zero_division=zero_division
-    )
-    expected_f1 = sklearn_metrics.f1_score(
-        y_true, y_pred, average=average, zero_division=zero_division
-    )
+    expected_precision = sklearn_metrics.precision_score(y_true, y_pred, average=average, zero_division=zero_division)
+    expected_recall = sklearn_metrics.recall_score(y_true, y_pred, average=average, zero_division=zero_division)
+    expected_f1 = sklearn_metrics.f1_score(y_true, y_pred, average=average, zero_division=zero_division)
 
     _assert_close(m[f"{prefix}_precision"], expected_precision)
     _assert_close(m[f"{prefix}_recall"], expected_recall)

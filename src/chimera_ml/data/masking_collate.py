@@ -44,9 +44,7 @@ class MaskingCollate:
         batch: Sequence[Mapping[str, Any]],
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Pad/stack modality tensors and produce modality-presence masks."""
-        modality_names = sorted(
-            {modality for sample in batch for modality in dict(sample.get("inputs", {}))}
-        )
+        modality_names = sorted({modality for sample in batch for modality in dict(sample.get("inputs", {}))})
 
         batch_size = len(batch)
         inputs: dict[str, torch.Tensor] = {}

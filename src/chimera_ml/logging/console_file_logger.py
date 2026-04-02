@@ -33,16 +33,12 @@ class ConsoleFileLogger:
     encoding: str = "utf-8"
 
     def __post_init__(self) -> None:
-        self.log_path = (
-            Path(self.log_path) / self.experiment_name / self.run_name / Path(self.log_file)
-        )
+        self.log_path = Path(self.log_path) / self.experiment_name / self.run_name / Path(self.log_file)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
         formatter = logging.Formatter(self.format)
 
-        file_handler = logging.FileHandler(
-            self.log_path, mode=self.file_mode, encoding=self.encoding
-        )
+        file_handler = logging.FileHandler(self.log_path, mode=self.file_mode, encoding=self.encoding)
         file_handler.setFormatter(formatter)
         file_handler.setLevel(_level(self.file_level))
 

@@ -32,7 +32,7 @@ class FusionFrameWiseCallback(BaseCallback):
       5) Compute metric and log; optionally dump big framewise pickle
     """
 
-    loader_name: str = "val"        # which loader key to evaluate
+    loader_name: str = "val"  # which loader key to evaluate
     log_prefix: str = "val_frame"
 
     metric_name: str = "va_ccc_metric"
@@ -40,12 +40,12 @@ class FusionFrameWiseCallback(BaseCallback):
     eps: float = 1e-8
 
     # overlap aggregation
-    overlap_strategy: str = "center_weighted"   # mean | center_weighted | gaussian_weighted | last
+    overlap_strategy: str = "center_weighted"  # mean | center_weighted | gaussian_weighted | last
     gaussian_sigma_ratio: float = 0.22
 
     # smoothing after overlap aggregation
-    smoothing: str = "none"                     # none | ema | moving_average | gaussian
-    smoothing_valence_param: float = 0.0        # ema: alpha in (0,1], ma/gauss: kernel size
+    smoothing: str = "none"  # none | ema | moving_average | gaussian
+    smoothing_valence_param: float = 0.0  # ema: alpha in (0,1], ma/gauss: kernel size
     smoothing_arousal_param: float = 0.0
 
     # GT files
@@ -556,11 +556,13 @@ class FusionFrameWiseCallback(BaseCallback):
                 valence_list.append(float(pred[0].item()))
                 arousal_list.append(float(pred[1].item()))
 
-            out_df = pd.DataFrame({
-                "image_location": template_df["image_location"],
-                "valence": valence_list,
-                "arousal": arousal_list,
-            })
+            out_df = pd.DataFrame(
+                {
+                    "image_location": template_df["image_location"],
+                    "valence": valence_list,
+                    "arousal": arousal_list,
+                }
+            )
             out_df.to_csv(self.submission_out_path, index=False)
 
         if getattr(trainer, "mlflow_logger", None) is not None:

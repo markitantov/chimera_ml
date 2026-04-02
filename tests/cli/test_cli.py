@@ -135,9 +135,7 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
     monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
     monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(
-        cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject}
-    )
+    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml")
@@ -161,9 +159,7 @@ def test_cli_train_works_without_snapshot_callback(monkeypatch):
     monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
     monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
     monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(
-        cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject}
-    )
+    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml")

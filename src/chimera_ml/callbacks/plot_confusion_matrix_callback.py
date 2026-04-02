@@ -19,8 +19,7 @@ def _import_pyplot() -> Any:
         import matplotlib.pyplot as plt
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "Dependency 'matplotlib' is not installed. "
-            "Install it with: pip install matplotlib"
+            "Dependency 'matplotlib' is not installed. Install it with: pip install matplotlib"
         ) from e
 
     return plt
@@ -87,9 +86,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
         return [name for name, _ in resolve_splits(trainer, self.splits)]
 
     @classmethod
-    def _extract_class_indices(
-        cls, cached: CachedSplitOutputs
-    ) -> tuple[Any | None, Any | None]:
+    def _extract_class_indices(cls, cached: CachedSplitOutputs) -> tuple[Any | None, Any | None]:
         preds = CachedSplitOutputs._concat_chunks(cached.preds)
         targets = CachedSplitOutputs._concat_chunks(cached.targets)
         if preds is not None and targets is not None:
@@ -132,11 +129,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
     def _extract_indices_from_tensor_pair(
         preds: torch.Tensor, targets: torch.Tensor
     ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        y_pred = (
-            preds.view(-1).to(torch.long)
-            if preds.ndim <= 1
-            else preds.argmax(dim=-1).view(-1).to(torch.long)
-        )
+        y_pred = preds.view(-1).to(torch.long) if preds.ndim <= 1 else preds.argmax(dim=-1).view(-1).to(torch.long)
 
         if PlotConfusionMatrixCallback._targets_are_one_hot_like(targets, preds):
             y_true = targets.argmax(dim=-1).view(-1).to(torch.long)

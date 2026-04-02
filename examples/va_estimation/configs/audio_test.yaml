@@ -17,7 +17,7 @@ data:
     augment: false
     s2s: true
     s2s_steps: 4
-    augment_params: 
+    augment_params:
       aug_noise_prob: 0.6
       aug_snr_db_min: 8.0
       aug_snr_db_max: 25.0

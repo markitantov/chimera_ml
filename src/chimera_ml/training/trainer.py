@@ -47,33 +47,20 @@ class Trainer:
 
     def fit(
         self,
-        train_loaders: DataLoader
-        | Mapping[str, DataLoader]
-        | list[DataLoader]
-        | tuple[DataLoader, ...],
-        val_loaders: DataLoader
-        | Mapping[str, DataLoader]
-        | list[DataLoader]
-        | tuple[DataLoader, ...]
-        | None = None,
+        train_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...],
+        val_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...] | None = None,
     ) -> None:
         """Run full training loop across epochs with optional validation splits."""
         device = torch.device(self.config.device if torch.cuda.is_available() else "cpu")
         self.model.to(device)
 
         # Expose loaders for callbacks (e.g., predictions logger)
-        self._train_loaders: dict[str, DataLoader] = normalize_loaders(
-            train_loaders, default_name="train"
-        )
-        self._val_loaders: dict[str, DataLoader] = normalize_loaders(
-            val_loaders, default_name="val"
-        )
+        self._train_loaders: dict[str, DataLoader] = normalize_loaders(train_loaders, default_name="train")
+        self._val_loaders: dict[str, DataLoader] = normalize_loaders(val_loaders, default_name="val")
         self._test_loaders: dict[str, DataLoader] = {}
         self._loaders: dict[str, DataLoader] = {}
         if not self._train_loaders:
-            raise ValueError(
-                "No train loaders provided. DataModule.train_dataloader() returned empty."
-            )
+            raise ValueError("No train loaders provided. DataModule.train_dataloader() returned empty.")
 
         use_amp = bool(self.config.mixed_precision) and (device.type == "cuda")
         scaler = torch.amp.GradScaler(device=device.type, enabled=use_amp)
@@ -129,9 +116,7 @@ class Trainer:
             )
 
             if self.mlflow_logger:
-                train_metrics = self._prepare_metrics_for_mlflow(
-                    {f"train/{k}": v for k, v in train_logs.items()}
-                )
+                train_metrics = self._prepare_metrics_for_mlflow({f"train/{k}": v for k, v in train_logs.items()})
                 if train_metrics:
                     self.mlflow_logger.log_metrics(train_metrics, step=epoch)
 
@@ -336,9 +321,7 @@ class Trainer:
 
                     if self.config.grad_clip_norm is not None:
                         scaler.unscale_(self.optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.config.grad_clip_norm
-                        )
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
 
                     scaler.step(self.optimizer)
                     scaler.update()
@@ -351,9 +334,7 @@ class Trainer:
                     ):
                         self._scheduler_step(None)
 
-            batch_size = (
-                int(out.preds.shape[0]) if hasattr(out, "preds") and out.preds is not None else 0
-            )
+            batch_size = int(out.preds.shape[0]) if hasattr(out, "preds") and out.preds is not None else 0
             num_samples += batch_size
 
             if loss is not None:
@@ -379,9 +360,7 @@ class Trainer:
                         feats = self._extract_features(out, batch, feature_extractor)
                         feats = feats.detach().cpu()
                         if feats.shape[0] != take:
-                            raise ValueError(
-                                f"features batch size {feats.shape[0]} != preds batch size {take}"
-                            )
+                            raise ValueError(f"features batch size {feats.shape[0]} != preds batch size {take}")
 
                         feats_chunks.append(feats[:take])
 
@@ -393,9 +372,7 @@ class Trainer:
 
             if train:
                 if self.mlflow_logger and (self.global_step % self.config.log_every_steps == 0):
-                    self.mlflow_logger.log_metrics(
-                        {"train_step/loss": avg_loss}, step=self.global_step
-                    )
+                    self.mlflow_logger.log_metrics({"train_step/loss": avg_loss}, step=self.global_step)
 
                 for cb in self.callbacks:
                     cb.on_batch_end(self, self.global_step, {"train_step/loss": avg_loss})
@@ -411,19 +388,13 @@ class Trainer:
             preds = self._concat_or_keep_ragged(preds_chunks)
             targets = self._concat_or_keep_ragged(targets_chunks) if targets_chunks else None
             metas = sample_meta if sample_meta else None
-            feats = (
-                self._concat_or_keep_ragged(feats_chunks)
-                if (with_features and feats_chunks)
-                else None
-            )
+            feats = self._concat_or_keep_ragged(feats_chunks) if (with_features and feats_chunks) else None
             self.cached_outputs[split] = CachedSplitOutputs(
                 preds=preds, targets=targets, sample_meta=metas, features=feats
             )
 
         if not train:
-            metrics_str = " | ".join(
-                f"{k}: {self._format_metric_for_log(v)}" for k, v in metrics_out.items()
-            )
+            metrics_str = " | ".join(f"{k}: {self._format_metric_for_log(v)}" for k, v in metrics_out.items())
 
             if self.logger:
                 self.logger.info(f"[{split} epoch {epoch}] {metrics_str}")
@@ -496,9 +467,7 @@ class Trainer:
 
                 if self.config.grad_clip_norm is not None:
                     scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(), self.config.grad_clip_norm
-                    )
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
 
                 scaler.step(self.optimizer)
                 scaler.update()

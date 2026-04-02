@@ -21,6 +21,7 @@ class FusionCCCMSELoss(BaseLoss):
       - invalid target mask (-5)
       - min_valid fallback to weighted MSE
     """
+
     def __init__(self, ccc_weight=1.0, mse_weight=0.0, v_weight=0.5, a_weight=0.5, min_valid=4):
         self.ccc_weight = float(ccc_weight)
         self.mse_weight = float(mse_weight)
@@ -79,7 +80,7 @@ class FusionCCCMSELoss(BaseLoss):
             loss = loss + self.mse_weight * self._mse(preds_f, targets_f)
 
         return loss
-    
+
 
 class FusuionCCCMSESmoothLoss(BaseLoss):
     def __init__(
@@ -107,16 +108,14 @@ class FusuionCCCMSESmoothLoss(BaseLoss):
 
     def _temporal_smoothness_loss(
         self,
-        preds: torch.Tensor,               # [B, L, 2]
-        seq_mask: torch.Tensor | None,     # [B, L]
-        valid_mask: torch.Tensor | None,   # [B, L]
+        preds: torch.Tensor,  # [B, L, 2]
+        seq_mask: torch.Tensor | None,  # [B, L]
+        valid_mask: torch.Tensor | None,  # [B, L]
     ) -> torch.Tensor:
         if preds.ndim != 3 or preds.shape[1] < 2:
             return preds.new_tensor(0.0)
 
-        pair_mask = torch.ones(
-            preds.shape[:2], device=preds.device, dtype=torch.bool
-        )
+        pair_mask = torch.ones(preds.shape[:2], device=preds.device, dtype=torch.bool)
 
         if seq_mask is not None:
             pair_mask = pair_mask & seq_mask.bool()
@@ -125,22 +124,19 @@ class FusuionCCCMSESmoothLoss(BaseLoss):
             pair_mask = pair_mask & valid_mask.bool()
 
         # Keep only neighboring timestep pairs where both elements are valid.
-        pair_mask = pair_mask[:, 1:] & pair_mask[:, :-1]   # [B, L-1]
+        pair_mask = pair_mask[:, 1:] & pair_mask[:, :-1]  # [B, L-1]
 
         if not pair_mask.any():
             return preds.new_tensor(0.0)
 
-        diffs = preds[:, 1:, :] - preds[:, :-1, :]         # [B, L-1, 2]
-        diffs = diffs[pair_mask]                           # [N, 2]
+        diffs = preds[:, 1:, :] - preds[:, :-1, :]  # [B, L-1, 2]
+        diffs = diffs[pair_mask]  # [N, 2]
 
         loss_v = (diffs[:, 0] ** 2).mean()
         loss_a = (diffs[:, 1] ** 2).mean()
 
         wsum = self.temporal_diff_v_weight + self.temporal_diff_a_weight
-        return (
-            self.temporal_diff_v_weight * loss_v
-            + self.temporal_diff_a_weight * loss_a
-        ) / max(wsum, 1e-8)
+        return (self.temporal_diff_v_weight * loss_v + self.temporal_diff_a_weight * loss_a) / max(wsum, 1e-8)
 
     def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
         preds = output.preds
@@ -208,16 +204,10 @@ class FusuionCCCMSESmoothLoss(BaseLoss):
 
 
 @LOSSES.register("fusion_ccc_mse_loss")
-def fusion_ccc_mse_loss(*, 
-                    ccc_weight: float = 1.0, 
-                    mse_weight: float = 0.0, 
-                    v_weight: float = 0.5,
-                    a_weight: float = 0.5,
-                    **_) -> BaseLoss:
-    return FusionCCCMSELoss(ccc_weight=ccc_weight, 
-                            mse_weight=mse_weight,
-                            v_weight=v_weight,
-                            a_weight=a_weight)
+def fusion_ccc_mse_loss(
+    *, ccc_weight: float = 1.0, mse_weight: float = 0.0, v_weight: float = 0.5, a_weight: float = 0.5, **_
+) -> BaseLoss:
+    return FusionCCCMSELoss(ccc_weight=ccc_weight, mse_weight=mse_weight, v_weight=v_weight, a_weight=a_weight)
 
 
 @LOSSES.register("fusion_ccc_mse_smooth_loss")

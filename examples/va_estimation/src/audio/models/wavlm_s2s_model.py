@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 from audio.models.common_models import AttnPool1d
@@ -18,7 +17,6 @@ class WavLMS2SModel(BaseModel):
         pooling: str = "mean",
         head_dropout: float = 0.1,
         input_normalize: bool = True,
-
         attn_hidden_dim: int | None = 128,
         attn_dropout: float = 0.0,
     ):
@@ -29,9 +27,7 @@ class WavLMS2SModel(BaseModel):
             from safetensors.torch import load_file
             from transformers import AutoModel
         except Exception as e:
-            raise RuntimeError(
-                "transformers is required. Install with: pip install -U transformers"
-            ) from e
+            raise RuntimeError("transformers is required. Install with: pip install -U transformers") from e
 
         self.model_name = model_name
         self.pooling = pooling
@@ -43,7 +39,7 @@ class WavLMS2SModel(BaseModel):
         ckpt_path = hf_hub_download(repo_id=model_name, filename="model.safetensors")
         sd = load_file(ckpt_path)
 
-        ssl_sd = {k[len("ssl_model."):]: v for k, v in sd.items() if k.startswith("ssl_model.")}
+        ssl_sd = {k[len("ssl_model.") :]: v for k, v in sd.items() if k.startswith("ssl_model.")}
         self.backbone.load_state_dict(ssl_sd, strict=False)
 
         cfg = self.backbone.config
@@ -54,17 +50,14 @@ class WavLMS2SModel(BaseModel):
             hidden_size = cfg.hidden_dim
 
         self.pooling = pooling
-        
+
         if "attn" in self.pooling:
             attn_use_std = self.pooling == "attn_stats"
             self.pool = AttnPool1d(
-                in_dim=hidden_size,
-                attn_dim=attn_hidden_dim,
-                attn_dropout=attn_dropout,
-                attn_use_std=attn_use_std
+                in_dim=hidden_size, attn_dim=attn_hidden_dim, attn_dropout=attn_dropout, attn_use_std=attn_use_std
             )
 
-            head_in = hidden_size * 2 if attn_use_std else hidden_size    
+            head_in = hidden_size * 2 if attn_use_std else hidden_size
         elif self.pooling == "stats":
             self.pool = None
             head_in = hidden_size * 2
@@ -96,7 +89,7 @@ class WavLMS2SModel(BaseModel):
 
     def _pool_chunks(self, h: torch.Tensor, attn_mask: torch.Tensor | None, n_chunks: int = 4) -> torch.Tensor:
         _B, T, _C = h.shape
-        
+
         cuts = [round(i * T / n_chunks) for i in range(n_chunks + 1)]
         outs = []
         for i in range(n_chunks):
@@ -116,7 +109,7 @@ class WavLMS2SModel(BaseModel):
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True, unbiased=False).clamp_min(1e-6)
         return (x - mean) / std
-    
+
     def _normalize_audio_masked(self, x: torch.Tensor, attn_mask: torch.Tensor | None) -> torch.Tensor:
         if attn_mask is None:
             mean = x.mean(dim=1, keepdim=True)
@@ -158,7 +151,7 @@ class WavLMS2SModel(BaseModel):
                 if bad.any():
                     attn_mask = attn_mask.clone()
                     attn_mask[bad, 0] = 1
-            
+
             return self.pool(h, attn_mask=attn_mask)
 
         if attn_mask is None:
@@ -211,7 +204,7 @@ class WavLMS2SModel(BaseModel):
             z = layer(z)
             if idx == 3:
                 feat256 = z
-                
+
         preds = z
         return ModelOutput(preds=preds, aux={"features": feat256})
 

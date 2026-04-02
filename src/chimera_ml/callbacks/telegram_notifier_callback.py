@@ -40,8 +40,7 @@ def _import_requests() -> Any:
         import requests  # type: ignore
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "Dependency 'requests' is not installed. "
-            "Install it with: pip install requests"
+            "Dependency 'requests' is not installed. Install it with: pip install requests"
         ) from e
     return requests
 
@@ -127,8 +126,7 @@ class TelegramNotifierCallback(BaseCallback):
             available = ", ".join(sorted(logs.keys()))
             self._warning(
                 trainer,
-                f"[TelegramNotifierCallback] monitor='{self.monitor}' not found in logs. "
-                f"Available keys: {available}",
+                f"[TelegramNotifierCallback] monitor='{self.monitor}' not found in logs. Available keys: {available}",
             )
 
             return
@@ -162,31 +160,22 @@ class TelegramNotifierCallback(BaseCallback):
             global_step = getattr(trainer, "global_step", None)
 
             if last_epoch is not None:
-                lines.append(
-                    f"<b>Last epoch:</b> <code>{html.escape(_format_scalar(last_epoch))}</code>"
-                )
+                lines.append(f"<b>Last epoch:</b> <code>{html.escape(_format_scalar(last_epoch))}</code>")
             if global_step is not None:
-                lines.append(
-                    f"<b>Global step:</b> <code>{html.escape(_format_scalar(global_step))}</code>"
-                )
+                lines.append(f"<b>Global step:</b> <code>{html.escape(_format_scalar(global_step))}</code>")
 
         if self._best_value is not None:
-            lines.append(
-                f"<b>Best epoch:</b> <code>{html.escape(_format_scalar(self._best_epoch))}</code>"
-            )
+            lines.append(f"<b>Best epoch:</b> <code>{html.escape(_format_scalar(self._best_epoch))}</code>")
             lines.append(f"<b>Monitor:</b> <code>{html.escape(self.monitor)}</code>")
             lines.append(f"<b>Mode:</b> <code>{html.escape(self.mode)}</code>")
-            lines.append(
-                f"<b>Best value:</b> <code>{html.escape(_format_scalar(self._best_value))}</code>"
-            )
+            lines.append(f"<b>Best value:</b> <code>{html.escape(_format_scalar(self._best_value))}</code>")
 
             if self.include_best_logs and self._best_logs:
                 lines.append("<b>Metrics at best epoch:</b>")
                 for key in sorted(self._best_logs):
                     value = self._best_logs[key]
                     lines.append(
-                        f"• <code>{html.escape(str(key))}</code>: "
-                        f"<code>{html.escape(_format_metric(value))}</code>"
+                        f"• <code>{html.escape(str(key))}</code>: <code>{html.escape(_format_metric(value))}</code>"
                     )
 
         # Add last logs/metrics if we have them.
@@ -195,8 +184,7 @@ class TelegramNotifierCallback(BaseCallback):
             for key in sorted(self._last_logs):
                 value = self._last_logs[key]
                 lines.append(
-                    f"• <code>{html.escape(str(key))}</code>: "
-                    f"<code>{html.escape(_format_metric(value))}</code>"
+                    f"• <code>{html.escape(str(key))}</code>: <code>{html.escape(_format_metric(value))}</code>"
                 )
 
         if self.message_suffix:
@@ -208,9 +196,7 @@ class TelegramNotifierCallback(BaseCallback):
     def on_fit_end(self, trainer: Any) -> None:
         """Build and send the final Telegram message."""
         if self._session is None:
-            self._warning(
-                trainer, "[TelegramNotifierCallback] Session is not initialized; skipping send."
-            )
+            self._warning(trainer, "[TelegramNotifierCallback] Session is not initialized; skipping send.")
             return
 
         text = self._build_message(trainer)

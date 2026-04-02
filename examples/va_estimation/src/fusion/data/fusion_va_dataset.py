@@ -20,7 +20,6 @@ class FusionVADataset(Dataset):
         target_source_field: str = "label",
         frame_index_offset: int = 1,
         labeled: bool = True,
-
         # audio masking using open-mouth meta
         mask_audio: bool = False,
         audio_min_open_sec: float = 1.0,
@@ -69,7 +68,7 @@ class FusionVADataset(Dataset):
     def _audio_om_filter_pass(self, rec: dict) -> bool:
         if not self.mask_audio:
             return True
-        
+
         meta = rec.get("meta", {})
         if not isinstance(meta, dict):
             meta = {}
@@ -77,11 +76,8 @@ class FusionVADataset(Dataset):
         open_sec = float(meta.get("open_sec", 0.0) or 0.0)
         coverage_ratio = float(meta.get("coverage_ratio", 0.0) or 0.0)
 
-        return (
-            open_sec >= self.audio_min_open_sec
-            and coverage_ratio >= self.audio_min_coverage_ratio
-        )
-    
+        return open_sec >= self.audio_min_open_sec and coverage_ratio >= self.audio_min_coverage_ratio
+
     def _extract_audio_inputs(
         self,
         rec: dict,
@@ -103,15 +99,10 @@ class FusionVADataset(Dataset):
 
         audio_emb = torch.as_tensor(emb, dtype=torch.float32)
         if audio_emb.ndim != 2:
-            raise ValueError(
-                f"Audio embedding must have shape [T_a, D_a], got {tuple(audio_emb.shape)}"
-            )
-        
+            raise ValueError(f"Audio embedding must have shape [T_a, D_a], got {tuple(audio_emb.shape)}")
+
         if audio_emb.shape[1] != self.audio_emb_size:
-            raise ValueError(
-                f"Audio embedding dim mismatch: expected {self.audio_emb_size}, "
-                f"got {audio_emb.shape[1]}"
-            )
+            raise ValueError(f"Audio embedding dim mismatch: expected {self.audio_emb_size}, got {audio_emb.shape[1]}")
 
         T_a = int(audio_emb.shape[0])
         sequence_mask = self._make_sequence_mask(T_a)
@@ -128,15 +119,11 @@ class FusionVADataset(Dataset):
         if self.use_predictions:
             pr = rec.get("prediction")
             if pr is None:
-                raise ValueError(
-                    "use_predictions=True, but audio record does not contain 'prediction'"
-                )
+                raise ValueError("use_predictions=True, but audio record does not contain 'prediction'")
 
             audio_pr = torch.as_tensor(pr, dtype=torch.float32)
             if audio_pr.ndim != 2 or audio_pr.shape[0] != T_a or audio_pr.shape[1] != 2:
-                raise ValueError(
-                    f"Audio prediction must have shape [T_a, 2], got {tuple(audio_pr.shape)}"
-                )
+                raise ValueError(f"Audio prediction must have shape [T_a, 2], got {tuple(audio_pr.shape)}")
 
             inputs_part["audio_prediction"] = audio_pr
 
@@ -147,7 +134,7 @@ class FusionVADataset(Dataset):
         }
 
         return inputs_part, masks_part
-    
+
     def _extract_targets(
         self,
         *,
@@ -177,11 +164,11 @@ class FusionVADataset(Dataset):
             y_list.append(lab)
             valid_list.append(is_valid)
 
-        if len(y_list) == 0: # no frames
+        if len(y_list) == 0:  # no frames
             y = torch.full((1, 2), -5.0, dtype=torch.float32)
             valid = torch.zeros((1,), dtype=torch.bool)
         else:
-            y = torch.stack(y_list, dim=0)                  # [L, 2]
+            y = torch.stack(y_list, dim=0)  # [L, 2]
             valid = torch.tensor(valid_list, dtype=torch.bool)  # [L]
 
         return y, valid
@@ -227,9 +214,7 @@ class FusionVADataset(Dataset):
 
             v = torch.as_tensor(emb, dtype=torch.float32).view(-1)
             if v.numel() != D_emb:
-                raise ValueError(
-                    f"{mod} embedding dim mismatch at {fk}: expected {D_emb}, got {v.numel()}"
-                )
+                raise ValueError(f"{mod} embedding dim mismatch at {fk}: expected {D_emb}, got {v.numel()}")
 
             emb_seq[j] = v
             valid_mask[j] = True
@@ -237,15 +222,11 @@ class FusionVADataset(Dataset):
             if self.use_predictions:
                 pr = item.get("prediction", None)
                 if pr is None:
-                    raise ValueError(
-                        f"use_predictions=True, but {mod} record at {fk} has no 'prediction'"
-                    )
+                    raise ValueError(f"use_predictions=True, but {mod} record at {fk} has no 'prediction'")
 
                 p = torch.as_tensor(pr, dtype=torch.float32).view(-1)
                 if p.numel() != 2:
-                    raise ValueError(
-                        f"{mod} prediction dim mismatch at {fk}: expected 2, got {p.numel()}"
-                    )
+                    raise ValueError(f"{mod} prediction dim mismatch at {fk}: expected 2, got {p.numel()}")
                 pr_seq[j] = p
 
         sequence_mask = self._make_sequence_mask(L)

@@ -1,4 +1,3 @@
-
 import torch
 from utils import ccc_1d
 
@@ -35,13 +34,13 @@ class VACCCMetric(BaseMetric):
             preds = preds.reshape(-1, 2)
             targets = targets.reshape(-1, 2)
 
-        valid = torch.isfinite(targets).all(dim=1) & (targets[:,0] != -5.0) & (targets[:,1] != -5.0)
+        valid = torch.isfinite(targets).all(dim=1) & (targets[:, 0] != -5.0) & (targets[:, 1] != -5.0)
         preds = preds[valid]
         targets = targets[valid]
 
         if preds.numel() == 0:
             return
-        
+
         self._preds.append(preds.detach().float().cpu())
         self._targets.append(targets.detach().float().cpu())
 

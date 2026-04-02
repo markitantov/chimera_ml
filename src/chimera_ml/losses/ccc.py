@@ -71,9 +71,7 @@ class CCCLoss(BaseLoss):
         target = target.view(-1, 1) if target.ndim == 1 else target.view(target.shape[0], -1)
 
         if pred.shape != target.shape:
-            raise ValueError(
-                f"CCCLoss: preds shape {tuple(pred.shape)} must match targets shape {tuple(target.shape)}"
-            )
+            raise ValueError(f"CCCLoss: preds shape {tuple(pred.shape)} must match targets shape {tuple(target.shape)}")
 
         ccc_vals = []
         for d in range(pred.shape[1]):

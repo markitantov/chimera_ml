@@ -11,7 +11,7 @@ class BaseCallback:
         if logger is not None and hasattr(logger, level):
             getattr(logger, level)(message)
             return
-        
+
         print(message)
 
     @classmethod

@@ -186,9 +186,7 @@ def test_trainer_evaluate_returns_prefixed_metrics():
 
 @pytest.mark.parametrize("which_present", ["only_mlflow", "only_console"])
 def test_trainer_fit_smoke_runs_with_partial_loggers(which_present: str):
-    mlflow_logger: BaseLogger | None = (
-        _MemoryMLflowLogger() if which_present == "only_mlflow" else None
-    )
+    mlflow_logger: BaseLogger | None = _MemoryMLflowLogger() if which_present == "only_mlflow" else None
     console_logger = _MemoryConsoleLogger() if which_present == "only_console" else None
     trainer = _make_trainer(mlflow_logger=mlflow_logger, logger=console_logger)
 
@@ -207,6 +205,7 @@ def _register_test_custom_logger() -> str:
     key = "test_custom_memory_logger"
     registry_keys = LOGGERS.keys()
     if key not in registry_keys:
+
         @LOGGERS.register(key)
         def _factory(**_):
             return _MemoryMLflowLogger()

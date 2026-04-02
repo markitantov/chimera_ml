@@ -1,37 +1,66 @@
-[tool.poetry]
-name = "chimera_ml"
+[project]
+name = "chimera-ml"
 version = "0.1.0"
-description = "Cross-modal HIerarchical Merging of Embeddings and Representations"
-authors = ["Maxim Markitantov <m.markitantov@yandex.ru>"]
+description = "Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations) - a lightweight training framework for configurable uni-modal and multi-modal experiments."
 readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+authors = [{ name = "Maxim Markitantov", email = "m.markitantov@yandex.ru" }]
+keywords = ["machine-learning", "pytorch", "multimodal", "training", "deep-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "torch>=2.2,<3.0",
+    "tqdm>=4.66,<5.0",
+    "numpy>=1.26,<3.0",
+    "pyyaml>=6.0.1,<7.0",
+    "typer>=0.12,<1.0",
+    "matplotlib>=3.8,<4.0",
+    "mlflow>=2.12,<3.0",
+    "requests>=2.31,<3.0",
+]
+
+[project.scripts]
+chimera_ml = "chimera_ml.cli:app"
+"chimera-ml" = "chimera_ml.cli:app"
+
+[tool.poetry]
 packages = [{ include = "chimera_ml", from = "src" }]
 
-[tool.poetry.dependencies]
-python = ">=3.12,<3.13"
-torch = "*"
-tqdm = "*"
-matplotlib = "*"
-mlflow = "*"
-numpy = "*"
-pyyaml = "*"
-pandas = "*"
-scikit-learn = "*"
-typer = { extras = ["all"], version = "*" }
-
 [tool.poetry.group.dev.dependencies]
-pytest = "*"
-ruff = "*"
-
-[tool.poetry.scripts]
-chimera_ml = "chimera_ml.cli:app"
+pytest = ">=8.2,<9.0"
+pytest-cov = ">=5.0,<6.0"
+ruff = ">=0.5.0,<1.0"
+pre-commit = ">=3.7,<4.0"
+scikit-learn = ">=1.4,<2.0"
 
 [tool.ruff]
-line-length = 100
-target-version = "py310"
-select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+line-length = 120
+target-version = "py312"
+extend-exclude = [".venv-exp"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "PIE", "RET", "RUF", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --disable-warnings"
+
+[tool.coverage.run]
+source = ["src/chimera_ml"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 2
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]
 build-backend = "poetry.core.masonry.api"
-

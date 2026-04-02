@@ -22,11 +22,7 @@ def _pad_tensor_first_dim(
         raise ValueError(f"Cannot pad tensor: current len={x.shape[0]} > target_len={target_len}")
 
     pad_shape = (target_len - x.shape[0], *tuple(x.shape[1:]))
-    pad = torch.full(
-        pad_shape,
-        fill_value=pad_value,
-        dtype=x.dtype
-    )
+    pad = torch.full(pad_shape, fill_value=pad_value, dtype=x.dtype)
 
     return torch.cat([x, pad], dim=0)
 
@@ -184,9 +180,7 @@ class FusionMaskingCollate:
                     tensors_for_key.append(d[key])
                     present_flags.append(1.0)
                 else:
-                    tensors_for_key.append(
-                        torch.empty((0, *shape_tail), dtype=dtype)
-                    )
+                    tensors_for_key.append(torch.empty((0, *shape_tail), dtype=dtype))
                     present_flags.append(0.0)
 
             inputs[key] = _stack_padded_tensors(tensors_for_key, pad_value=0.0)
@@ -225,12 +219,7 @@ class FusionMaskingCollate:
 
         # infer modality names from per-sample masks
         input_mask_modalities = sorted(
-            set().union(
-                *[
-                    set(m.get("masks", {}).get("input_sequence_mask", {}).keys())
-                    for m in sample_metas
-                ]
-            )
+            set().union(*[set(m.get("masks", {}).get("input_sequence_mask", {}).keys()) for m in sample_metas])
         )
 
         for mod in input_mask_modalities:
@@ -267,7 +256,7 @@ class FusionMaskingCollate:
 
         meta = {
             "present_modalities": all_input_keys,
-            "mask": batch_presence_mask,   # legacy-compatible field
+            "mask": batch_presence_mask,  # legacy-compatible field
             "sample_meta": sample_metas,
             "masks": collated_masks,
         }

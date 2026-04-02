@@ -41,7 +41,7 @@ class AudioFrameWiseCallback(BaseCallback):
     eps: float = 1e-8
 
     overlap_strategy: str = "center_weighted"  # mean | center_weighted | last
-    resample_mode: str = "linear"   # "nearest"
+    resample_mode: str = "linear"  # "nearest"
 
     # GT file settings
     ann_root: str = "."
@@ -61,11 +61,11 @@ class AudioFrameWiseCallback(BaseCallback):
     pickle_path: str = "./val_frame_dump.pkl"
     pickle_numpy: bool = True
     frame_index_offset: int = 0
-    
+
     def __post_init__(self) -> None:
         if self.overlap_strategy not in ("mean", "center_weighted", "last"):
             raise ValueError("overlap_strategy must be one of: mean|center_weighted|last")
-        
+
         if self.resample_mode not in ("linear", "nearest"):
             raise ValueError("resample_mode must be one of: linear|nearest")
 
@@ -152,7 +152,7 @@ class AudioFrameWiseCallback(BaseCallback):
             pass
 
         return start_frame, end_frame
-    
+
     def _to_time_major_emb(self, e: torch.Tensor) -> torch.Tensor:
         if not torch.is_tensor(e):
             e = torch.as_tensor(e)
@@ -187,7 +187,7 @@ class AudioFrameWiseCallback(BaseCallback):
         idx = torch.linspace(0, T - 1, steps=L)
         idx = torch.round(idx).to(dtype=torch.long).clamp(0, T - 1)
         return seq_td[idx]
-    
+
     def _resample_seq_to_len_linear(self, seq_td: torch.Tensor, L: int) -> torch.Tensor:
         """Linear resample [T,D] -> [L,D] using interpolate()."""
         T = int(seq_td.shape[0])
@@ -202,9 +202,9 @@ class AudioFrameWiseCallback(BaseCallback):
         if T == 1:
             return seq_td.expand(L, D).clone()
 
-        x = seq_td.transpose(0, 1).unsqueeze(0)          # [1, D, T]
+        x = seq_td.transpose(0, 1).unsqueeze(0)  # [1, D, T]
         y = F.interpolate(x, size=L, mode="linear", align_corners=False)  # [1, D, L]
-        return y.squeeze(0).transpose(0, 1).contiguous() # [L, D]
+        return y.squeeze(0).transpose(0, 1).contiguous()  # [L, D]
 
     # ---- MINIMAL ADD: helpers for seq2seq support ----
     def _to_time_major_va(self, p: torch.Tensor) -> torch.Tensor:
@@ -266,12 +266,14 @@ class AudioFrameWiseCallback(BaseCallback):
         vfp = torch.cat(vid_fp, dim=0)  # [K,2]
         vft = torch.cat(vid_ft, dim=0)  # [K,2]
 
-        df = pd.DataFrame({
-            "target_valence": vft[:, 0].cpu().numpy(),
-            "target_arousal": vft[:, 1].cpu().numpy(),
-            "pred_valence":   vfp[:, 0].cpu().numpy(),
-            "pred_arousal":   vfp[:, 1].cpu().numpy(),
-        })
+        df = pd.DataFrame(
+            {
+                "target_valence": vft[:, 0].cpu().numpy(),
+                "target_arousal": vft[:, 1].cpu().numpy(),
+                "pred_valence": vfp[:, 0].cpu().numpy(),
+                "pred_arousal": vfp[:, 1].cpu().numpy(),
+            }
+        )
 
         csv_path = out_dir / f"{vid}.csv"
         df.to_csv(csv_path, index=False)
@@ -282,17 +284,17 @@ class AudioFrameWiseCallback(BaseCallback):
         cached = trainer.get_cached_split_outputs(self.loader_name)
         if cached is None:
             return
-        
+
         preds = getattr(cached, "preds", None)
         meta_all = getattr(cached, "sample_meta", None)
         feats = getattr(cached, "features", None)
 
         if preds is None or meta_all is None:
             return
-        
+
         if len(meta_all) == 0:
             return
-        
+
         # preds: [N,2] or [N,T,2] / [N,2,T]
         preds = preds.detach().cpu()
         if preds.ndim == 3 and preds.shape[-1] != 2 and preds.shape[1] == 2:
@@ -339,7 +341,7 @@ class AudioFrameWiseCallback(BaseCallback):
 
             L = int(end_frame - start_frame)
 
-            if self.resample_mode == "linear": # [L,2]
+            if self.resample_mode == "linear":  # [L,2]
                 p_t2 = self._resample_seq_to_len_linear(p_t2, L)
             else:
                 p_t2 = self._resample_seq_to_len_nearest(p_t2, L)
@@ -540,7 +542,7 @@ class AudioFrameWiseCallback(BaseCallback):
         except Exception:
             print(f"[{self.log_prefix} epoch {epoch}] {msg_metrics}")
             print(f"[{self.log_prefix} epoch {epoch}] {msg_stats}")
-        
+
         if frame_dump is not None and len(frame_dump) > 0:
             p = Path(self.pickle_path)
             p.parent.mkdir(parents=True, exist_ok=True)

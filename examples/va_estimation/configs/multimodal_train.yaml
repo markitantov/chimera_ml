@@ -65,7 +65,7 @@ optimizer:
   params:
     lr: 5e-5
     weight_decay: 0.01
-    
+
 loss:
   name: "fusion_ccc_mse_loss"
   params:

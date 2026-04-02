@@ -42,7 +42,7 @@ def audio_va_datamodule(
 
     train_ds = None
     train_ds = AudioVADataset(
-        csv_path=train_csv, 
+        csv_path=train_csv,
         wav_root=dataset_path / "train",
         filter_non_speech=bool(filter_non_speech),
         labeled=True,
@@ -50,7 +50,7 @@ def audio_va_datamodule(
         augment=augment,
         augment_params=augment_params,
         s2s=s2s,
-        s2s_steps=s2s_steps
+        s2s_steps=s2s_steps,
     )
 
     val_ds = None
@@ -65,7 +65,7 @@ def audio_va_datamodule(
                 split="val",
                 augment=False,
                 s2s=s2s,
-                s2s_steps=s2s_steps
+                s2s_steps=s2s_steps,
             ),
             # unfiltered validation (all windows; used by frame-wise callback)
             "val_full": AudioVADataset(
@@ -76,7 +76,7 @@ def audio_va_datamodule(
                 split="val_full",
                 augment=False,
                 s2s=s2s,
-                s2s_steps=s2s_steps
+                s2s_steps=s2s_steps,
             ),
         }
 
@@ -90,7 +90,7 @@ def audio_va_datamodule(
             split="test",
             augment=False,
             s2s=s2s,
-            s2s_steps=s2s_steps
+            s2s_steps=s2s_steps,
         )
 
     return DataModule(

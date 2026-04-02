@@ -36,9 +36,7 @@ def test_get_masks_falls_back_to_meta_masks():
     batch = Batch(
         inputs={},
         targets=None,
-        meta={
-            "masks": {"sequence_mask": torch.tensor([[True]]), "audio_mask": torch.tensor([1.0])}
-        },
+        meta={"masks": {"sequence_mask": torch.tensor([[True]]), "audio_mask": torch.tensor([1.0])}},
     )
 
     got = batch.get_masks()

@@ -37,7 +37,7 @@ class AudioWindowWiseCallback(BaseCallback):
     def __post_init__(self) -> None:
         if self.overlap_strategy not in ("keep_all", "keep_first", "keep_last"):
             raise ValueError("overlap_strategy must be one of: keep_all|keep_first|keep_last")
-        
+
         self._gt_cache: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
 
     # ---------------- meta helpers ----------------
@@ -121,7 +121,7 @@ class AudioWindowWiseCallback(BaseCallback):
             return wins
 
         if self.overlap_strategy == "keep_first":
-            last_end = -10**18
+            last_end = -(10**18)
             for w in wins:
                 us = max(int(w["start_frame"]), int(last_end))
                 ue = int(w["end_frame"])
@@ -158,10 +158,10 @@ class AudioWindowWiseCallback(BaseCallback):
 
         if preds is None or meta_all is None:
             return
-        
+
         if len(meta_all) == 0:
             return
-        
+
         # preds: [N,2] or [N,T,2] / [N,2,T]
         preds = preds.detach().cpu()
         if preds.ndim == 3 and preds.shape[-1] != 2 and preds.shape[1] == 2:
@@ -199,12 +199,14 @@ class AudioWindowWiseCallback(BaseCallback):
             if end_frame <= start_frame:
                 continue
 
-            wins_by_vid[vid].append({
-                "idx": idx,
-                "meta": meta,
-                "start_frame": int(start_frame),
-                "end_frame": int(end_frame),
-            })
+            wins_by_vid[vid].append(
+                {
+                    "idx": idx,
+                    "meta": meta,
+                    "start_frame": int(start_frame),
+                    "end_frame": int(end_frame),
+                }
+            )
 
         if not wins_by_vid:
             return
@@ -231,8 +233,8 @@ class AudioWindowWiseCallback(BaseCallback):
                     if ee <= ss:
                         continue
 
-                    target_frames = gt[ss:ee]      # [L,2]
-                    valid_frames = vmask[ss:ee] # [L]
+                    target_frames = gt[ss:ee]  # [L,2]
+                    valid_frames = vmask[ss:ee]  # [L]
 
                     # clamp use-range into [ss, ee)
                     us = max(ss, min(us_f, ee))
@@ -266,7 +268,7 @@ class AudioWindowWiseCallback(BaseCallback):
                 pred_i = preds[idx]
                 feat_i = feats[idx]
                 tgt_i = targets[idx]
-                
+
                 key = f"{vid}___{int(s_f):06d}_{int(e_f):06d}__{idx:06d}"
 
                 dump[key] = {
@@ -282,7 +284,7 @@ class AudioWindowWiseCallback(BaseCallback):
                     "label_f": target_frames.cpu().numpy().astype(np.float32),
                     "valid_f": valid_frames.cpu().numpy().astype(np.bool_),
                 }
-                
+
         if not dump:
             return
 

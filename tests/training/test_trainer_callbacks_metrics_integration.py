@@ -149,9 +149,7 @@ class _RequestsStub:
         return self._session
 
 
-def test_trainer_fit_integrates_all_builtin_callbacks_and_accuracy_metrics(
-    tmp_path: Path, monkeypatch
-):
+def test_trainer_fit_integrates_all_builtin_callbacks_and_accuracy_metrics(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
 
@@ -267,8 +265,7 @@ def test_trainer_fit_integrates_all_builtin_callbacks_and_accuracy_metrics(
     bytes_artifacts = trainer.mlflow_logger.artifact_bytes_calls
     assert any(path == "predictions/val" and name.startswith("preds_epoch_") for _b, path, name in bytes_artifacts)
     assert any(
-        path == "figures/val" and name.startswith("confusion_matrix_epoch_")
-        for _b, path, name in bytes_artifacts
+        path == "figures/val" and name.startswith("confusion_matrix_epoch_") for _b, path, name in bytes_artifacts
     )
 
     artifact_files = trainer.mlflow_logger.artifact_calls

@@ -85,7 +85,5 @@ def test_mlflow_factory_and_registry(monkeypatch):
     factory = LOGGERS.get("mlflow_logger")
     assert callable(factory)
 
-    logger = mlflow_logger(
-        tracking_uri=None, experiment_name="exp", run_name="run", config_path=None
-    )
+    logger = mlflow_logger(tracking_uri=None, experiment_name="exp", run_name="run", config_path=None)
     assert isinstance(logger, MLflowLogger)

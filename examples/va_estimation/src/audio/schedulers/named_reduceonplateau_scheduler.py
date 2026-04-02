@@ -26,8 +26,4 @@ class NamedReduceLROnPlateauScheduler(torch.optim.lr_scheduler.ReduceLROnPlateau
 
 @SCHEDULERS.register("named_reduceonplateau_scheduler")
 def named_reduceonplateau_scheduler(*, optimizer, target_group_names=("head",), **params):
-    return NamedReduceLROnPlateauScheduler(
-        optimizer,
-        target_group_names=target_group_names,
-        **params
-    )
+    return NamedReduceLROnPlateauScheduler(optimizer, target_group_names=target_group_names, **params)

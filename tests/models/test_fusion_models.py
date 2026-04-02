@@ -127,9 +127,7 @@ def test_gated_prediction_fusion_forward_and_errors():
     logits_a = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
     logits_b = torch.tensor([[0.5, 0.5], [2.0, 1.0]])
     submodels = {"a": _ConstantSubmodel(logits_a), "b": _ConstantSubmodel(logits_b)}
-    model = GatedPredictionFusionModel(
-        submodels=submodels, num_classes=2, gate_hidden=4, use_mask=True
-    )
+    model = GatedPredictionFusionModel(submodels=submodels, num_classes=2, gate_hidden=4, use_mask=True)
 
     batch = Batch(
         inputs={"a": torch.zeros(2, 1), "b": torch.zeros(2, 1)},
@@ -142,9 +140,7 @@ def test_gated_prediction_fusion_forward_and_errors():
     assert out.aux is not None
     assert out.aux["gates"].shape == (2, 2)
 
-    wrong = GatedPredictionFusionModel(
-        submodels={"a": _ConstantSubmodel(torch.randn(2, 3))}, num_classes=2
-    )
+    wrong = GatedPredictionFusionModel(submodels={"a": _ConstantSubmodel(torch.randn(2, 3))}, num_classes=2)
     with pytest.raises(ValueError, match="must output"):
         wrong(Batch(inputs={"a": torch.zeros(2, 1)}, targets=None))
 
@@ -166,9 +162,7 @@ def test_model_factories_and_registry_entries_work():
     feat = feature_fusion_model(encoders={"x": nn.Linear(2, 2)}, head=nn.Linear(2, 1))
     pred = prediction_fusion_model(submodels={"x": _ConstantSubmodel(torch.randn(2, 2))})
     gate = gated_fusion_model(encoders={"x": nn.Linear(2, 2)}, head=nn.Linear(2, 1), shared_dim=2)
-    gate_pred = gated_prediction_fusion_model(
-        submodels={"x": _ConstantSubmodel(torch.randn(2, 2))}, num_classes=2
-    )
+    gate_pred = gated_prediction_fusion_model(submodels={"x": _ConstantSubmodel(torch.randn(2, 2))}, num_classes=2)
 
     assert isinstance(feat, FeatureFusionModel)
     assert isinstance(pred, PredictionFusionModel)

@@ -29,7 +29,6 @@ def ccc_1d(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> torch
     return (2.0 * cov) / (pred_var + target_var + (pred_mean - target_mean).pow(2) + eps)
 
 
-
 @dataclass
 class TensorMetricAdapter:
     """Adapter to feed raw (preds, targets) tensors into a metric that expects (ModelOutput, Batch).

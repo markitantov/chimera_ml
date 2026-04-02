@@ -48,10 +48,7 @@ class DataModule:
         """Build loaders preserving the input container shape."""
         # Mapping[str, Dataset] -> Mapping[str, DataLoader]
         if isinstance(datasets, Mapping):
-            return {
-                name: self._make_loader(ds, shuffle=shuffle, drop_last=drop_last)
-                for name, ds in datasets.items()
-            }
+            return {name: self._make_loader(ds, shuffle=shuffle, drop_last=drop_last) for name, ds in datasets.items()}
 
         # Sequence[Dataset] (list/tuple) -> list[DataLoader]
         if isinstance(datasets, Sequence) and not isinstance(datasets, (str, bytes)):
@@ -69,9 +66,7 @@ class DataModule:
         if self.train_dataset is None:
             return None
 
-        return self._make_loaders(
-            self.train_dataset, shuffle=self.shuffle_train, drop_last=self.drop_last_train
-        )
+        return self._make_loaders(self.train_dataset, shuffle=self.shuffle_train, drop_last=self.drop_last_train)
 
     def val_dataloader(self) -> DataLoader | Mapping[str, DataLoader] | Sequence[DataLoader] | None:
         """Return validation dataloaders or `None` when val dataset is absent."""

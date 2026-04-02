@@ -91,9 +91,7 @@ class PRFMetric(BaseMetric):
                 recall = float(np.average(recall_per_class, weights=support))
                 f1 = float(np.average(f1_per_class, weights=support))
         else:
-            raise ValueError(
-                f"Invalid average='{self.average}'. Expected one of: micro, macro, weighted."
-            )
+            raise ValueError(f"Invalid average='{self.average}'. Expected one of: micro, macro, weighted.")
 
         prefix = self.average
         return {

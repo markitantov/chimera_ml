@@ -68,9 +68,7 @@ def build_from_registry(
         if default_name is None:
             if allow_none:
                 return None
-            raise ValueError(
-                "cfg is None and default_name is None (set allow_none=True to return None)."
-            )
+            raise ValueError("cfg is None and default_name is None (set allow_none=True to return None).")
         cfg = {name_key: default_name, params_key: {}}
 
     name = cfg.get(name_key, default_name)
@@ -91,9 +89,7 @@ def build_from_registry(
     # 3) Resolve factory
     factory = registry.get(name)
     if not callable(factory):
-        raise TypeError(
-            f"Registry '{registry}' returned non-callable for name='{name}': {type(factory)}"
-        )
+        raise TypeError(f"Registry '{registry}' returned non-callable for name='{name}': {type(factory)}")
 
     # 4) Merge inject into params
     kwargs = dict(params)

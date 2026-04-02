@@ -48,7 +48,7 @@ def simple_bandlimit(x: torch.Tensor) -> torch.Tensor:
     keep_lo = rand_uniform(0.03, 0.12)
     hi = simple_lowpass_fft(x, keep_hi)
     lo = simple_lowpass_fft(x, keep_lo)
-    return (hi - lo)
+    return hi - lo
 
 
 def simple_reverb(x: torch.Tensor, sr: int = 16000) -> torch.Tensor:
@@ -73,6 +73,7 @@ class SpecAugment:
     Simple SpecAugment: freq mask + time mask on log-mel.
     Expects spec [M, T] (float).
     """
+
     def __init__(
         self,
         p: float = 0.8,

@@ -38,9 +38,7 @@ def generate_run_name(
     if config_path:
         parts.append(Path(config_path).stem)
 
-    parts.append(
-        local_datetime_tag(include_time=include_time, fmt=datetime_format, timezone=timezone)
-    )
+    parts.append(local_datetime_tag(include_time=include_time, fmt=datetime_format, timezone=timezone))
 
     if model_name:
         parts.append(model_name)

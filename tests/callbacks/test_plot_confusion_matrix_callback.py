@@ -260,9 +260,7 @@ def test_plot_confusion_matrix_callback_requires_matplotlib(monkeypatch):
     monkeypatch.setattr(
         cm_plot_module,
         "_import_pyplot",
-        lambda: (_ for _ in ()).throw(
-            ModuleNotFoundError("Dependency 'matplotlib' is not installed.")
-        ),
+        lambda: (_ for _ in ()).throw(ModuleNotFoundError("Dependency 'matplotlib' is not installed.")),
     )
 
     cb = PlotConfusionMatrixCallback()

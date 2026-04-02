@@ -27,6 +27,7 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "chimera_ml.data.masking_collate",
 )
 
+
 def register_all() -> None:
     """Register all built-in components and entrypoint plugins."""
     for mod in _BUILTIN_MODULES:

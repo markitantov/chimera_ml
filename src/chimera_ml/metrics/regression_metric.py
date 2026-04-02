@@ -10,13 +10,12 @@ from chimera_ml.core.types import ModelOutput
 from chimera_ml.metrics.base import BaseMetric
 
 
-def _validate_multioutput(multioutput: Literal["raw_values", "uniform_average", "variance_weighted"], 
-                          allowed: tuple[str, ...]) -> None:
+def _validate_multioutput(
+    multioutput: Literal["raw_values", "uniform_average", "variance_weighted"], allowed: tuple[str, ...]
+) -> None:
     if multioutput not in allowed:
         allowed_values = ", ".join(f"'{v}'" for v in allowed)
-        raise ValueError(
-            f"Invalid multioutput='{multioutput}'. Allowed values for this metric: {allowed_values}."
-        )
+        raise ValueError(f"Invalid multioutput='{multioutput}'. Allowed values for this metric: {allowed_values}.")
 
 
 def _aggregate(
@@ -31,9 +30,7 @@ def _aggregate(
         return float(np.mean(values))
     if multioutput == "variance_weighted":
         if variance_weights is None:
-            raise ValueError(
-                "multioutput='variance_weighted' is only supported for r2_metric."
-            )
+            raise ValueError("multioutput='variance_weighted' is only supported for r2_metric.")
         total_weight = float(np.sum(variance_weights))
         if total_weight == 0.0:
             return float(np.mean(values))
@@ -156,9 +153,7 @@ class R2Metric(RegressionBaseMetric):
         den_zero = ~den_nonzero
         raw[den_zero] = np.where(ss_res[den_zero] == 0.0, 1.0, 0.0)
 
-        _validate_multioutput(
-            self.multioutput, allowed=("raw_values", "uniform_average", "variance_weighted")
-        )
+        _validate_multioutput(self.multioutput, allowed=("raw_values", "uniform_average", "variance_weighted"))
         v = _aggregate(raw, self.multioutput, variance_weights=ss_tot)
         return {"r2": _metric_output(v)}
 

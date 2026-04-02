@@ -22,14 +22,16 @@ class CCCMSELoss(BaseLoss):
       - min_valid fallback to weighted MSE
     """
 
-    def __init__(self, 
-                 ccc_weight: float = 1.0,
-                 mse_weight: float = 0.0,
-                 v_weight: float = 0.5,
-                 a_weight: float = 0.5,
-                 smooth_weight: float = 0.0,
-                 smooth_type: str = "l1",
-                 min_valid: int = 4):
+    def __init__(
+        self,
+        ccc_weight: float = 1.0,
+        mse_weight: float = 0.0,
+        v_weight: float = 0.5,
+        a_weight: float = 0.5,
+        smooth_weight: float = 0.0,
+        smooth_type: str = "l1",
+        min_valid: int = 4,
+    ):
         self.ccc_weight = float(ccc_weight)
         self.mse_weight = float(mse_weight)
         self.v_weight = float(v_weight)
@@ -45,15 +47,13 @@ class CCCMSELoss(BaseLoss):
 
         if targets is None:
             raise ValueError("ValenceArousalCCCLoss requires batch.targets (got None).")
-        
+
         # NEW: temporal smoothness
         smooth_loss = preds.new_tensor(0.0)
         if self.smooth_weight > 0.0 and preds.dim() == 3:
             # targets: [B,T,2]
             valid_t = (
-                torch.isfinite(targets).all(dim=-1)
-                & (targets[..., 0] != -5.0)
-                & (targets[..., 1] != -5.0)
+                torch.isfinite(targets).all(dim=-1) & (targets[..., 0] != -5.0) & (targets[..., 1] != -5.0)
             )  # [B,T]
 
             pair_valid = valid_t[:, 1:] & valid_t[:, :-1]  # [B,T-1]
@@ -62,7 +62,7 @@ class CCCMSELoss(BaseLoss):
                 per_pair = (dp**2).sum(dim=-1) if self.smooth_type == "l2" else dp.abs().sum(dim=-1)
 
                 smooth_loss = (per_pair * pair_valid.float()).sum() / (pair_valid.float().sum() + 1e-8)
-        
+
         # seq-to-seq support: [B,4,2] -> [B*4,2]
         if preds.dim() == 3:
             preds = preds.reshape(-1, 2)
@@ -94,16 +94,10 @@ class CCCMSELoss(BaseLoss):
             loss = loss + self.mse_weight * self._mse(preds_f, targets_f)
 
         return loss + self.smooth_weight * smooth_loss
-    
+
 
 @LOSSES.register("ccc_mse_loss")
-def ccc_mse_loss(*, 
-                 ccc_weight: float = 1.0, 
-                 mse_weight: float = 0.0, 
-                 v_weight: float = 0.5,
-                 a_weight: float = 0.5,
-                 **_) -> BaseLoss:
-    return CCCMSELoss(ccc_weight=ccc_weight, 
-                      mse_weight=mse_weight,
-                      v_weight=v_weight,
-                      a_weight=a_weight)
+def ccc_mse_loss(
+    *, ccc_weight: float = 1.0, mse_weight: float = 0.0, v_weight: float = 0.5, a_weight: float = 0.5, **_
+) -> BaseLoss:
+    return CCCMSELoss(ccc_weight=ccc_weight, mse_weight=mse_weight, v_weight=v_weight, a_weight=a_weight)

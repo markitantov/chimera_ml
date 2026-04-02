@@ -74,9 +74,7 @@ class TrainConfig:
     # single|round_robin|weighted
     train_stop_on: str = "min"  # When to end an epoch in multi-loader mode:
     # min=stop on first exhausted, max=stop on last exhausted
-    train_loader_weights: dict[str, float] | None = (
-        None  # Per-loader sampling weights for weighted mode:
-    )
+    train_loader_weights: dict[str, float] | None = None  # Per-loader sampling weights for weighted mode:
     # {loader_name: weight}
 
     # Scheduler

@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 
@@ -10,8 +9,7 @@ class AttnPool1d(nn.Module):
     mask: (B, T) 1/True for valid frames
     """
 
-    def __init__(self, in_dim: int, attn_dim: int = 128, 
-                 attn_dropout: float = 0.0, attn_use_std: bool = True):
+    def __init__(self, in_dim: int, attn_dim: int = 128, attn_dropout: float = 0.0, attn_use_std: bool = True):
         super().__init__()
         self.attn_use_std = attn_use_std
         self.proj = nn.Sequential(

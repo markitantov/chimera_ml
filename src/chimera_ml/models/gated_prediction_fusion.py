@@ -65,9 +65,7 @@ class GatedPredictionFusionModel(BaseModel):
             score_list.append(score)
 
         if not logits_list:
-            raise ValueError(
-                "No modalities provided in batch.inputs for GatedPredictionFusionModel."
-            )
+            raise ValueError("No modalities provided in batch.inputs for GatedPredictionFusionModel.")
 
         L = torch.stack(logits_list, dim=0)  # (M, B, C)
         S = torch.stack(score_list, dim=0)  # (M, B, 1)

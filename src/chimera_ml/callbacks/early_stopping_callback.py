@@ -39,8 +39,7 @@ class EarlyStoppingCallback(BaseCallback):
             available = ", ".join(sorted(logs.keys()))
             self._warning(
                 trainer,
-                f"[EarlyStoppingCallback] monitor='{self.monitor}' not found in logs. "
-                f"Available keys: {available}",
+                f"[EarlyStoppingCallback] monitor='{self.monitor}' not found in logs. Available keys: {available}",
             )
 
             return

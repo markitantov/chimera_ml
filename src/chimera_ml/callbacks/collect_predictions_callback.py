@@ -113,7 +113,7 @@ class CollectPredictionsCallback(BaseCallback):
         """Extract optional sample IDs from cached metadata."""
         if isinstance(metas, list):
             return [m.get("id") if isinstance(m, dict) else None for m in metas[:n]]
-        
+
         return None
 
     def _build_rows(
@@ -161,7 +161,7 @@ class CollectPredictionsCallback(BaseCallback):
                     row[f"target_{j}"] = float(targ_flat[j].item())
 
             rows.append(row)
-            
+
         return rows
 
     @staticmethod

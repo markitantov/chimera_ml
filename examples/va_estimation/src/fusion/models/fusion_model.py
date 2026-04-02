@@ -54,18 +54,18 @@ class FusionModel(BaseModel):
         self.num_context_latents = int(num_context_latents)
 
         # lazy projectors: no need to know input dims upfront
-        self.frame_projectors = nn.ModuleDict({
-            mod: nn.LazyLinear(hidden) for mod in self.frame_modalities
-        })
-        self.frame_gate_mlps = nn.ModuleDict({
-            mod: nn.Sequential(
-                nn.LazyLinear(hidden),
-                nn.GELU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden, 1),
-            )
-            for mod in self.frame_modalities
-        })
+        self.frame_projectors = nn.ModuleDict({mod: nn.LazyLinear(hidden) for mod in self.frame_modalities})
+        self.frame_gate_mlps = nn.ModuleDict(
+            {
+                mod: nn.Sequential(
+                    nn.LazyLinear(hidden),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                    nn.Linear(hidden, 1),
+                )
+                for mod in self.frame_modalities
+            }
+        )
 
         self.context_projector = nn.LazyLinear(hidden)
 
@@ -175,13 +175,13 @@ class FusionModel(BaseModel):
         if not reps:
             raise ValueError("No framewise modalities found in batch.inputs.")
 
-        reps = torch.stack(reps, dim=2)               # [B, L, M, H]
-        gate_logits = torch.stack(gate_logits, dim=2) # [B, L, M]
-        valid_masks = torch.stack(valid_masks, dim=2) # [B, L, M]
+        reps = torch.stack(reps, dim=2)  # [B, L, M, H]
+        gate_logits = torch.stack(gate_logits, dim=2)  # [B, L, M]
+        valid_masks = torch.stack(valid_masks, dim=2)  # [B, L, M]
 
         # if all modalities invalid at position -> weights become 0
-        any_valid = valid_masks.any(dim=2)            # [B, L]
-        weights = torch.softmax(gate_logits, dim=2)   # [B, L, M]
+        any_valid = valid_masks.any(dim=2)  # [B, L]
+        weights = torch.softmax(gate_logits, dim=2)  # [B, L, M]
         weights = weights * valid_masks.to(dtype=weights.dtype)
         weights = weights / weights.sum(dim=2, keepdim=True).clamp_min(1e-8)
 

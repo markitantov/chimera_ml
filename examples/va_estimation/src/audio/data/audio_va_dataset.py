@@ -55,7 +55,7 @@ class AudioVADataset(Dataset):
 
         if labeled is None:
             labeled = has_seq_cols if self.s2s else has_one_cols
-        
+
         self.labeled = bool(labeled)
 
         if self.labeled:
@@ -70,14 +70,11 @@ class AudioVADataset(Dataset):
                 valid_sec = (t[:, :, 0] != -5.0) & (t[:, :, 1] != -5.0) & np.isfinite(t).all(axis=2)
                 # df = df[valid_sec.any(axis=1)] # 1 / 4
                 # df = df[valid_sec.all(axis=1)] # all valid
-                
+
                 valid_cnt = valid_sec.sum(axis=1)
-                df = df[valid_cnt >= math.ceil(self.s2s_steps / 2)] # 2 / 4 or 4 / 8
+                df = df[valid_cnt >= math.ceil(self.s2s_steps / 2)]  # 2 / 4 or 4 / 8
             else:
-                df = df[
-                    (df["valence"].astype(float) != -5.0)
-                    & (df["arousal"].astype(float) != -5.0)
-                ]
+                df = df[(df["valence"].astype(float) != -5.0) & (df["arousal"].astype(float) != -5.0)]
 
         self.df = df.reset_index(drop=True)
         self.wav_root = wav_root
@@ -119,17 +116,13 @@ class AudioVADataset(Dataset):
             x = x[: self.target_len]
 
         return x, int(t_eff)
-    
+
     def _apply_augmentations(self, audio: torch.Tensor) -> torch.Tensor:
         if torch.rand(1).item() < self.augment_params["aug_gain_prob"]:
-            audio = apply_gain(audio, 
-                               self.augment_params["aug_gain_db_min"], 
-                               self.augment_params["aug_gain_db_max"])
+            audio = apply_gain(audio, self.augment_params["aug_gain_db_min"], self.augment_params["aug_gain_db_max"])
 
         if torch.rand(1).item() < self.augment_params["aug_noise_prob"]:
-            audio = add_noise_snr(audio, 
-                                  self.augment_params["aug_snr_db_min"], 
-                                  self.augment_params["aug_snr_db_max"])
+            audio = add_noise_snr(audio, self.augment_params["aug_snr_db_min"], self.augment_params["aug_snr_db_max"])
 
         if torch.rand(1).item() < self.augment_params["aug_band_prob"]:
             audio = simple_bandlimit(audio)
@@ -162,9 +155,7 @@ class AudioVADataset(Dataset):
             "end_frame": int(row.get("end_frame", 0)) if not pd.isna(row.get("end_frame", 0)) else 0,
             "open_sec": float(row.get("open_sec", 0.0)) if not pd.isna(row.get("open_sec", 0.0)) else 0.0,
             "coverage_ratio": (
-                float(row.get("coverage_ratio", 0.0))
-                if not pd.isna(row.get("coverage_ratio", 0.0))
-                else 0.0
+                float(row.get("coverage_ratio", 0.0)) if not pd.isna(row.get("coverage_ratio", 0.0)) else 0.0
             ),
             "fps": float(row.get("fps")) if ("fps" in self.df.columns and not pd.isna(row.get("fps"))) else None,
             "audio_len": torch.tensor(audio_len, dtype=torch.long),
@@ -178,4 +169,3 @@ class AudioVADataset(Dataset):
             target = torch.tensor([float(row["valence"]), float(row["arousal"])], dtype=torch.float32)  # [2]
 
         return {"inputs": inputs, "target": target, "meta": meta}
-    

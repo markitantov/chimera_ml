@@ -169,9 +169,7 @@ def _collect_config_errors(
 
 @app.command("validate-config")
 def validate_config(
-    config_path: str = typer.Option(
-        ..., "--config-path", "-c", help="Path to experiment YAML config."
-    ),
+    config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
     require_experiment_name: bool = typer.Option(
         True,
         "--require-experiment-name/--no-require-experiment-name",
@@ -235,9 +233,7 @@ def registry_list(
 
 @plugins_app.command("list")
 def plugins_list(
-    group: str = typer.Option(
-        "chimera_ml.plugins", "--group", help="Entry point group to inspect."
-    ),
+    group: str = typer.Option("chimera_ml.plugins", "--group", help="Entry point group to inspect."),
 ):
     """List discovered plugin entry points."""
     plugins = _resolve_entrypoint_plugins(group)
@@ -293,9 +289,7 @@ def doctor(
 
 @app.command()
 def train(
-    config_path: str = typer.Option(
-        ..., "--config-path", "-c", help="Path to experiment YAML config."
-    ),
+    config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
 ):
     """Run training from YAML config with dynamic factories."""
     typer.echo(f"[train] Loading config: {config_path}")
@@ -350,9 +344,7 @@ def train(
     logger_cfg = cfg.section("logging", name="console_file_logger")
     logger = None
     if logger_cfg:
-        logger = build_logger(
-            logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name}
-        )
+        logger = build_logger(logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name})
 
     mlflow_cfg = cfg.section("logging", name="mlflow_logger")
     mlflow_logger = None
@@ -395,9 +387,7 @@ def train(
 
 @app.command()
 def eval(
-    config_path: str = typer.Option(
-        ..., "--config-path", "-c", help="Path to experiment YAML config."
-    ),
+    config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
     checkpoint_path: str = typer.Option(
         ..., "--checkpoint-path", help="Path to .pt checkpoint saved by ModelCheckpoint."
     ),
