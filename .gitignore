@@ -120,3 +120,4 @@ temp/
 *.local.yml
 .env
 .env.*
+**/configs_local/
