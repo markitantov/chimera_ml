@@ -67,6 +67,7 @@ Main commands:
 chimera-ml validate-config --config-path <config.yaml>
 chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
+chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--max-trials N]
 chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
 chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules]
 chimera-ml plugins list [--group chimera_ml.plugins]
@@ -86,6 +87,15 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - generates `run_name` via `generate_run_name(...)`,
 - patches `checkpoint_callback` and `snapshot_callback` params with experiment/run data,
 - builds all components from registries and runs `Trainer.fit(...)`.
+
+`sweep`:
+
+- materializes one YAML config per trial under `sweep_runs/` by default,
+- supports Cartesian grids via `parameters` (grid search) and explicit trial lists via `trials`,
+- applies overrides using dotted paths such as `optimizer.params.lr` or
+  `callbacks.checkpoint_callback.params.monitor`,
+- runs the normal `train` flow once per trial and appends `sweep_001`, `sweep_002`, ... to run names,
+- supports `--max-trials` for CI smoke tuning and `--dry-run` to inspect generated trials.
 
 `eval`:
 
@@ -178,6 +188,24 @@ callbacks:
     params:
       monitor: "val/loss"
       mode: "min"
+```
+
+Sweep grid example:
+
+```yaml
+parameters:
+  optimizer.params.lr: [0.001, 0.0003, 0.0001]
+  train.params.epochs: [3, 5]
+```
+
+Explicit trial example:
+
+```yaml
+trials:
+  - optimizer.params.lr: 0.001
+    train.params.epochs: 3
+  - optimizer.params.lr: 0.0001
+    callbacks.checkpoint_callback.params.monitor: "val/ccc"
 ```
 
 ## TrainConfig Parameters

@@ -8,7 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Planned
 
-- Built-in CLI sweep command for experiment series (for example: `chimera-ml sweep --base-config ... --sweep-config ...`).
+- Built-in CLI inference pipeline command for end-to-end production-style inference (for example:
+  `chimera-ml infer --config-path ... --input ... --output-dir ...`). The command should support
+  plugin-defined pipeline stages such as media ingestion, audio extraction, frame extraction/downsampling,
+  ASR/text extraction, modality-specific preprocessing, checkpoint loading, model inference, and structured
+  prediction/artifact export.
+
+## [0.2.0] - 2026-04-22
+
+### Added
+
+- Built-in CLI sweep command for hyperparameter trial series (for example:
+  `chimera-ml sweep --base-config ... --sweep-config ...`).
 
 ## [0.1.0] - 2026-04-02
 

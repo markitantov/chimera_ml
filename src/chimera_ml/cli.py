@@ -1,5 +1,8 @@
 import platform
 import sys
+from collections.abc import Iterator, Mapping, Sequence
+from itertools import product
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -19,7 +22,7 @@ from chimera_ml.training.builders import (
     build_scheduler,
     build_train_config,
 )
-from chimera_ml.training.config import ExperimentConfig, load_yaml
+from chimera_ml.training.config import ExperimentConfig
 from chimera_ml.training.trainer import Trainer
 from chimera_ml.utils.seed import define_seed
 
@@ -100,71 +103,142 @@ def _resolve_entrypoint_plugins(group: str = "chimera_ml.plugins") -> list[Any]:
         return []
 
 
-def _collect_config_errors(
-    cfg: ExperimentConfig,
+def _iter_sweep_overrides(sweep_cfg: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
+    """Yield trial override dictionaries from explicit trials or a grid parameter spec."""
+    trials = sweep_cfg.get("trials")
+    parameters = sweep_cfg.get("parameters")
+
+    if trials is not None and parameters is not None:
+        raise ValueError("Sweep config must define either 'trials' or 'parameters', not both.")
+
+    if trials is not None:
+        if not isinstance(trials, Sequence) or isinstance(trials, (str, bytes)):
+            raise TypeError("Sweep config 'trials' must be a list of mappings.")
+
+        for i, trial in enumerate(trials, start=1):
+            if not isinstance(trial, Mapping):
+                raise TypeError(f"Sweep trial #{i} must be a mapping.")
+
+            yield dict(trial)
+
+        return
+
+    if not isinstance(parameters, Mapping):
+        raise TypeError("Sweep config must contain a 'parameters' mapping or a 'trials' list.")
+
+    paths = list(parameters.keys())
+    value_lists: list[list[Any]] = []
+    for path in paths:
+        values = parameters[path]
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+            raise TypeError(f"Sweep parameter '{path}' must be a non-empty list.")
+
+        if not values:
+            raise ValueError(f"Sweep parameter '{path}' must contain at least one value.")
+
+        value_lists.append(list(values))
+
+    for values in product(*value_lists):
+        yield dict(zip(paths, values, strict=True))
+
+
+def _format_overrides(overrides: Mapping[str, Any]) -> str:
+    return ", ".join(f"{key}={value!r}" for key, value in overrides.items())
+
+
+def _run_train_from_config(
+    config_path: str,
     *,
-    require_experiment_name: bool = True,
-) -> list[str]:
-    """Return human-readable config validation errors."""
-    errors: list[str] = []
-    raw = cfg.raw
+    config: ExperimentConfig | None = None,
+    run_name_suffix: str | None = None,
+) -> None:
+    """Run training from a config path or an already loaded config dict."""
+    typer.echo(f"[train] Loading config: {config_path}")
+    cfg = config.copy() if config is not None else ExperimentConfig.from_yaml(config_path)
 
-    if not isinstance(raw, dict):
-        return ["Top-level config must be a mapping/object."]
+    seed = int(cfg.get("seed", 0))
+    define_seed(seed)
 
-    # Named sections required by current train/eval builders.
-    for section in ("data", "model", "train", "loss", "optimizer"):
-        value = raw.get(section)
-        if not isinstance(value, dict):
-            errors.append(f"Section '{section}' must be a mapping.")
-            continue
+    # 0) Working with experiment names
+    experiment_info = cfg.section("experiment_info").get("params", {})
+    if "experiment_name" not in experiment_info:
+        raise ValueError("`experiment_info.params.experiment_name` is required.")
 
-        if section != "train" and not value.get("name"):
-            errors.append(f"Section '{section}' must contain non-empty 'name'.")
+    experiment_name = experiment_info["experiment_name"]
+    run_name = generate_run_name(
+        config_path=config_path,
+        model_name=cfg.section("model").get("name"),
+        suffix=run_name_suffix,
+        include_time=experiment_info.get("include_time", True),
+        datetime_format=experiment_info.get("datetime_format", "%Y-%m-%d_%H-%M"),
+        timezone=experiment_info.get("timezone", None),
+    )
+    typer.echo(f"[train] Experiment: {experiment_name} | Run: {run_name}")
 
-        params = value.get("params", {})
-        if params is None:
-            params = {}
-        if not isinstance(params, dict):
-            errors.append(f"Section '{section}.params' must be a mapping.")
+    if isinstance(cfg.get("callbacks"), list) and cfg.section("callbacks", name="checkpoint_callback"):
+        cfg.set_at_path("callbacks.checkpoint_callback.params.experiment_name", experiment_name)
+        cfg.set_at_path("callbacks.checkpoint_callback.params.run_name", run_name)
 
-    scheduler = raw.get("scheduler")
-    if scheduler is not None:
-        if not isinstance(scheduler, dict):
-            errors.append("Section 'scheduler' must be a mapping when provided.")
-        elif not scheduler.get("name"):
-            errors.append("Section 'scheduler' must contain non-empty 'name' when provided.")
+    snapshot_cfg = cfg.section("callbacks", name="snapshot_callback")
+    snapshot_params = snapshot_cfg.get("params", {}) if snapshot_cfg else {}
+    save_snapshot_config = bool(snapshot_params.get("save_config"))
 
-    for section in ("metrics", "callbacks", "logging"):
-        value = raw.get(section)
-        if value is None:
-            continue
+    if isinstance(cfg.get("callbacks"), list) and snapshot_cfg:
+        cfg.set_at_path("callbacks.snapshot_callback.params.experiment_name", experiment_name)
+        cfg.set_at_path("callbacks.snapshot_callback.params.run_name", run_name)
+        cfg.set_at_path("callbacks.snapshot_callback.params.config_path", config_path if save_snapshot_config else None)
 
-        if not isinstance(value, list):
-            errors.append(f"Section '{section}' must be a list.")
-            continue
+    # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
 
-        for i, item in enumerate(value):
-            if not isinstance(item, dict):
-                errors.append(f"Section '{section}[{i}]' must be a mapping.")
-                continue
+    # 2) Build from registries
+    typer.echo("[train] Building datamodule and model...")
+    dm = build_datamodule(cfg.section("data"))
+    model_obj = build_model(cfg.section("model"))
 
-            if not item.get("name"):
-                errors.append(f"Section '{section}[{i}]' must contain non-empty 'name'.")
+    train_cfg = build_train_config(cfg.section("train"))
 
-    if require_experiment_name:
-        experiment_info = raw.get("experiment_info")
-        if not isinstance(experiment_info, dict):
-            errors.append("Section 'experiment_info' must be a mapping.")
-        else:
-            params = experiment_info.get("params", {})
-            if not isinstance(params, dict):
-                errors.append("Section 'experiment_info.params' must be a mapping.")
+    logger_cfg = cfg.section("logging", name="console_file_logger")
+    logger = None
+    if logger_cfg:
+        logger = build_logger(logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name})
 
-            elif not params.get("experiment_name"):
-                errors.append("`experiment_info.params.experiment_name` is required.")
+    mlflow_cfg = cfg.section("logging", name="mlflow_logger")
+    mlflow_logger = None
+    if mlflow_cfg:
+        mlflow_logger = build_logger(
+            mlflow_cfg,
+            inject={
+                "config_path": config_path,
+                "experiment_name": experiment_name,
+                "run_name": run_name,
+            },
+        )
 
-    return errors
+    loss_fn = build_loss(cfg.section("loss"))
+    metrics = build_metrics(cfg.get("metrics", []))
+
+    optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
+    scheduler = build_scheduler(cfg.get("scheduler"), optimizer)
+    callbacks = build_callbacks(cfg.get("callbacks"))
+
+    trainer = Trainer(
+        model=model_obj,
+        loss_fn=loss_fn,
+        optimizer=optimizer,
+        metrics=metrics,
+        config=train_cfg,
+        mlflow_logger=mlflow_logger,
+        logger=logger,
+        callbacks=callbacks,
+        scheduler=scheduler,
+    )
+
+    train_loader = dm.train_dataloader()
+    val_loaders = dm.val_dataloader()
+
+    typer.echo("[train] Starting fit...")
+    trainer.fit(train_loader, val_loaders=val_loaders)
+    typer.echo("[train] Done.")
 
 
 @app.command("validate-config")
@@ -178,12 +252,12 @@ def validate_config(
 ):
     """Validate YAML config structure without starting training."""
     try:
-        cfg = ExperimentConfig(load_yaml(config_path))
+        cfg = ExperimentConfig.from_yaml(config_path)
     except Exception as exc:
         typer.echo(f"Invalid config file '{config_path}': {exc}")
         raise typer.Exit(code=1) from exc
 
-    errors = _collect_config_errors(cfg, require_experiment_name=require_experiment_name)
+    errors = cfg.validate(require_experiment_name=require_experiment_name)
     if errors:
         typer.echo(f"Config '{config_path}' is invalid:")
         for err in errors:
@@ -292,97 +366,54 @@ def train(
     config_path: str = typer.Option(..., "--config-path", "-c", help="Path to experiment YAML config."),
 ):
     """Run training from YAML config with dynamic factories."""
-    typer.echo(f"[train] Loading config: {config_path}")
-    cfg = ExperimentConfig(load_yaml(config_path))
+    _run_train_from_config(config_path)
 
-    seed = int(cfg.get("seed", 0))
-    define_seed(seed)
 
-    # 0) Working with experiment names
-    experiment_info = cfg.section("experiment_info").get("params", {})
-    if "experiment_name" not in experiment_info:
-        raise ValueError("`experiment_info.params.experiment_name` is required.")
+@app.command()
+def sweep(
+    base_config: str = typer.Option(..., "--base-config", "-b", help="Path to base experiment YAML config."),
+    sweep_config: str = typer.Option(..., "--sweep-config", "-s", help="Path to sweep YAML config."),
+    output_dir: str = typer.Option(
+        "sweep_runs",
+        "--output-dir",
+        "-o",
+        help="Directory for materialized trial YAML files.",
+    ),
+    max_trials: int | None = typer.Option(None, "--max-trials", help="Optional CI limit for the number of trials."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print generated trials without running training."),
+):
+    """Run a grid/explicit hyperparameter sweep by repeatedly calling train."""
+    base_cfg = ExperimentConfig.from_yaml(base_config)
+    sweep_cfg = ExperimentConfig.from_yaml(sweep_config)
 
-    experiment_name = experiment_info["experiment_name"]
-    run_name = generate_run_name(
-        config_path=config_path,
-        model_name=cfg.section("model").get("name"),
-        include_time=experiment_info.get("include_time", True),
-        datetime_format=experiment_info.get("datetime_format", "%Y-%m-%d_%H-%M"),
-        timezone=experiment_info.get("timezone", None),
-    )
-    typer.echo(f"[train] Experiment: {experiment_name} | Run: {run_name}")
+    if max_trials is not None and max_trials < 1:
+        raise ValueError("--max-trials must be >= 1 when provided.")
 
-    cfg.patch_params_at(
-        "callbacks",
-        names=["checkpoint_callback"],
-        experiment_name=experiment_name,
-        run_name=run_name,
-    )
+    overrides_list = list(_iter_sweep_overrides(sweep_cfg.raw))
+    if max_trials is not None:
+        overrides_list = overrides_list[:max_trials]
 
-    snapshot_cfg = cfg.section("callbacks", name="snapshot_callback")
-    snapshot_params = snapshot_cfg.get("params", {}) if snapshot_cfg else {}
-    save_snapshot_config = bool(snapshot_params.get("save_config"))
+    if not overrides_list:
+        raise ValueError("Sweep config produced no trials.")
 
-    cfg.patch_params_at(
-        "callbacks",
-        names=["snapshot_callback"],
-        experiment_name=experiment_name,
-        run_name=run_name,
-        config_path=config_path if save_snapshot_config else None,
-    )
+    out_path = Path(output_dir)
+    if not dry_run:
+        out_path.mkdir(parents=True, exist_ok=True)
 
-    # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
+    typer.echo(f"[sweep] Loaded {len(overrides_list)} trial(s).")
+    for i, overrides in enumerate(overrides_list, start=1):
+        trial_id = f"sweep_{i:03d}"
+        trial_cfg = base_cfg.copy()
+        trial_cfg.apply_overrides(overrides)
 
-    # 2) Build from registries
-    typer.echo("[train] Building datamodule and model...")
-    dm = build_datamodule(cfg.section("data"))
-    model_obj = build_model(cfg.section("model"))
+        trial_config_path = out_path / f"{Path(base_config).stem}_{trial_id}.yaml"
+        typer.echo(f"[sweep] Trial {i}/{len(overrides_list)} {trial_id}: {_format_overrides(overrides)}")
 
-    train_cfg = build_train_config(cfg.section("train"))
+        if dry_run:
+            continue
 
-    logger_cfg = cfg.section("logging", name="console_file_logger")
-    logger = None
-    if logger_cfg:
-        logger = build_logger(logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name})
-
-    mlflow_cfg = cfg.section("logging", name="mlflow_logger")
-    mlflow_logger = None
-    if mlflow_cfg:
-        mlflow_logger = build_logger(
-            mlflow_cfg,
-            inject={
-                "config_path": config_path,
-                "experiment_name": experiment_name,
-                "run_name": run_name,
-            },
-        )
-
-    loss_fn = build_loss(cfg.section("loss"))
-    metrics = build_metrics(cfg.get("metrics", []))
-
-    optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
-    scheduler = build_scheduler(cfg.get("scheduler"), optimizer)
-    callbacks = build_callbacks(cfg.get("callbacks"))
-
-    trainer = Trainer(
-        model=model_obj,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        metrics=metrics,
-        config=train_cfg,
-        mlflow_logger=mlflow_logger,
-        logger=logger,
-        callbacks=callbacks,
-        scheduler=scheduler,
-    )
-
-    train_loader = dm.train_dataloader()
-    val_loaders = dm.val_dataloader()
-
-    typer.echo("[train] Starting fit...")
-    trainer.fit(train_loader, val_loaders=val_loaders)
-    typer.echo("[train] Done.")
+        trial_cfg.to_yaml(trial_config_path)
+        _run_train_from_config(str(trial_config_path), config=trial_cfg, run_name_suffix=trial_id)
 
 
 @app.command()
@@ -395,7 +426,7 @@ def eval(
 ):
     """Run evaluation (no training). Logs metrics and artifacts to MLflow if configured."""
     typer.echo(f"[eval] Loading config: {config_path}")
-    cfg = ExperimentConfig(load_yaml(config_path))
+    cfg = ExperimentConfig.from_yaml(config_path)
 
     seed = int(cfg.get("seed", 0))
     define_seed(seed)

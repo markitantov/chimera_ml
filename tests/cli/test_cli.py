@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 import torch
 import typer
@@ -121,10 +123,22 @@ def _config_for_eval():
     }
 
 
+def _patch_config(monkeypatch, cfg):
+    monkeypatch.setattr(cli.ExperimentConfig, "from_yaml", classmethod(lambda cls, _: cls(deepcopy(cfg))))
+
+
+def _patch_configs(monkeypatch, configs):
+    monkeypatch.setattr(
+        cli.ExperimentConfig,
+        "from_yaml",
+        classmethod(lambda cls, path: cls(deepcopy(configs[path]))),
+    )
+
+
 def test_cli_train_wires_builders_and_trainer(monkeypatch):
     model = _ModelStub()
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_train())
+    _patch_config(monkeypatch, _config_for_train())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
@@ -148,7 +162,7 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
 def test_cli_train_works_without_snapshot_callback(monkeypatch):
     model = _ModelStub()
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_train_without_snapshot())
+    _patch_config(monkeypatch, _config_for_train_without_snapshot())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
@@ -176,7 +190,7 @@ def test_cli_train_initializes_console_logger_before_mlflow(monkeypatch):
         logger_call_order.append(cfg["name"])
         return {"name": cfg["name"], "inject": inject}
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_train())
+    _patch_config(monkeypatch, _config_for_train())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
@@ -225,7 +239,7 @@ def test_cli_train_creates_logs_dir_before_mlflow_init(monkeypatch, tmp_path):
         return original_build_logger(logger_cfg, inject=inject)
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli, "load_yaml", lambda _: cfg)
+    _patch_config(monkeypatch, cfg)
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
@@ -244,10 +258,68 @@ def test_cli_train_creates_logs_dir_before_mlflow_init(monkeypatch, tmp_path):
     assert (tmp_path / "logs" / "exp" / "run_name").exists()
 
 
+def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {
+        "parameters": {
+            "optimizer.params.lr": [0.001, 0.0001],
+            "train.params.epochs": [1, 2],
+        }
+    }
+    calls = []
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        calls.append((config_path, config, run_name_suffix))
+
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    cli.sweep(
+        base_config="base.yaml",
+        sweep_config="sweep.yaml",
+        output_dir=str(tmp_path / "sweeps"),
+        max_trials=None,
+        dry_run=False,
+    )
+
+    assert len(calls) == 4
+    assert calls[0][2] == "sweep_001"
+    assert calls[0][1].raw["optimizer"]["params"]["lr"] == 0.001
+    assert calls[0][1].raw["train"]["params"]["epochs"] == 1
+    assert calls[-1][1].raw["optimizer"]["params"]["lr"] == 0.0001
+    assert calls[-1][1].raw["train"]["params"]["epochs"] == 2
+    assert (tmp_path / "sweeps" / "base_sweep_001.yaml").exists()
+    assert (tmp_path / "sweeps" / "base_sweep_004.yaml").exists()
+
+
+def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {"trials": [{"callbacks.checkpoint_callback.params.monitor": "val/ccc"}]}
+    calls = []
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        calls.append((config_path, config, run_name_suffix))
+
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    cli.sweep(
+        base_config="base.yaml",
+        sweep_config="sweep.yaml",
+        output_dir=str(tmp_path / "sweeps"),
+        max_trials=None,
+        dry_run=False,
+    )
+
+    callbacks = calls[0][1].raw["callbacks"]
+    checkpoint_cfg = next(item for item in callbacks if item["name"] == "checkpoint_callback")
+    assert checkpoint_cfg["params"]["monitor"] == "val/ccc"
+
+
 def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):
     model = _ModelStub()
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_eval())
+    _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMEvalStub())
     monkeypatch.setattr(cli, "build_model", lambda _: model)
@@ -281,7 +353,7 @@ def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):
 def test_cli_eval_flattens_nested_loader_containers(monkeypatch):
     model = _ModelStub()
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_eval())
+    _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMNestedStub())
     monkeypatch.setattr(cli, "build_model", lambda _: model)
@@ -314,7 +386,7 @@ def test_cli_eval_uses_weights_only_when_loading_checkpoint(monkeypatch):
         seen_kwargs.update(kwargs)
         return {"model_state_dict": {}}
 
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _config_for_eval())
+    _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMEvalStub())
     monkeypatch.setattr(cli, "build_model", lambda _: model)
@@ -365,7 +437,7 @@ def _valid_cli_cfg():
 
 
 def test_validate_config_success(monkeypatch, capsys):
-    monkeypatch.setattr(cli, "load_yaml", lambda _: _valid_cli_cfg())
+    _patch_config(monkeypatch, _valid_cli_cfg())
 
     cli.validate_config(config_path="ok.yaml", require_experiment_name=True)
     out = capsys.readouterr().out
@@ -375,7 +447,7 @@ def test_validate_config_success(monkeypatch, capsys):
 def test_validate_config_fails_on_missing_experiment_name(monkeypatch, capsys):
     bad = _valid_cli_cfg()
     bad["experiment_info"] = {"params": {}}
-    monkeypatch.setattr(cli, "load_yaml", lambda _: bad)
+    _patch_config(monkeypatch, bad)
 
     with pytest.raises(typer.Exit) as exc:
         cli.validate_config(config_path="bad.yaml", require_experiment_name=True)
