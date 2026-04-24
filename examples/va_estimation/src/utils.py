@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,7 +41,6 @@ class TensorMetricAdapter:
     """
 
     metric: BaseMetric
-    device: torch.device | None = None
 
     def reset(self) -> None:
         self.metric.reset()
