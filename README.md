@@ -260,6 +260,46 @@ Plugin declaration (recommended, PEP 621 style):
 my_project = "my_project.chimera_plugin:register"
 ```
 
+## BuildContext For Plugin Authors
+
+During `train` and `eval`, `chimera-ml` creates a per-run `BuildContext` and passes it through the build pipeline:
+
+- `datamodule`
+- `model`
+- `loss`
+- `metrics`
+- `optimizer`
+- `scheduler`
+- `callbacks`
+- `collate`
+- `logger`
+
+Use it when downstream components need runtime metadata that should not be duplicated in YAML, such as class names, number of classes, class weights, window sizes, output schema, or metric names.
+
+Factories can accept an optional `context` argument:
+
+```python
+from chimera_ml.core.registry import LOSSES
+
+
+@LOSSES.register("my_loss")
+def my_loss(alpha: float = 1.0, context = None):
+    class_weights = context.get("data.class_weights") if context is not None else None
+    return MyLoss(alpha=alpha, class_weights=class_weights)
+```
+
+Built components can also enrich the context during registration by implementing `describe_context(...)`:
+
+```python
+class MyDataModule(DataModule):
+    def describe_context(self, context, config = None, *, stage = None) -> None:
+        context.set("data.num_classes", 3)
+        context.set("data.class_names", ["negative", "neutral", "positive"])
+        context.set("data.class_weights", [0.2, 0.5, 0.3])
+```
+
+`BuildContext` is local to a single CLI run. It is not a global singleton, so it remains safe for tests, sweeps, and independent experiments.
+
 Typical `register()` function:
 
 ```python
