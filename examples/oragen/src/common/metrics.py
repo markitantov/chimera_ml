@@ -126,21 +126,21 @@ class AgePCCMetric(BaseMetric):
         return {"age_pcc": value}
 
 
-@METRICS.register("oragen_age_mae_metric")
-def oragen_age_mae_metric(**params):
+@METRICS.register("age_mae_metric")
+def age_mae_metric(**params):
     return AgeMAEMetric(**params)
 
 
-@METRICS.register("oragen_age_pcc_metric")
-def oragen_age_pcc_metric(**params):
+@METRICS.register("age_pcc_metric")
+def age_pcc_metric(**params):
     return AgePCCMetric(**params)
 
 
-@METRICS.register("oragen_gender_prf_macro_metric")
-def oragen_gender_prf_macro_metric(**params):
+@METRICS.register("gender_prf_macro_metric")
+def gender_prf_macro_metric(**params):
     return GenderPRFMetric(**params)
 
 
-@METRICS.register("oragen_mask_uar_metric")
-def oragen_mask_uar_metric(**params):
+@METRICS.register("mask_uar_metric")
+def mask_uar_metric(**params):
     return MaskUARMetric(**params)
