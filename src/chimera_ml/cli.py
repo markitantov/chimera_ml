@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from chimera_ml.data.loader_utils import normalize_loaders
 from chimera_ml.logging.utils import generate_run_name
 from chimera_ml.training.builders import (
+    BuildContext,
     build_callbacks,
     build_datamodule,
     build_logger,
@@ -192,15 +193,24 @@ def _run_train_from_config(
 
     # 2) Build from registries
     typer.echo("[train] Building datamodule and model...")
-    dm = build_datamodule(cfg.section("data"))
-    model_obj = build_model(cfg.section("model"))
+    context = BuildContext(config=cfg, stage="train")
+
+    dm = build_datamodule(cfg.section("data"), context=context)
+    context.register("datamodule", dm)
+
+    model_obj = build_model(cfg.section("model"), context=context)
+    context.register("model", model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
 
     logger_cfg = cfg.section("logging", name="console_file_logger")
     logger = None
     if logger_cfg:
-        logger = build_logger(logger_cfg, inject={"experiment_name": experiment_name, "run_name": run_name})
+        logger = build_logger(
+            logger_cfg,
+            inject={"experiment_name": experiment_name, "run_name": run_name},
+            context=context,
+        )
 
     mlflow_cfg = cfg.section("logging", name="mlflow_logger")
     mlflow_logger = None
@@ -212,14 +222,24 @@ def _run_train_from_config(
                 "experiment_name": experiment_name,
                 "run_name": run_name,
             },
+            context=context,
         )
 
-    loss_fn = build_loss(cfg.section("loss"))
-    metrics = build_metrics(cfg.get("metrics", []))
+    loss_fn = build_loss(cfg.section("loss"), context=context)
+    context.register("loss", loss_fn)
 
-    optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
-    scheduler = build_scheduler(cfg.get("scheduler"), optimizer)
-    callbacks = build_callbacks(cfg.get("callbacks"))
+    metrics = build_metrics(cfg.get("metrics", []), context=context)
+    context.register_many("metrics", metrics)
+
+    optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
+    context.register("optimizer", optimizer)
+
+    scheduler = build_scheduler(cfg.get("scheduler"), optimizer, context=context)
+    if scheduler is not None:
+        context.register("scheduler", scheduler)
+
+    callbacks = build_callbacks(cfg.get("callbacks"), context=context)
+    context.register_many("callbacks", callbacks)
 
     trainer = Trainer(
         model=model_obj,
@@ -433,17 +453,27 @@ def eval(
 
     # 1) Load project plugins (register datamodule/model/loss/metrics/callbacks/etc)
     typer.echo("[eval] Building datamodule and model...")
-    dm = build_datamodule(cfg.section("data"))
-    model_obj = build_model(cfg.section("model"))
+    context = BuildContext(config=cfg, stage="eval")
+
+    dm = build_datamodule(cfg.section("data"), context=context)
+    context.register("datamodule", dm)
+    model_obj = build_model(cfg.section("model"), context=context)
+    context.register("model", model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
     train_cfg.epochs = 1
 
-    loss_fn = build_loss(cfg.section("loss"))
-    metrics = build_metrics(cfg.get("metrics", []))
+    loss_fn = build_loss(cfg.section("loss"), context=context)
+    context.register("loss", loss_fn)
 
-    optimizer = build_optimizer(cfg.section("optimizer"), model_obj)
-    callbacks = build_callbacks(cfg.get("callbacks"))
+    metrics = build_metrics(cfg.get("metrics", []), context=context)
+    context.register_many("metrics", metrics)
+
+    optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
+    context.register("optimizer", optimizer)
+
+    callbacks = build_callbacks(cfg.get("callbacks"), context=context)
+    context.register_many("callbacks", callbacks)
 
     trainer = Trainer(
         model=model_obj,

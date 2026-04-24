@@ -1,6 +1,7 @@
 import inspect
 from collections.abc import Mapping
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Protocol, cast
 
 import torch
 
@@ -16,6 +17,78 @@ from chimera_ml.core.registry import (
     SCHEDULERS,
 )
 from chimera_ml.training.config import TrainConfig
+
+
+class ContextDescribable(Protocol):
+    """Optional protocol for components that enrich BuildContext during registration."""
+
+    def describe_context(self, context: "BuildContext") -> None: ...
+
+
+@dataclass
+class BuildContext:
+    """Per-run build context shared across datamodule/model/loss/etc construction."""
+
+    config: Any | None = None
+    stage: str | None = None
+    values: dict[str, Any] = field(default_factory=dict)
+    objects: dict[str, Any] = field(default_factory=dict)
+
+    def get(self, path: str, default: Any = None) -> Any:
+        if not path:
+            return default
+
+        node: Any = self.values
+        for part in path.split("."):
+            if not isinstance(node, Mapping) or part not in node:
+                return default
+
+            node = node[part]
+
+        return node
+
+    def set(self, path: str, value: Any) -> None:
+        parts = [part.strip() for part in path.split(".") if part.strip()]
+        if not parts:
+            raise ValueError("Context path cannot be empty.")
+
+        node = self.values
+        for part in parts[:-1]:
+            child = node.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                node[part] = child
+
+            node = child
+
+        node[parts[-1]] = value
+
+    def bind(self, name: str, obj: Any) -> None:
+        self.objects[str(name)] = obj
+
+    def get_object(self, name: str, default: Any = None) -> Any:
+        return self.objects.get(str(name), default)
+
+    def _describe_component(self, component: Any) -> None:
+        if not hasattr(component, "describe_context"):
+            return
+
+        describable = cast(ContextDescribable, component)
+        describable.describe_context(self)
+
+    def register(self, name: str, component: Any) -> Any:
+        """Bind a built component and let it enrich the shared context."""
+        self.bind(name, component)
+        self._describe_component(component)
+        return component
+
+    def register_many(self, name: str, components: list[Any]) -> list[Any]:
+        """Bind a list of built components and let each enrich the shared context."""
+        self.bind(name, components)
+        for component in components:
+            self._describe_component(component)
+
+        return components
 
 
 def build_from_registry(
@@ -115,64 +188,90 @@ def build_from_registry(
     return factory(**kwargs)
 
 
-def build_loss(cfg: dict[str, Any]) -> Any:
+def build_loss(cfg: dict[str, Any], *, context: BuildContext | None = None) -> Any:
     """Build loss function from the losses registry."""
-    return build_from_registry(LOSSES, cfg)
+    inject = {"context": context} if context is not None else None
+    return build_from_registry(LOSSES, cfg, inject=inject, smart_inject=True)
 
 
-def build_metrics(cfg_list: list[dict[str, Any]]) -> list[Any]:
+def build_metrics(cfg_list: list[dict[str, Any]], *, context: BuildContext | None = None) -> list[Any]:
     """Build all metrics from metric configs."""
-    return [build_from_registry(METRICS, mcfg) for mcfg in cfg_list]
+    inject = {"context": context} if context is not None else None
+    return [build_from_registry(METRICS, mcfg, inject=inject, smart_inject=True) for mcfg in cfg_list]
 
 
-def build_datamodule(cfg: dict[str, Any]) -> object:
+def build_datamodule(cfg: dict[str, Any], *, context: BuildContext | None = None) -> object:
     """Build a datamodule from registry config."""
-    return build_from_registry(DATAMODULES, cfg)
+    inject = {"context": context} if context is not None else None
+    return build_from_registry(DATAMODULES, cfg, inject=inject, smart_inject=True)
 
 
-def build_model(cfg: dict[str, Any]) -> Any:
+def build_model(cfg: dict[str, Any], *, context: BuildContext | None = None) -> Any:
     """Build model from the models registry."""
-    return build_from_registry(MODELS, cfg)
+    inject = {"context": context} if context is not None else None
+    return build_from_registry(MODELS, cfg, inject=inject, smart_inject=True)
 
 
-def build_optimizer(cfg: dict[str, Any] | None, model: torch.nn.Module) -> torch.optim.Optimizer:
+def build_optimizer(
+    cfg: dict[str, Any] | None,
+    model: torch.nn.Module,
+    *,
+    context: BuildContext | None = None,
+) -> torch.optim.Optimizer:
     """Build optimizer, defaulting to AdamW when config is not provided."""
+    inject = {"model": model}
+    if context is not None:
+        inject["context"] = context
+
     return build_from_registry(
         OPTIMIZERS,
         cfg,
         default_name="adamw_optimizer",
-        inject={"model": model},
+        inject=inject,
         inject_overrides=True,
+        smart_inject=True,
     )
 
 
 def build_scheduler(
     cfg: dict[str, Any] | None,
     optimizer: torch.optim.Optimizer,
+    *,
+    context: BuildContext | None = None,
 ) -> torch.optim.lr_scheduler.LRScheduler | torch.optim.lr_scheduler.ReduceLROnPlateau | None:
     """Build scheduler from config or return `None`."""
+    inject = {"optimizer": optimizer}
+    if context is not None:
+        inject["context"] = context
+
     return build_from_registry(
         SCHEDULERS,
         cfg,
         allow_none=True,
-        inject={"optimizer": optimizer},
+        inject=inject,
         inject_overrides=True,
+        smart_inject=True,
     )
 
 
-def build_callbacks(cfg_list: list[dict[str, Any]] | None) -> list[Any]:
+def build_callbacks(cfg_list: list[dict[str, Any]] | None, *, context: BuildContext | None = None) -> list[Any]:
     """Build callbacks from callback configs."""
     if not cfg_list:
         return []
-    return [build_from_registry(CALLBACKS, ccfg) for ccfg in cfg_list]
+
+    inject = {"context": context} if context is not None else None
+    return [build_from_registry(CALLBACKS, ccfg, inject=inject, smart_inject=True) for ccfg in cfg_list]
 
 
-def build_collate(cfg: dict[str, Any] | None) -> Any:
+def build_collate(cfg: dict[str, Any] | None, *, context: BuildContext | None = None) -> Any:
     """Build collate callable, defaulting to `masking_collate`."""
+    inject = {"context": context} if context is not None else None
     return build_from_registry(
         COLLATES,
         cfg,
         default_name="masking_collate",
+        inject=inject,
+        smart_inject=True,
     )
 
 
@@ -180,13 +279,18 @@ def build_logger(
     cfg: dict[str, Any] | None,
     *,
     inject: dict[str, Any] | None = None,
+    context: BuildContext | None = None,
 ) -> Any | None:
     """Build optional logger with runtime injection."""
+    merged_inject = dict(inject or {})
+    if context is not None:
+        merged_inject["context"] = context
+
     return build_from_registry(
         LOGGERS,
         cfg,
         allow_none=True,
-        inject=inject,
+        inject=merged_inject or None,
         inject_overrides=True,
         smart_inject=True,
     )

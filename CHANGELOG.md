@@ -14,6 +14,20 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   ASR/text extraction, modality-specific preprocessing, checkpoint loading, model inference, and structured
   prediction/artifact export.
 
+## [0.2.1] - 2026-04-24
+
+### Added
+
+- Per-run `BuildContext` shared across CLI build stages so plugin components can exchange runtime metadata without duplicating YAML config.
+- `BuildContext` support in registry builders for datamodules, models, losses, metrics, optimizers, schedulers, callbacks, collates, and loggers.
+- Context registration hooks via `BuildContext.register(...)` and `BuildContext.register_many(...)` for components that implement `describe_context(...)`.
+
+### Changed
+
+- CLI `train` and `eval` flows now create and propagate a shared build context before constructing downstream components.
+- Plugin authoring flow now favors explicit context-based metadata exchange over ad hoc runtime config mutation.
+- `README.md` documentation now includes guidance for using `BuildContext` in plugin factories and components.
+
 ## [0.2.0] - 2026-04-22
 
 ### Added
