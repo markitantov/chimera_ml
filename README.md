@@ -274,7 +274,7 @@ During `train` and `eval`, `chimera-ml` creates a per-run `BuildContext` and pas
 - `collate`
 - `logger`
 
-Use it when downstream components need runtime metadata that should not be duplicated in YAML, such as class names, number of classes, class weights, window sizes, output schema, or metric names.
+Use it when downstream components need runtime metadata that should not be duplicated in YAML, such as class names, number of classes, class weights, window sizes, output schema, or metric names. `BuildContext` is intended for shared metadata, not for passing live runtime objects between components.
 
 Factories can accept an optional `context` argument:
 

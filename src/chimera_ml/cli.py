@@ -196,10 +196,10 @@ def _run_train_from_config(
     context = BuildContext(config=cfg, stage="train")
 
     dm = build_datamodule(cfg.section("data"), context=context)
-    context.register("datamodule", dm)
+    context.register(dm)
 
     model_obj = build_model(cfg.section("model"), context=context)
-    context.register("model", model_obj)
+    context.register(model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
 
@@ -226,20 +226,20 @@ def _run_train_from_config(
         )
 
     loss_fn = build_loss(cfg.section("loss"), context=context)
-    context.register("loss", loss_fn)
+    context.register(loss_fn)
 
     metrics = build_metrics(cfg.get("metrics", []), context=context)
-    context.register_many("metrics", metrics)
+    context.register_many(metrics)
 
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
-    context.register("optimizer", optimizer)
+    context.register(optimizer)
 
     scheduler = build_scheduler(cfg.get("scheduler"), optimizer, context=context)
     if scheduler is not None:
-        context.register("scheduler", scheduler)
+        context.register(scheduler)
 
     callbacks = build_callbacks(cfg.get("callbacks"), context=context)
-    context.register_many("callbacks", callbacks)
+    context.register_many(callbacks)
 
     trainer = Trainer(
         model=model_obj,
@@ -456,24 +456,24 @@ def eval(
     context = BuildContext(config=cfg, stage="eval")
 
     dm = build_datamodule(cfg.section("data"), context=context)
-    context.register("datamodule", dm)
+    context.register(dm)
     model_obj = build_model(cfg.section("model"), context=context)
-    context.register("model", model_obj)
+    context.register(model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
     train_cfg.epochs = 1
 
     loss_fn = build_loss(cfg.section("loss"), context=context)
-    context.register("loss", loss_fn)
+    context.register(loss_fn)
 
     metrics = build_metrics(cfg.get("metrics", []), context=context)
-    context.register_many("metrics", metrics)
+    context.register_many(metrics)
 
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
-    context.register("optimizer", optimizer)
+    context.register(optimizer)
 
     callbacks = build_callbacks(cfg.get("callbacks"), context=context)
-    context.register_many("callbacks", callbacks)
+    context.register_many(callbacks)
 
     trainer = Trainer(
         model=model_obj,
