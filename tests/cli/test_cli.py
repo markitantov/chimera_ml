@@ -294,8 +294,7 @@ def test_cli_train_build_context_flows_across_build_chain(monkeypatch):
         seen["loss_build"] = (
             context.get("data.inferred_dim"),
             context.get("model.hidden_dim"),
-            context.get_object("datamodule"),
-            context.get_object("model"),
+            context.stage,
         )
         return "loss"
 
@@ -327,7 +326,7 @@ def test_cli_train_build_context_flows_across_build_chain(monkeypatch):
     cli.train(config_path="cfg.yaml")
 
     assert seen["model_build"] == (11, None, "train")
-    assert seen["loss_build"] == (11, 23, dm, model)
+    assert seen["loss_build"] == (11, 23, "train")
     assert seen["callback_build"] == ("train/score", 23)
 
 

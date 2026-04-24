@@ -32,7 +32,6 @@ class BuildContext:
     config: Any | None = None
     stage: str | None = None
     values: dict[str, Any] = field(default_factory=dict)
-    objects: dict[str, Any] = field(default_factory=dict)
 
     def get(self, path: str, default: Any = None) -> Any:
         if not path:
@@ -63,30 +62,18 @@ class BuildContext:
 
         node[parts[-1]] = value
 
-    def bind(self, name: str, obj: Any) -> None:
-        self.objects[str(name)] = obj
+    def register(self, component: Any) -> Any:
+        """Let a built component enrich the shared context."""
+        if hasattr(component, "describe_context"):
+            describable = cast(ContextDescribable, component)
+            describable.describe_context(self)
 
-    def get_object(self, name: str, default: Any = None) -> Any:
-        return self.objects.get(str(name), default)
-
-    def _describe_component(self, component: Any) -> None:
-        if not hasattr(component, "describe_context"):
-            return
-
-        describable = cast(ContextDescribable, component)
-        describable.describe_context(self)
-
-    def register(self, name: str, component: Any) -> Any:
-        """Bind a built component and let it enrich the shared context."""
-        self.bind(name, component)
-        self._describe_component(component)
         return component
 
-    def register_many(self, name: str, components: list[Any]) -> list[Any]:
-        """Bind a list of built components and let each enrich the shared context."""
-        self.bind(name, components)
+    def register_many(self, components: list[Any]) -> list[Any]:
+        """Let a list of built components enrich the shared context."""
         for component in components:
-            self._describe_component(component)
+            self.register(component)
 
         return components
 
