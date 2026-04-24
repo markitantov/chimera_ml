@@ -40,6 +40,12 @@ class _DMNestedStub:
         return {"test_a": "test_loader_a"}
 
 
+class _DMContextStub(_DMStub):
+    def describe_context(self, context, config=None, *, stage=None):
+        context.set("data.inferred_dim", 11)
+        context.set("data.monitor_name", f"{stage}/score")
+
+
 class _TrainCfg:
     def __init__(self):
         self.epochs = 5
@@ -54,6 +60,11 @@ class _ModelStub(torch.nn.Module):
     def load_state_dict(self, state_dict, strict=True):
         self.loaded = (state_dict, strict)
         return super().load_state_dict({}, strict=False)
+
+
+class _ModelContextStub(_ModelStub):
+    def describe_context(self, context, config=None, *, stage=None):
+        context.set("model.hidden_dim", 23)
 
 
 class _TrainerStub:
@@ -141,15 +152,19 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     _patch_config(monkeypatch, _config_for_train())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
+    monkeypatch.setattr(
+        cli,
+        "build_logger",
+        lambda cfg, inject=None, context=None: {"cfg": cfg, "inject": inject, "context": context},
+    )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml")
@@ -165,15 +180,19 @@ def test_cli_train_works_without_snapshot_callback(monkeypatch):
     _patch_config(monkeypatch, _config_for_train_without_snapshot())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
-    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None: {"cfg": cfg, "inject": inject})
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
+    monkeypatch.setattr(
+        cli,
+        "build_logger",
+        lambda cfg, inject=None, context=None: {"cfg": cfg, "inject": inject, "context": context},
+    )
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml")
@@ -186,21 +205,21 @@ def test_cli_train_initializes_console_logger_before_mlflow(monkeypatch):
     model = _ModelStub()
     logger_call_order: list[str] = []
 
-    def _build_logger(cfg, inject=None):
+    def _build_logger(cfg, inject=None, context=None):
         logger_call_order.append(cfg["name"])
-        return {"name": cfg["name"], "inject": inject}
+        return {"name": cfg["name"], "inject": inject, "context": context}
 
     _patch_config(monkeypatch, _config_for_train())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
     monkeypatch.setattr(cli, "build_logger", _build_logger)
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
@@ -230,32 +249,86 @@ def test_cli_train_creates_logs_dir_before_mlflow_init(monkeypatch, tmp_path):
 
     original_build_logger = cli.build_logger
 
-    def _build_logger_wrapper(logger_cfg, inject=None):
+    def _build_logger_wrapper(logger_cfg, inject=None, context=None):
         if logger_cfg["name"] == "mlflow_logger":
             expected_logs_dir = tmp_path / "logs" / "exp" / "run_name"
             assert expected_logs_dir.exists()
-            return {"name": "mlflow_logger", "inject": inject}
+            return {"name": "mlflow_logger", "inject": inject, "context": context}
 
-        return original_build_logger(logger_cfg, inject=inject)
+        return original_build_logger(logger_cfg, inject=inject, context=context)
 
     monkeypatch.chdir(tmp_path)
     _patch_config(monkeypatch, cfg)
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
     monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_scheduler", lambda *_: "sch")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
     monkeypatch.setattr(cli, "build_logger", _build_logger_wrapper)
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
 
     cli.train(config_path="cfg.yaml")
 
     assert (tmp_path / "logs" / "exp" / "run_name").exists()
+
+
+def test_cli_train_build_context_flows_across_build_chain(monkeypatch):
+    model = _ModelContextStub()
+    dm = _DMContextStub()
+    seen: dict[str, object] = {}
+
+    def _build_model(cfg, *, context=None):
+        seen["model_build"] = (
+            context.get("data.inferred_dim"),
+            context.get("model.hidden_dim"),
+            context.stage,
+        )
+        return model
+
+    def _build_loss(cfg, *, context=None):
+        seen["loss_build"] = (
+            context.get("data.inferred_dim"),
+            context.get("model.hidden_dim"),
+            context.get_object("datamodule"),
+            context.get_object("model"),
+        )
+        return "loss"
+
+    def _build_callbacks(cfg, *, context=None):
+        seen["callback_build"] = (
+            context.get("data.monitor_name"),
+            context.get("model.hidden_dim"),
+        )
+        return ["cb"]
+
+    _patch_config(monkeypatch, _config_for_train())
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: dm)
+    monkeypatch.setattr(cli, "build_model", _build_model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", _build_loss)
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", _build_callbacks)
+    monkeypatch.setattr(
+        cli,
+        "build_logger",
+        lambda cfg, inject=None, context=None: {"cfg": cfg, "inject": inject, "context": context},
+    )
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+
+    cli.train(config_path="cfg.yaml")
+
+    assert seen["model_build"] == (11, None, "train")
+    assert seen["loss_build"] == (11, 23, dm, model)
+    assert seen["callback_build"] == ("train/score", 23)
 
 
 def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
@@ -321,13 +394,13 @@ def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):
 
     _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMEvalStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMEvalStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
     monkeypatch.setattr(cli.torch, "load", lambda *args, **kwargs: {"model_state_dict": {}})
 
@@ -355,13 +428,13 @@ def test_cli_eval_flattens_nested_loader_containers(monkeypatch):
 
     _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMNestedStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMNestedStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
     monkeypatch.setattr(cli.torch, "load", lambda *args, **kwargs: {"model_state_dict": {}})
 
@@ -388,13 +461,13 @@ def test_cli_eval_uses_weights_only_when_loading_checkpoint(monkeypatch):
 
     _patch_config(monkeypatch, _config_for_eval())
     monkeypatch.setattr(cli, "define_seed", lambda _: None)
-    monkeypatch.setattr(cli, "build_datamodule", lambda _: _DMEvalStub())
-    monkeypatch.setattr(cli, "build_model", lambda _: model)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMEvalStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
     monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
-    monkeypatch.setattr(cli, "build_loss", lambda _: "loss")
-    monkeypatch.setattr(cli, "build_metrics", lambda _: ["metric"])
-    monkeypatch.setattr(cli, "build_optimizer", lambda *_: "opt")
-    monkeypatch.setattr(cli, "build_callbacks", lambda *_: ["cb"])
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
     monkeypatch.setattr(cli, "Trainer", _TrainerStub)
     monkeypatch.setattr(cli.torch, "load", _fake_torch_load)
 

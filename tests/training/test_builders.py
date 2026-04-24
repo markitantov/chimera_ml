@@ -1,8 +1,11 @@
 import torch
 
-from chimera_ml.core.registry import Registry
+from chimera_ml.core.registry import COLLATES, LOGGERS, Registry
 from chimera_ml.training.builders import (
+    BuildContext,
+    build_collate,
     build_from_registry,
+    build_logger,
     build_optimizer,
     build_train_config,
 )
@@ -41,6 +44,25 @@ def test_build_from_registry_smart_inject_filters_unknown_args():
     assert out == {"v": 2}
 
 
+def test_build_from_registry_smart_inject_passes_context_when_supported():
+    reg = Registry("x")
+
+    @reg.register("demo")
+    def _demo(context=None):
+        return context.get("data.num_classes")
+
+    context = BuildContext()
+    context.set("data.num_classes", 3)
+
+    out = build_from_registry(
+        reg,
+        {"name": "demo", "params": {}},
+        inject={"context": context},
+        smart_inject=True,
+    )
+    assert out == 3
+
+
 def test_build_optimizer_default_is_adamw_optimizer():
     model = torch.nn.Linear(2, 1)
     opt = build_optimizer(None, model)
@@ -51,3 +73,33 @@ def test_build_train_config_reads_params_dict():
     cfg = build_train_config({"params": {"epochs": 3, "mixed_precision": True}})
     assert cfg.epochs == 3
     assert cfg.mixed_precision is True
+
+
+def test_build_collate_passes_context_when_supported():
+    key = "_test_context_collate_builder"
+
+    if key not in COLLATES._items:
+
+        @COLLATES.register(key)
+        def _demo_collate(context=None):
+            return {"num_classes": context.get("data.num_classes")}
+
+    context = BuildContext()
+    context.set("data.num_classes", 4)
+
+    out = build_collate({"name": key, "params": {}}, context=context)
+    assert out == {"num_classes": 4}
+
+
+def test_build_logger_passes_context_when_supported():
+    key = "_test_context_logger_builder"
+
+    if key not in LOGGERS._items:
+
+        @LOGGERS.register(key)
+        def _demo_logger(context=None):
+            return {"stage": context.stage}
+
+    context = BuildContext(stage="train")
+    out = build_logger({"name": key, "params": {}}, context=context)
+    assert out == {"stage": "train"}
