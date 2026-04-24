@@ -22,13 +22,7 @@ from chimera_ml.training.config import TrainConfig
 class ContextDescribable(Protocol):
     """Optional protocol for components that enrich BuildContext during registration."""
 
-    def describe_context(
-        self,
-        context: "BuildContext",
-        config: Any | None = None,
-        *,
-        stage: str | None = None,
-    ) -> None: ...
+    def describe_context(self, context: "BuildContext") -> None: ...
 
 
 @dataclass
@@ -69,78 +63,30 @@ class BuildContext:
 
         node[parts[-1]] = value
 
-    def update(self, values: Mapping[str, Any], *, namespace: str | None = None) -> None:
-        if namespace:
-            existing = self.get(namespace)
-            if not isinstance(existing, dict):
-                existing = {}
-                self.set(namespace, existing)
-
-            existing.update(dict(values))
-            return
-
-        self.values.update(dict(values))
-
     def bind(self, name: str, obj: Any) -> None:
         self.objects[str(name)] = obj
 
     def get_object(self, name: str, default: Any = None) -> Any:
         return self.objects.get(str(name), default)
 
-    def _describe_component(
-        self,
-        component: Any,
-        *,
-        config: Any | None = None,
-        stage: str | None = None,
-    ) -> None:
+    def _describe_component(self, component: Any) -> None:
         if not hasattr(component, "describe_context"):
             return
 
         describable = cast(ContextDescribable, component)
-        hook = describable.describe_context
+        describable.describe_context(self)
 
-        try:
-            sig = inspect.signature(hook)
-            params = sig.parameters
-        except (TypeError, ValueError):
-            hook(self)
-            return
-
-        kwargs: dict[str, Any] = {}
-        if "config" in params:
-            kwargs["config"] = config
-
-        if "stage" in params:
-            kwargs["stage"] = stage
-
-        hook(self, **kwargs)
-
-    def register(
-        self,
-        name: str,
-        component: Any,
-        *,
-        config: Any | None = None,
-        stage: str | None = None,
-    ) -> Any:
+    def register(self, name: str, component: Any) -> Any:
         """Bind a built component and let it enrich the shared context."""
         self.bind(name, component)
-        self._describe_component(component, config=config, stage=stage)
+        self._describe_component(component)
         return component
 
-    def register_many(
-        self,
-        name: str,
-        components: list[Any],
-        *,
-        config: Any | None = None,
-        stage: str | None = None,
-    ) -> list[Any]:
+    def register_many(self, name: str, components: list[Any]) -> list[Any]:
         """Bind a list of built components and let each enrich the shared context."""
         self.bind(name, components)
         for component in components:
-            self._describe_component(component, config=config, stage=stage)
+            self._describe_component(component)
 
         return components
 

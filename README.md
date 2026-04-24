@@ -292,13 +292,13 @@ Built components can also enrich the context during registration by implementing
 
 ```python
 class MyDataModule(DataModule):
-    def describe_context(self, context, config = None, *, stage = None) -> None:
+    def describe_context(self, context) -> None:
         context.set("data.num_classes", 3)
         context.set("data.class_names", ["negative", "neutral", "positive"])
         context.set("data.class_weights", [0.2, 0.5, 0.3])
 ```
 
-`BuildContext` is local to a single CLI run. It is not a global singleton, so it remains safe for tests, sweeps, and independent experiments.
+`BuildContext` is local to a single CLI run. It is not a global singleton, so it remains safe for tests, sweeps, and independent experiments. Runtime metadata such as the current config and stage are available directly as `context.config` and `context.stage`.
 
 Typical `register()` function:
 

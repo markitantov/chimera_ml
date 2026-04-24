@@ -196,10 +196,10 @@ def _run_train_from_config(
     context = BuildContext(config=cfg, stage="train")
 
     dm = build_datamodule(cfg.section("data"), context=context)
-    context.register("datamodule", dm, config=cfg, stage="train")
+    context.register("datamodule", dm)
 
     model_obj = build_model(cfg.section("model"), context=context)
-    context.register("model", model_obj, config=cfg, stage="train")
+    context.register("model", model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
 
@@ -226,20 +226,20 @@ def _run_train_from_config(
         )
 
     loss_fn = build_loss(cfg.section("loss"), context=context)
-    context.register("loss", loss_fn, config=cfg, stage="train")
+    context.register("loss", loss_fn)
 
     metrics = build_metrics(cfg.get("metrics", []), context=context)
-    context.register_many("metrics", metrics, config=cfg, stage="train")
+    context.register_many("metrics", metrics)
 
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
-    context.register("optimizer", optimizer, config=cfg, stage="train")
+    context.register("optimizer", optimizer)
 
     scheduler = build_scheduler(cfg.get("scheduler"), optimizer, context=context)
     if scheduler is not None:
-        context.register("scheduler", scheduler, config=cfg, stage="train")
+        context.register("scheduler", scheduler)
 
     callbacks = build_callbacks(cfg.get("callbacks"), context=context)
-    context.register_many("callbacks", callbacks, config=cfg, stage="train")
+    context.register_many("callbacks", callbacks)
 
     trainer = Trainer(
         model=model_obj,
@@ -456,24 +456,24 @@ def eval(
     context = BuildContext(config=cfg, stage="eval")
 
     dm = build_datamodule(cfg.section("data"), context=context)
-    context.register("datamodule", dm, config=cfg, stage="eval")
+    context.register("datamodule", dm)
     model_obj = build_model(cfg.section("model"), context=context)
-    context.register("model", model_obj, config=cfg, stage="eval")
+    context.register("model", model_obj)
 
     train_cfg = build_train_config(cfg.section("train"))
     train_cfg.epochs = 1
 
     loss_fn = build_loss(cfg.section("loss"), context=context)
-    context.register("loss", loss_fn, config=cfg, stage="eval")
+    context.register("loss", loss_fn)
 
     metrics = build_metrics(cfg.get("metrics", []), context=context)
-    context.register_many("metrics", metrics, config=cfg, stage="eval")
+    context.register_many("metrics", metrics)
 
     optimizer = build_optimizer(cfg.section("optimizer"), model_obj, context=context)
-    context.register("optimizer", optimizer, config=cfg, stage="eval")
+    context.register("optimizer", optimizer)
 
     callbacks = build_callbacks(cfg.get("callbacks"), context=context)
-    context.register_many("callbacks", callbacks, config=cfg, stage="eval")
+    context.register_many("callbacks", callbacks)
 
     trainer = Trainer(
         model=model_obj,

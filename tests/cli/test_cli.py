@@ -41,9 +41,9 @@ class _DMNestedStub:
 
 
 class _DMContextStub(_DMStub):
-    def describe_context(self, context, config=None, *, stage=None):
+    def describe_context(self, context):
         context.set("data.inferred_dim", 11)
-        context.set("data.monitor_name", f"{stage}/score")
+        context.set("data.monitor_name", f"{context.stage}/score")
 
 
 class _TrainCfg:
@@ -63,7 +63,7 @@ class _ModelStub(torch.nn.Module):
 
 
 class _ModelContextStub(_ModelStub):
-    def describe_context(self, context, config=None, *, stage=None):
+    def describe_context(self, context):
         context.set("model.hidden_dim", 23)
 
 
