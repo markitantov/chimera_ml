@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from transformers import AutoConfig
 from transformers.models.hubert.modeling_hubert import HubertModel, HubertPreTrainedModel
 from transformers.models.wav2vec2.modeling_wav2vec2 import Wav2Vec2Model, Wav2Vec2PreTrainedModel
 
@@ -12,7 +13,7 @@ from chimera_ml.models.base import BaseModel
 from common.models import (
     AGenderClassificationHead, StatPoolLayer, TransformerLayer
 )
-from common.utils import multitask_dict_to_tensor
+from common.utils import multitask_dict_to_tensor, define_context_length
 
 
 class AGenderAudioW2V2Model(Wav2Vec2PreTrainedModel, BaseModel):
@@ -92,10 +93,24 @@ class AGenderAudioHuBERTModel(HubertPreTrainedModel, BaseModel):
 
 
 @MODELS.register("agender_audio_w2v2_model")
-def agender_audio_w2v2_model(**params):
-    return AGenderAudioW2V2Model(**params)
+def agender_audio_w2v2_model(model_name: str):
+    model_config = AutoConfig.from_pretrained(model_name)
+    model_config.output_size = gen + 1 # TODO Get number of gender classes from datamodule
+    model_config.context_length = define_context_length(win_max_length) # TODO Get win_max_length from datamodule
+
+    return AGenderAudioW2V2Model.from_pretrained({
+        "pretrained_model_name_or_path": model_name,
+        "config": model_config
+    })
 
 
 @MODELS.register("agender_audio_hubert_model")
-def agender_audio_hubert_model(**params):
-    return AGenderAudioHuBERTModel(**params)
+def agender_audio_hubert_model(model_name: str):
+    model_config = AutoConfig.from_pretrained(model_name)
+    model_config.output_size = gen + 1 # TODO Get number of gender classes from datamodule
+    model_config.context_length = define_context_length(win_max_length) # TODO Get win_max_length from datamodule
+
+    return AGenderAudioHuBERTModel.from_pretrained({
+        "pretrained_model_name_or_path": model_name,
+        "config": model_config
+    })
