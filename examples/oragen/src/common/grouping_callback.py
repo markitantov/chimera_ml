@@ -53,22 +53,28 @@ class GroupingCallback(BaseCallback):
     @torch.no_grad()
     def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
         logger = getattr(trainer, "mlflow_logger", None)
+        grouped_by_split: dict[str, dict[str, list[dict[str, float | int]]]] = {}
 
         for split_name, _ in resolve_splits(trainer, self.splits):
             cached = trainer.get_cached_split_outputs(split_name)
             if cached is None or cached.targets is None:
                 continue
 
+            split_group = split_name.split("_", 1)[0]
             grouped = self._group_data(cached)
-            all_rows: list[dict[str, float | int]] = []
-
             for corpus_name, rows in grouped.items():
+                grouped_by_split.setdefault(split_group, {}).setdefault(corpus_name, []).extend(rows)
+
+        for split_group, grouped_all in grouped_by_split.items():
+            all_rows: list[dict[str, float | int]] = []
+            for corpus_name, rows in grouped_all.items():
                 all_rows.extend(rows)
                 metrics = self._compute_metrics(rows)
                 if not metrics:
                     continue
 
-                grouped_metrics = {f"{corpus_name}/{self.metric_prefix}_{key}": value for key, value in metrics.items()}
+                metric_scope = f"{split_group}_{corpus_name}_{self.metric_prefix}"
+                grouped_metrics = {f"{metric_scope}/{key}": value for key, value in metrics.items()}
                 logs.update(grouped_metrics)
 
                 if logger is not None:
@@ -80,20 +86,25 @@ class GroupingCallback(BaseCallback):
                     )
                     logger.log_artifact_bytes(
                         _fig_to_png_bytes(fig),
-                        artifact_path=f"{self.artifact_path}/{corpus_name}",
+                        artifact_path=f"{self.artifact_path}/{metric_scope}",
                         filename=self.filename_template.format(corpus=corpus_name, epoch=epoch),
                     )
                     plt.close(fig)
 
                 self._info(
                     trainer,
-                    f"[GroupingCallback] {corpus_name}: "
-                    + " | ".join(f"{key}={value:.4f}" for key, value in metrics.items() if key != "num_files"),
+                    f"[GroupingCallback] "
+                    + " | ".join(
+                        f"{metric_scope}/{key}={value:.4f}"
+                        for key, value in metrics.items()
+                        if key != "num_files"
+                    ),
                 )
 
             if all_rows:
+                metric_scope = f"{split_group}_{self.cc_metric_name.upper()}_{self.metric_prefix}"
                 metrics = self._compute_metrics(all_rows)
-                grouped_metrics = {f"{self.cc_metric_name}/{self.metric_prefix}_{key}": value for key, value in metrics.items()}
+                grouped_metrics = {f"{metric_scope}/{key}": value for key, value in metrics.items()}
                 logs.update(grouped_metrics)
 
                 if logger is not None:
@@ -101,8 +112,12 @@ class GroupingCallback(BaseCallback):
 
                 self._info(
                     trainer,
-                    f"[GroupingCallback] {self.cc_metric_name}: "
-                    + " | ".join(f"{key}={value:.4f}" for key, value in metrics.items() if key != "num_files"),
+                    f"[GroupingCallback] "
+                    + " | ".join(
+                        f"{metric_scope}/{key}={value:.4f}"
+                        for key, value in metrics.items()
+                        if key != "num_files"
+                    ),
                 )
 
     def _group_data(self, cached: CachedSplitOutputs) -> dict[str, list[dict[str, float | int]]]:
@@ -216,4 +231,5 @@ def grouping_callback(context = None, **params):
     gender_class_names = params.pop("gender_class_names", None)
     if gender_class_names is None and context is not None:
         gender_class_names = context.get("data.gender_class_names")
+    
     return GroupingCallback(gender_class_names=gender_class_names, **params)
