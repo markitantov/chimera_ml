@@ -44,9 +44,11 @@ class AgenderAudioDataModule(DataModule):
         val_datasets: dict[str, Dataset] = {}
         test_datasets: dict[str, Dataset] = {}
         self.datasets_stats: dict[str, dict[str, Any]] = {}
+        train_counts: list[np.ndarray] = []
 
         for corpus_name, cfg in self.corpora.items():
             labels = pd.read_csv(cfg["labels_file_path"])
+            labels["subset"] = labels["subset"].astype(str)
             vad = load_pickle(cfg.get("vad_path")) if cfg.get("vad_path") else None
             common = {
                 "data_root": cfg["data_root"],
@@ -60,46 +62,55 @@ class AgenderAudioDataModule(DataModule):
                 "win_min_length": self.win_min_length,
                 "preprocessor_name": self.preprocessor_name,
             }
-            train_labels = labels[labels["subset"].isin(list(self.train_subsets))].copy()
+            self.datasets_stats.setdefault(corpus_name, {})
 
-            if not train_labels.empty:
+            for subset_name in self.train_subsets:
+                subset_name = str(subset_name)
+                subset_labels = labels[labels["subset"] == subset_name].copy()
+                if subset_labels.empty:
+                    continue
+
                 train_dataset = AGenderAudioDataset(
-                    labels_metadata=train_labels,
-                    features_file_name=f"{corpus_name}_TRAIN_{self.features_file_name}",
+                    labels_metadata=subset_labels,
+                    features_file_name=f"{corpus_name}_{subset_name.upper()}_{self.features_file_name}",
                     **common,
                 )
                 train_datasets.append(train_dataset)
-                self.datasets_stats.setdefault(corpus_name, {})["train"] = train_dataset.stats
+                self.datasets_stats[corpus_name][subset_name] = train_dataset.stats
+                train_counts.append(train_dataset.stats["counts"]["gen"])
 
-            val_labels = labels[labels["subset"].isin(list(self.val_subsets))].copy()
+            for subset_name in self.val_subsets:
+                subset_name = str(subset_name)
+                subset_labels = labels[labels["subset"] == subset_name].copy()
+                if subset_labels.empty:
+                    continue
 
-            if not val_labels.empty:
-                val_datasets[corpus_name] = AGenderAudioDataset(
-                    labels_metadata=val_labels,
-                    features_file_name=f"{corpus_name}_VAL_{self.features_file_name}",
+                dataset_key = f"{subset_name}/{corpus_name}"
+                val_datasets[dataset_key] = AGenderAudioDataset(
+                    labels_metadata=subset_labels,
+                    features_file_name=f"{corpus_name}_{subset_name.upper()}_{self.features_file_name}",
                     **common,
                 )
-                self.datasets_stats.setdefault(corpus_name, {})["val"] = val_datasets[corpus_name].stats
+                self.datasets_stats[corpus_name][subset_name] = val_datasets[dataset_key].stats
 
             if self.test_subsets:
-                test_labels = labels[labels["subset"].isin(list(self.test_subsets))].copy()
-                if not test_labels.empty:
-                    test_datasets[corpus_name] = AGenderAudioDataset(
-                        labels_metadata=test_labels,
-                        features_file_name=f"{corpus_name}_TEST_{self.features_file_name}",
+                for subset_name in self.test_subsets:
+                    subset_name = str(subset_name)
+                    subset_labels = labels[labels["subset"] == subset_name].copy()
+                    if subset_labels.empty:
+                        continue
+                    
+                    dataset_key = f"{subset_name}/{corpus_name}"
+                    test_datasets[dataset_key] = AGenderAudioDataset(
+                        labels_metadata=subset_labels,
+                        features_file_name=f"{corpus_name}_{subset_name.upper()}_{self.features_file_name}",
                         **common,
                     )
-                    self.datasets_stats.setdefault(corpus_name, {})["test"] = test_datasets[corpus_name].stats
+                    self.datasets_stats[corpus_name][subset_name] = test_datasets[dataset_key].stats
 
         self.train_dataset = ConcatDataset(train_datasets) if train_datasets else None
         self.val_dataset = val_datasets or None
         self.test_dataset = test_datasets or None
-
-        train_counts = [
-            corpus_stats["train"]["counts"]["gen"]
-            for corpus_stats in self.datasets_stats.values()
-            if "train" in corpus_stats
-        ]
 
         if train_counts:
             counts = np.sum(train_counts, axis=0)
@@ -111,9 +122,6 @@ class AgenderAudioDataModule(DataModule):
             )
         else:
             self.gender_class_weights = [0.0] * self.gender_num_classes
-
-        print("ok")
-
 
 @DATAMODULES.register("agender_audio_datamodule")
 def agender_audio_datamodule(context = None, **params):
