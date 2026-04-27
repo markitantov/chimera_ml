@@ -6,10 +6,8 @@ import pandas as pd
 from tqdm import tqdm
 
 import torch
-import torchvision
 from torch.utils.data import Dataset
 
-from common.data_preprocessors import Wav2Vec2DataPreprocessor
 from common.utils import (
     generate_features_suffix,
     load_pickle,
@@ -39,8 +37,9 @@ class AGenderAudioDataset(Dataset):
         win_max_length: int = 4,
         win_shift: int = 2,
         win_min_length: int = 0,
-        transform: torchvision.transforms.transforms.Compose = None,
+        transform: Any = None,
         preprocessor_name: str | None = None,
+        display_filtering_stats: bool = False,
     ) -> None:
         self.data_root = Path(data_root)
         self.labels_metadata = labels_metadata
@@ -52,15 +51,15 @@ class AGenderAudioDataset(Dataset):
         self.transform = transform
         self.corpus_name = corpus_name
         self.gender_num_classes = int(gender_num_classes)
-        self.data_preprocessor = (
-            Wav2Vec2DataPreprocessor(
+        self.data_preprocessor = None
+        if preprocessor_name:
+            from common.data_preprocessors import Wav2Vec2DataPreprocessor
+
+            self.data_preprocessor = Wav2Vec2DataPreprocessor(
                 preprocessor_name=preprocessor_name,
                 sr=self.sr,
                 win_max_length=self.win_max_length,
             )
-            if preprocessor_name
-            else None
-        )
 
         suffix = generate_features_suffix(
             vad_metadata=self.vad_metadata,
@@ -73,18 +72,34 @@ class AGenderAudioDataset(Dataset):
         self.full_features_path.mkdir(parents=True, exist_ok=True)
         stats_path = Path(features_root) / f"{features_file_name}_{suffix}_stats.pickle"
 
+        self.display_filtering_stats = display_filtering_stats
+
         info = load_pickle(stats_path)
 
         if not info:
+            print("No cached feature index found. Start reading audio and preparing window caches.")
             info = self._prepare_data()
             save_pickle(info, stats_path)
+            print(f"Feature index saved to '{stats_path}'.")
+        else:
+            print(f"Using cached feature index from '{stats_path}'.")
         
         self.info, self.stats = self._filter_samples(info)
+        print(
+            f"Ready: num_windows={len(self.info)}, "
+            f"num_files={len(self.stats['fns'])}, "
+            f"gender_counts={self.stats['counts']['gen'].tolist()}"
+        )
 
     def _prepare_data(self) -> list[dict[str, Any]]:
         info: list[dict[str, Any]] = []
+        records = self.labels_metadata.to_dict("records")
+        files_without_windows_before_vad = 0
+        files_without_windows_after_vad = 0
+        windows_before_vad = 0
+        windows_after_vad = 0
 
-        for sample in tqdm(self.labels_metadata.to_dict("records")):
+        for sample in tqdm(records, desc=f"{self.corpus_name}: extracting audio features"):
             sample_filename = normalize_audio_filename(sample["audio_file_path"])
             sample_fp = self.data_root / sample_filename
             full_wave = read_audio(sample_fp, self.sr)
@@ -97,7 +112,10 @@ class AGenderAudioDataset(Dataset):
             )
 
             if not windows:
+                files_without_windows_before_vad += 1
                 continue
+
+            windows_before_vad += len(windows)
             
             if self.vad_metadata:
                 windows = find_intersections(
@@ -105,6 +123,11 @@ class AGenderAudioDataset(Dataset):
                     self.vad_metadata[sample_filename],
                     min_length=int(self.win_min_length * self.sr),
                 )
+                if not windows:
+                    files_without_windows_after_vad += 1
+                    continue
+
+            windows_after_vad += len(windows)
 
             for w_idx, window in enumerate(windows):
                 wave = full_wave[window["start"] : window["end"]].clone()
@@ -123,6 +146,15 @@ class AGenderAudioDataset(Dataset):
 
                 save_pickle(wave, self.full_features_path / waveform_cache_name(sample_filename, w_idx))
 
+        if self.display_filtering_stats:
+            print(
+                f"Prepared {len(info)} window records from {len(records)} source rows. "
+                f"files_without_windows_before_vad={files_without_windows_before_vad}, "
+                f"files_without_windows_after_vad={files_without_windows_after_vad}, "
+                f"windows_before_vad={windows_before_vad}, "
+                f"windows_after_vad={windows_after_vad}"
+            )
+        
         return info
 
     def _filter_samples(self, info: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -178,7 +210,7 @@ class AGenderAudioDataset(Dataset):
 
         target = torch.tensor([float(data["gen"]), float(data["age"])], dtype=torch.float32)
         return {
-            "inputs": {"audio": torch.tensor(audio, dtype=torch.float32)},
+            "inputs": {"audio": audio.to(dtype=torch.float32) if torch.is_tensor(audio) else torch.tensor(audio, dtype=torch.float32)},
             "target": target,
             "meta": {
                 "filename": data["fn"],

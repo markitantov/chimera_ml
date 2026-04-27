@@ -1,5 +1,5 @@
 import numpy as np
-from transformers import Wav2Vec2Processor, ViTImageProcessor
+from transformers import AutoFeatureExtractor, ViTImageProcessor
 import torch
 
 
@@ -10,7 +10,7 @@ class Wav2Vec2DataPreprocessor:
         self.win_max_length = win_max_length
         
         self.return_attention_mask = return_attention_mask
-        self.processor = Wav2Vec2Processor.from_pretrained(preprocessor_name)
+        self.processor = AutoFeatureExtractor.from_pretrained(preprocessor_name)
     
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         data = self.processor(
@@ -19,6 +19,7 @@ class Wav2Vec2DataPreprocessor:
             return_tensors="pt",
             padding="max_length",
             max_length=self.sr * self.win_max_length,
+            return_attention_mask=self.return_attention_mask,
         )
         
         return data if self.return_attention_mask else data["input_values"][0]
@@ -31,7 +32,7 @@ class HuBERTDataPreprocessor:
         self.win_max_length = win_max_length
         
         self.return_attention_mask = return_attention_mask
-        self.processor = Wav2Vec2Processor.from_pretrained(preprocessor_name)
+        self.processor = AutoFeatureExtractor.from_pretrained(preprocessor_name)
     
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         data = self.processor(
@@ -40,6 +41,7 @@ class HuBERTDataPreprocessor:
             return_tensors="pt",
             padding="max_length",
             max_length=self.sr * self.win_max_length,
+            return_attention_mask=self.return_attention_mask,
         )
         
         return data if self.return_attention_mask else data["input_values"][0]
@@ -52,4 +54,3 @@ class ViTDataPreprocessor:
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         data = self.processor(x, return_tensors="pt")['pixel_values']
         return data[0]
-    

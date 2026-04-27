@@ -36,7 +36,7 @@ class AgeGenderSOTAModel(Wav2Vec2PreTrainedModel):
         self.wav2vec2 = Wav2Vec2Model(config)
         self.age = ModelHead(config, 1)
         self.gender = ModelHead(config, 3)
-        self.init_weights()
+        self.post_init()
 
     def forward(self, batch: Batch) -> ModelOutput:
         outputs = self.wav2vec2(batch.inputs["audio"])

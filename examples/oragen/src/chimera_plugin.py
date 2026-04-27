@@ -2,14 +2,14 @@ import importlib
 import warnings
 
 _MODULES_TO_REGISTER: tuple[str, ...] = (
-    "audio.data.audio_datamodule"
+    "audio.data.agender_audio_datamodule",
     "audio.models.audio_models",
     "audio.models.audio_sota_model",
     "image.models.image_models",
-    "fusion.data.fusion_features_datamodule",
     "fusion.models.fusion_models",
     "common.losses",
     "common.metrics",
+    "common.grouping_callback",
 )
 
 
