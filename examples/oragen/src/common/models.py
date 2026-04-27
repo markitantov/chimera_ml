@@ -71,13 +71,21 @@ class MultiHeadAttention(nn.Module):
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
         super().__init__()
+        self.d_model = d_model
+        self.max_len = max_len
         self.dropout = nn.Dropout(p=dropout)
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
+        self.register_buffer("pe", self._build_pe(), persistent=True)
+
+    def _build_pe(self) -> torch.Tensor:
+        position = torch.arange(self.max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.d_model, 2) * (-math.log(10000.0) / self.d_model))
+        pe = torch.zeros(self.max_len, 1, self.d_model)
         pe[:, 0, 0::2] = torch.sin(position * div_term)
         pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe.permute(1, 0, 2))
+        return pe.permute(1, 0, 2)
+
+    def reset_parameters(self) -> None:
+        self.pe.copy_(self._build_pe().to(device=self.pe.device, dtype=self.pe.dtype))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.dropout(x + self.pe[:, : x.size(1)])
@@ -108,7 +116,7 @@ class StatPoolLayer(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.cat([x.mean(dim=self.dim), x.std(dim=self.dim)], dim=-1)
+        return torch.cat([x.mean(dim=self.dim), x.std(dim=self.dim, correction=0)], dim=-1)
 
 
 class AGenderClassificationHead(nn.Module):
