@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from chimera_ml.core.batch import Batch
@@ -22,6 +23,16 @@ class _TinyModel(torch.nn.Module):
 class _MSELoss(BaseLoss):
     def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
         return torch.mean((output.preds - batch.targets) ** 2)
+
+
+class _InfLoss(BaseLoss):
+    def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
+        return torch.tensor(float("inf"), dtype=output.preds.dtype, device=output.preds.device)
+
+
+class _SqrtMeanLoss(BaseLoss):
+    def __call__(self, output: ModelOutput, batch: Batch) -> torch.Tensor:
+        return torch.sqrt(output.preds.mean())
 
 
 class _Metric(BaseMetric):
@@ -208,11 +219,123 @@ def test_trainer_run_epoch_collects_cache_and_handles_target_errors():
         raise AssertionError("Expected ValueError for train batch without targets")
 
 
+def test_trainer_run_epoch_raises_on_non_finite_predictions():
+    opt = torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=1e-3)
+    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu")
+    tr = Trainer(
+        model=_NaNPredModel(),
+        loss_fn=_MSELoss(),
+        optimizer=opt,
+        metrics=[_Metric()],
+        config=cfg,
+        mlflow_logger=None,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    with pytest.raises(FloatingPointError, match="Non-finite predictions detected") as exc_info:
+        tr._run_epoch(
+            loader=[_batch()],
+            device=torch.device("cpu"),
+            scaler=scaler,
+            train=False,
+            epoch=1,
+            split="val",
+        )
+
+    message = str(exc_info.value)
+    assert "preds=shape=(2, 1), dtype=torch.float32, finite=False" in message
+    assert "inputs={'x': 'shape=(2, 1), dtype=torch.float32, finite=True'}" in message
+    assert "targets=shape=(2, 1), dtype=torch.float32, finite=True" in message
+
+
+def test_trainer_run_epoch_raises_on_non_finite_loss():
+    model = _TinyModel()
+    opt = torch.optim.SGD(model.parameters(), lr=1e-3)
+    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu")
+    tr = Trainer(
+        model=model,
+        loss_fn=_InfLoss(),
+        optimizer=opt,
+        metrics=[_Metric()],
+        config=cfg,
+        mlflow_logger=None,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    with pytest.raises(FloatingPointError, match="Non-finite loss detected") as exc_info:
+        tr._run_epoch(
+            loader=[_batch()],
+            device=torch.device("cpu"),
+            scaler=scaler,
+            train=False,
+            epoch=1,
+            split="val",
+        )
+
+    message = str(exc_info.value)
+    assert "loss=shape=(), dtype=torch.float32, finite=False, value=inf" in message
+    assert "preds=shape=(2, 1), dtype=torch.float32, finite=True" in message
+
+
+def test_trainer_run_epoch_raises_on_non_finite_gradients():
+    model = _ZeroScalarModel()
+    opt = torch.optim.SGD(model.parameters(), lr=1e-3)
+    cfg = TrainConfig(epochs=1, mixed_precision=False, use_scheduler=False, device="cpu")
+    tr = Trainer(
+        model=model,
+        loss_fn=_SqrtMeanLoss(),
+        optimizer=opt,
+        metrics=[_Metric()],
+        config=cfg,
+        mlflow_logger=None,
+        logger=None,
+        callbacks=[],
+        scheduler=None,
+    )
+    scaler = torch.amp.GradScaler(device="cpu", enabled=False)
+
+    with pytest.raises(FloatingPointError, match="Non-finite gradients detected") as exc_info:
+        tr._run_epoch(
+            loader=[_batch()],
+            device=torch.device("cpu"),
+            scaler=scaler,
+            train=True,
+            epoch=1,
+            split="train",
+        )
+
+    message = str(exc_info.value)
+    assert "bad_grad_params=['scale']" in message
+    assert "loss=shape=(), dtype=torch.float32, finite=True, value=0.0" in message
+
+
 class _SeqModel(torch.nn.Module):
     def forward(self, batch: Batch) -> ModelOutput:
         # Keep sequence dimension from input, may vary between batches.
         preds = batch.inputs["x"]
         return ModelOutput(preds=preds, aux={"features": preds + 1.0})
+
+
+class _NaNPredModel(torch.nn.Module):
+    def forward(self, batch: Batch) -> ModelOutput:
+        preds = torch.full_like(batch.inputs["x"], float("nan"))
+        return ModelOutput(preds=preds)
+
+
+class _ZeroScalarModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.scale = torch.nn.Parameter(torch.zeros(()))
+
+    def forward(self, batch: Batch) -> ModelOutput:
+        preds = self.scale.expand(batch.inputs["x"].shape[0], 1)
+        return ModelOutput(preds=preds)
 
 
 def _seq_batch(t: int) -> Batch:

@@ -14,6 +14,23 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   ASR/text extraction, modality-specific preprocessing, checkpoint loading, model inference, and structured
   prediction/artifact export.
 
+## [0.2.2] - 2026-04-28
+
+### Added
+
+- Shared `training/non_finite.py` utilities for compact non-finite diagnostics in the training loop.
+- Focused trainer tests covering non-finite predictions, loss, and gradients.
+
+### Changed
+
+- `README.md` now documents fail-fast trainer behavior for non-finite predictions, loss, gradients, and gradient norms.
+- `build_from_registry(..., smart_inject=True)` docs now clarify that only explicitly declared injected parameters are passed through.
+
+### Fixed
+
+- Trainer now fails fast with richer debug context when predictions or loss become `NaN`/`Inf`.
+- Trainer now checks unscaled gradients and clipped gradient norms for non-finite values before `optimizer.step()`.
+
 ## [0.2.1] - 2026-04-24
 
 ### Added
