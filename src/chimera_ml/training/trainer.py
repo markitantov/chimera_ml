@@ -23,11 +23,7 @@ from chimera_ml.training.mixed_loader_utils import (
     estimate_train_epoch_steps,
     iter_mixed_train_batches,
 )
-from chimera_ml.training.non_finite import (
-    assert_finite_gradients,
-    assert_finite_step,
-    non_finite_debug_context,
-)
+from chimera_ml.training.non_finite import assert_finite_step
 
 FeatureExtractor = Callable[[BaseModel, Batch, ModelOutput], torch.Tensor]
 
@@ -332,26 +328,10 @@ class Trainer:
                     self.optimizer.zero_grad(set_to_none=True)
                     assert loss is not None
                     scaler.scale(loss).backward()
-                    scaler.unscale_(self.optimizer)
-                    assert_finite_gradients(
-                        model=self.model,
-                        split=split,
-                        epoch=epoch,
-                        global_step=self.global_step,
-                        out=out,
-                        loss=loss,
-                        batch=batch,
-                    )
 
                     if self.config.grad_clip_norm is not None:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
-                        if not torch.isfinite(grad_norm).all():
-                            raise FloatingPointError(
-                                f"Non-finite gradient norm detected at split='{split}', "
-                                f"epoch={epoch}, global_step={self.global_step}. "
-                                f"grad_norm={float(grad_norm.detach().item())}. "
-                                f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
-                            )
+                        scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
 
                     scaler.step(self.optimizer)
                     scaler.update()
@@ -503,26 +483,10 @@ class Trainer:
 
                 self.optimizer.zero_grad(set_to_none=True)
                 scaler.scale(loss).backward()
-                scaler.unscale_(self.optimizer)
-                assert_finite_gradients(
-                    model=self.model,
-                    split=loader_name,
-                    epoch=epoch,
-                    global_step=self.global_step,
-                    out=out,
-                    loss=loss,
-                    batch=batch,
-                )
 
                 if self.config.grad_clip_norm is not None:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
-                    if not torch.isfinite(grad_norm).all():
-                        raise FloatingPointError(
-                            f"Non-finite gradient norm detected at split='{loader_name}', "
-                            f"epoch={epoch}, global_step={self.global_step}. "
-                            f"grad_norm={float(grad_norm.detach().item())}. "
-                            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
-                        )
+                    scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip_norm)
 
                 scaler.step(self.optimizer)
                 scaler.update()

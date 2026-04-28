@@ -86,8 +86,7 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - requires `experiment_info.params.experiment_name`,
 - generates `run_name` via `generate_run_name(...)`,
 - patches `checkpoint_callback` and `snapshot_callback` params with experiment/run data,
-- builds all components from registries and runs `Trainer.fit(...)`,
-- fails fast on non-finite predictions, loss, gradients, and clipped gradient norms with compact debug context in the raised error.
+- builds all components from registries and runs `Trainer.fit(...)`.
 
 `sweep`:
 
@@ -225,11 +224,6 @@ trials:
 - `scheduler_step_per_epoch` (default `true`)
 - `scheduler_monitor` (optional metric key)
 - `collect_cache` (default `true`)
-
-Numerical stability behavior:
-
-- the trainer raises `FloatingPointError` when predictions or loss become `NaN`/`Inf`,
-- during training it also checks unscaled gradients and clipped gradient norms before `optimizer.step()`.
 
 ## Data Contract
 

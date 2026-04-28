@@ -18,18 +18,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 
-- Shared `training/non_finite.py` utilities for compact non-finite diagnostics in the training loop.
-- Focused trainer tests covering non-finite predictions, loss, and gradients.
+- Focused trainer tests for current trainer behavior.
 
 ### Changed
 
-- `README.md` now documents fail-fast trainer behavior for non-finite predictions, loss, gradients, and gradient norms.
 - `build_from_registry(..., smart_inject=True)` docs now clarify that only explicitly declared injected parameters are passed through.
 
 ### Fixed
 
-- Trainer now fails fast with richer debug context when predictions or loss become `NaN`/`Inf`.
-- Trainer now checks unscaled gradients and clipped gradient norms for non-finite values before `optimizer.step()`.
+- Trainer/runtime edge cases around factory injection and evaluation flow.
 
 ## [0.2.1] - 2026-04-24
 
