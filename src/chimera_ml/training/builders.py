@@ -117,8 +117,10 @@ def build_from_registry(
         inject_overrides:
             If True, inject values override cfg params on conflicts.
         smart_inject:
-            If True, only pass injected keys that the factory accepts (by signature introspection).
-            Useful when you want to inject `param` universally, but some factories don't accept it.
+            If True, only pass injected keys that are explicitly declared in the factory signature
+            (based on signature introspection). Keys accepted only via `**kwargs`/`**params`
+            are not injected implicitly. Useful when you want to inject runtime dependencies
+            universally, but some factories should ignore them unless they opt in explicitly.
 
     Returns:
         Built object (factory(**kwargs)) or None (if allow_none and cfg/default implies None).
@@ -154,23 +156,21 @@ def build_from_registry(
     # 4) Merge inject into params
     kwargs = dict(params)
     if inject:
-        if inject_overrides:
-            kwargs.update(inject)
-        else:
-            for k, v in inject.items():
-                kwargs.setdefault(k, v)
+        filtered_inject = dict(inject)
+        if smart_inject:
+            try:
+                sig = inspect.signature(factory)
+                allowed_injected = set(sig.parameters.keys())
+                filtered_inject = {k: v for k, v in inject.items() if k in allowed_injected}
+            except (TypeError, ValueError):
+                # Can't inspect -> fall back to passing everything
+                filtered_inject = dict(inject)
 
-    # 5) Optionally filter injected keys by factory signature
-    if smart_inject and inject:
-        try:
-            sig = inspect.signature(factory)
-            accepts_kwargs = any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values())
-            if not accepts_kwargs:
-                allowed = set(sig.parameters.keys())
-                kwargs = {k: v for k, v in kwargs.items() if k in allowed}
-        except (TypeError, ValueError):
-            # Can't inspect -> fall back to passing everything
-            pass
+        if inject_overrides:
+            kwargs.update(filtered_inject)
+        else:
+            for k, v in filtered_inject.items():
+                kwargs.setdefault(k, v)
 
     return factory(**kwargs)
 
