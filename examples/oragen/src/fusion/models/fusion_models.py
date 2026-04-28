@@ -1,5 +1,14 @@
 import torch
 import torch.nn as nn
+from common.models import (
+    AGenderClassificationHead,
+    AGenderClassificationHeadV2,
+    MaskAGenderClassificationHead,
+    MultiHeadAttention,
+    Permute,
+    StatPoolLayer,
+)
+from common.utils import FeaturesType, multitask_dict_to_tensor
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
@@ -7,24 +16,15 @@ from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
 
 
-from common.utils import FeaturesType, multitask_dict_to_tensor
-from common.models import (
-    MultiHeadAttention, 
-    StatPoolLayer,
-    AGenderClassificationHead,
-    AGenderClassificationHeadV2,
-    MaskAGenderClassificationHead,
-    Permute,
-)
-
-
 def _features_type(value) -> FeaturesType:
     if isinstance(value, FeaturesType):
         return value
+    
     if isinstance(value, str):
         key = value.strip().upper()
         if key in FeaturesType.__members__:
             return FeaturesType[key]
+        
     return FeaturesType(int(value))
 
 
@@ -60,8 +60,7 @@ class MTCMAModelV1(nn.Module):
         values = self.fc_v(self.norm_v(values))
         
         x = self.self_attention(queries=queries, keys=keys, values=values, mask=None)
-        x = x + self.mlp(x)
-        return x
+        return x + self.mlp(x)
     
 
 class MTCMAModelV2(nn.Module):
@@ -92,8 +91,7 @@ class MTCMAModelV2(nn.Module):
         values = self.norm_v(values)
         
         x = self.self_attention(queries=queries, keys=keys, values=values, mask=None)
-        x = x + self.mlp(x)
-        return x
+        return x + self.mlp(x)
 
 
 class AVModelV1(BaseModel):
@@ -198,8 +196,9 @@ class AVModelV2(BaseModel):
                 nn.Linear(128, 256),
             )
             
-        self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=1 if self.features_type == FeaturesType.LATE else 4)
-        self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=1 if self.features_type == FeaturesType.LATE else 4)
+        num_heads = 1 if self.features_type == FeaturesType.LATE else 4
+        self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
+        self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
         
         self.stp = StatPoolLayer(dim=1)
         
@@ -291,8 +290,9 @@ class AVModelV3(BaseModel):
                 nn.Linear(128, 256),
             )
             
-        self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=1 if self.features_type == FeaturesType.LATE else 4)
-        self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=1 if self.features_type == FeaturesType.LATE else 4)
+        num_heads = 1 if self.features_type == FeaturesType.LATE else 4
+        self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
+        self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
         
         self.stp = StatPoolLayer(dim=1)
         
@@ -348,7 +348,7 @@ class AVModelV3(BaseModel):
 
 
 class MaskAgenderAVModelV1(BaseModel):
-    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str = None) -> None:
+    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
         self.av_model = AVModelV3(features_type=features_type)
             
@@ -370,7 +370,7 @@ class MaskAgenderAVModelV1(BaseModel):
     
     
 class MaskAgenderAVModelV2(BaseModel):
-    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str = None) -> None:
+    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
         
         self.av_model = AVModelV3(features_type=features_type)
@@ -391,7 +391,7 @@ class MaskAgenderAVModelV2(BaseModel):
               
 
 class MaskAgenderAVModelV3(BaseModel):
-    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str = None) -> None:
+    def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
         
         self.av_model = AVModelV3(features_type=features_type)
@@ -422,57 +422,49 @@ A: torch.Size([256])
 V: torch.Size([4, 128])
 '''
 
-MaskAgenderAVModelV1
-@MODELS.register("av_model_v1")
-def av_model_v1(**params):
-    return AVModelV1(**params) 
+@MODELS.register("agender_multimodal_model_v1")
+def agender_multimodal_model_v1(context = None, **params):
+    features_type = params.pop("features_type", None)
+    if features_type is None and context is not None:
+        features_type = context.get("data.features_type", FeaturesType.LATE)
 
-
-@MODELS.register("av_model_v2")
-def av_model_v2(**params):
-    return AVModelV2(**params) 
-
-
-@MODELS.register("av_model_v3")
-def av_model_v3(**params):
-    return AVModelV3(**params) 
-
-@MODELS.register("mask_agender_av_model_v1")
-def mask_agender_av_model_v1(**params):
-    return MaskAgenderAVModelV1(**params) 
-
-
-@MODELS.register("mask_agender_av_model_v2")
-def mask_agender_av_model_v2(**params):
-    return MaskAgenderAVModelV2(**params) 
-
-
-@MODELS.register("mask_agender_av_model_v3")
-def mask_agender_av_model_v3(**params):
-    return MaskAgenderAVModelV3(**params) 
-
-
-if __name__ == "__main__":
-    device = torch.device('cpu')
+    include_mask = params.pop("include_mask", None)
+    if include_mask is None and context is not None:
+        include_mask = bool(context.get("data.include_mask", False))
     
-    features = [
-        {
-            'a': torch.zeros((10, 512, 199)).to(device),
-            'v': torch.zeros((10, 4, 197, 768)).to(device),
-            'features_type': FeaturesType.EARLY,
-        },
-        {
-            'a': torch.zeros((10, 199, 1024)).to(device),
-            'v': torch.zeros((10, 4, 13, 768)).to(device),
-            'features_type': FeaturesType.INTERMEDIATE,
-        },
-        {
-            'a': torch.rand((10, 256)).to(device),
-            'v': torch.rand((10, 4, 128)).to(device),
-            'features_type': FeaturesType.LATE,
-        },
-    ]
+    if include_mask:
+        return MaskAgenderAVModelV1(features_type=features_type, **params)
+
+    return AVModelV1(features_type=features_type, **params)
+
+
+@MODELS.register("agender_multimodal_model_v2")
+def agender_multimodal_model_v2(context = None, **params):
+    features_type = params.pop("features_type", None)
+    if features_type is None and context is not None:
+        features_type = context.get("data.features_type", FeaturesType.LATE)
+
+    include_mask = params.pop("include_mask", None)
+    if include_mask is None and context is not None:
+        include_mask = bool(context.get("data.include_mask", False))
     
-    for f in features:
-        model = AVModelV3(features_type=f['features_type'])
-        print(model([f['a'], f['v']]))
+    if include_mask:
+        return MaskAgenderAVModelV2(features_type=features_type, **params)
+
+    return AVModelV2(features_type=features_type, **params)
+
+
+@MODELS.register("agender_multimodal_model_v3")
+def agender_multimodal_model_v3(context = None, **params):
+    features_type = params.pop("features_type", None)
+    if features_type is None and context is not None:
+        features_type = context.get("data.features_type", FeaturesType.LATE)
+
+    include_mask = params.pop("include_mask", None)
+    if include_mask is None and context is not None:
+        include_mask = bool(context.get("data.include_mask", False))
+    
+    if include_mask:
+        return MaskAgenderAVModelV3(features_type=features_type, **params)
+
+    return AVModelV3(features_type=features_type, **params)

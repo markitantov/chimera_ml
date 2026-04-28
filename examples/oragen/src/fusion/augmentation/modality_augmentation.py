@@ -1,12 +1,12 @@
 import random
 
 import torch
-
-
 from common.utils import DatasetType
 
-class ModalityDropAugmentation:
+
+class ModalityDropAugmentation(torch.nn.Module):
     def __init__(self, audio_drop_prob: float = 0.3, video_drop_prob: float = 0.3) -> None:
+        super().__init__()
         self.audio_drop_prob = float(audio_drop_prob)
         self.video_drop_prob = float(video_drop_prob)
 
@@ -23,7 +23,7 @@ class ModalityDropAugmentation:
 
 class MultiAugment(torch.nn.Module):
     def __init__(self, dataset_type) -> None:
-        super(MultiAugment, self).__init__()
+        super().__init__()
         self.dataset_type = dataset_type
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -96,5 +96,9 @@ def agender_loss(context = None, **params):
     gender_weights = params.pop("gender_weights", None)
     if gender_weights is None and context is not None:
         gender_weights = context.get("data.gender_class_weights")
+
+    mask_weights = params.pop("mask_weights", None)
+    if mask_weights is None and context is not None:
+        mask_weights = context.get("data.mask_class_weights")
     
-    return AGenderLoss(gender_weights=gender_weights, **params)
+    return AGenderLoss(gender_weights=gender_weights, mask_weights=mask_weights, **params)
