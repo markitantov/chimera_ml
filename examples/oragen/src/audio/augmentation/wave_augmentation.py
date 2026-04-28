@@ -1,6 +1,6 @@
-import numpy as np
 import random
 
+import numpy as np
 import torch
 import torchaudio
 
@@ -9,9 +9,8 @@ class PolarityInversion(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-    def forward(self, wave: torch.Tensor) -> torch.tensor:
-        wave = torch.neg(wave)
-        return wave
+    def forward(self, wave: torch.Tensor) -> torch.Tensor:
+        return torch.neg(wave)
     
 
 class WhiteNoise(torch.nn.Module):
@@ -35,7 +34,7 @@ class SoxEffect(torch.nn.Module):
         self.sr = sr
 
     def forward(self, wave: torch.Tensor) -> torch.Tensor:
-        wave, sr = torchaudio.sox_effects.apply_effects_tensor(wave, self.sr, self.effects)
+        wave, _sr = torchaudio.sox_effects.apply_effects_tensor(wave, self.sr, self.effects)
         return wave
 
 
@@ -47,8 +46,7 @@ class Gain(torch.nn.Module):
 
     def forward(self, wave: torch.Tensor) -> torch.Tensor:
         gain = random.uniform(self.min_gain, self.max_gain)
-        audio = torchaudio.transforms.Vol(gain, gain_type="db")(wave)       
-        return audio
+        return torchaudio.transforms.Vol(gain, gain_type="db")(wave)
 
 
 class RandomChoice(torch.nn.Module):

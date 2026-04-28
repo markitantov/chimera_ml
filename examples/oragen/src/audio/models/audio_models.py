@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from common.models import AGenderClassificationHead, PositionalEncoding, StatPoolLayer, TransformerLayer
+from common.utils import define_context_length, multitask_dict_to_tensor
 from transformers import AutoConfig
 from transformers.models.hubert.modeling_hubert import HubertModel, HubertPreTrainedModel
 from transformers.models.wav2vec2.modeling_wav2vec2 import Wav2Vec2Model, Wav2Vec2PreTrainedModel
@@ -9,19 +11,24 @@ from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
 
-from common.models import (
-    AGenderClassificationHead, PositionalEncoding, StatPoolLayer, TransformerLayer
-)
-from common.utils import multitask_dict_to_tensor, define_context_length
-
 
 class AGenderAudioW2V2Model(Wav2Vec2PreTrainedModel, BaseModel):
     def __init__(self, config):
         super().__init__(config)
         self.wav2vec2 = Wav2Vec2Model(config)
         self.f_size = int(getattr(config, "hidden_size", 1024))
-        self.transformer_block1 = TransformerLayer(input_dim=self.f_size, num_heads=4, dropout=0.1, positional_encoding=True)
-        self.transformer_block2 = TransformerLayer(input_dim=self.f_size, num_heads=4, dropout=0.1, positional_encoding=True)
+        self.transformer_block1 = TransformerLayer(
+            input_dim=self.f_size,
+            num_heads=4,
+            dropout=0.1,
+            positional_encoding=True,
+        )
+        self.transformer_block2 = TransformerLayer(
+            input_dim=self.f_size,
+            num_heads=4,
+            dropout=0.1,
+            positional_encoding=True,
+        )
         self.stp = StatPoolLayer(dim=1)
         self.fc1 = nn.Linear(self.f_size * 2, 256)
         self.relu = nn.ReLU()
@@ -58,8 +65,18 @@ class AGenderAudioHuBERTModel(HubertPreTrainedModel, BaseModel):
         super().__init__(config)
         self.hubert = HubertModel(config)
         self.f_size = int(getattr(config, "hidden_size", 1024))
-        self.transformer_block1 = TransformerLayer(input_dim=self.f_size, num_heads=4, dropout=0.1, positional_encoding=True)
-        self.transformer_block2 = TransformerLayer(input_dim=self.f_size, num_heads=4, dropout=0.1, positional_encoding=True)
+        self.transformer_block1 = TransformerLayer(
+            input_dim=self.f_size,
+            num_heads=4,
+            dropout=0.1,
+            positional_encoding=True,
+        )
+        self.transformer_block2 = TransformerLayer(
+            input_dim=self.f_size,
+            num_heads=4,
+            dropout=0.1,
+            positional_encoding=True,
+        )
         self.stp = StatPoolLayer(dim=1)
         self.fc1 = nn.Linear(self.f_size * 2, 256)
         self.relu = nn.ReLU()
@@ -99,7 +116,7 @@ def build_audio_model_config(
     win_max_length = context.get("data.win_max_length")
     gender_class_names = context.get("data.gender_class_names")
     model_config = AutoConfig.from_pretrained(model_name)
-    model_config.output_size = int(len(gender_class_names)) + 1
+    model_config.output_size = len(gender_class_names) + 1
     model_config.context_length = define_context_length(int(win_max_length))
     return model_config
 

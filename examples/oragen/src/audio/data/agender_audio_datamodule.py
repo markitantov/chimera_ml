@@ -3,14 +3,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from audio.data.agender_audio_dataset import AGenderAudioDataset
+from common.utils import load_pickle
 from torch.utils.data import ConcatDataset, Dataset
 
 from chimera_ml.core.registry import DATAMODULES
 from chimera_ml.data.datamodule import DataModule
 
-
-from common.utils import load_pickle
-from audio.data.agender_audio_dataset import AGenderAudioDataset
 
 @dataclass
 class AgenderAudioDataModule(DataModule):
@@ -118,10 +117,10 @@ class AgenderAudioDataModule(DataModule):
             self.gender_class_weights = (
                 (counts / total).tolist()
                 if total > 0
-                else [0.0] * len(counts)
+                else [1.0] * len(counts)
             )
         else:
-            self.gender_class_weights = [0.0] * self.gender_num_classes
+            self.gender_class_weights = [1.0] * self.gender_num_classes
 
 @DATAMODULES.register("agender_audio_datamodule")
 def agender_audio_datamodule(context = None, **params):

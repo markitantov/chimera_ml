@@ -3,23 +3,21 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-
 import torch
-from torch.utils.data import Dataset
-
 from common.utils import (
+    find_intersections,
+    gender_label_to_int,
     generate_features_suffix,
     load_pickle,
-    save_pickle,
-    read_audio,
-    slice_audio,
-    find_intersections,
-    normalize_audio_filename,
-    waveform_cache_name,
-    gender_label_to_int,
     mask_label_to_int,
+    normalize_audio_filename,
+    read_audio,
+    save_pickle,
+    slice_audio,
+    waveform_cache_name,
 )
+from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 class AGenderAudioDataset(Dataset):
@@ -105,7 +103,7 @@ class AGenderAudioDataset(Dataset):
             full_wave = read_audio(sample_fp, self.sr)
             windows = slice_audio(
                 start_time=0,
-                end_time=int(len(full_wave)),
+                end_time=len(full_wave),
                 win_max_length=int(self.win_max_length * self.sr),
                 win_shift=int(self.win_shift * self.sr),
                 win_min_length=int(self.win_min_length * self.sr),
@@ -209,8 +207,13 @@ class AGenderAudioDataset(Dataset):
             audio = torch.nn.functional.pad(audio, (0, max(0, target_len - len(audio))), mode="constant")[:target_len]
 
         target = torch.tensor([float(data["gen"]), float(data["age"])], dtype=torch.float32)
+        if torch.is_tensor(audio):
+            audio_tensor = audio.to(dtype=torch.float32)
+        else:
+            audio_tensor = torch.tensor(audio, dtype=torch.float32)
+        
         return {
-            "inputs": {"audio": audio.to(dtype=torch.float32) if torch.is_tensor(audio) else torch.tensor(audio, dtype=torch.float32)},
+            "inputs": {"audio": audio_tensor},
             "target": target,
             "meta": {
                 "filename": data["fn"],

@@ -1,6 +1,5 @@
-import numpy as np
-from transformers import AutoFeatureExtractor, ViTImageProcessor
 import torch
+from transformers import AutoFeatureExtractor, ViTImageProcessor
 
 
 class Wav2Vec2DataPreprocessor: 

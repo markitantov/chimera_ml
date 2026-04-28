@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from common.utils import multitask_dict_to_tensor
 from transformers.models.wav2vec2.modeling_wav2vec2 import (
     Wav2Vec2Model,
     Wav2Vec2PreTrainedModel,
@@ -10,7 +11,6 @@ from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
 
-from common.utils import multitask_dict_to_tensor
 
 class ModelHead(BaseModel):
     def __init__(self, config, num_labels) -> None:
@@ -25,8 +25,7 @@ class ModelHead(BaseModel):
         x = self.dense(x)
         x = torch.tanh(x)
         x = self.dropout(x)
-        x = self.out_proj(x)
-        return x
+        return self.out_proj(x)
 
 
 class AgeGenderSOTAModel(Wav2Vec2PreTrainedModel):

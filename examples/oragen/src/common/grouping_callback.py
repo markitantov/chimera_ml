@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 from chimera_ml.callbacks._utils import resolve_splits
 from chimera_ml.callbacks.base import BaseCallback
@@ -18,8 +18,10 @@ from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
 def _as_chunks(value: torch.Tensor | list[torch.Tensor] | None) -> list[torch.Tensor]:
     if value is None:
         return []
+    
     if torch.is_tensor(value):
         return [value.detach().cpu()]
+    
     return [chunk.detach().cpu() for chunk in value if torch.is_tensor(chunk)]
 
 
@@ -28,6 +30,7 @@ def _confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) 
     valid = (y_true >= 0) & (y_true < num_classes) & (y_pred >= 0) & (y_pred < num_classes)
     if np.any(valid):
         np.add.at(cm, (y_true[valid], y_pred[valid]), 1)
+    
     return cm
 
 
@@ -50,17 +53,60 @@ class GroupingCallback(BaseCallback):
     def on_fit_start(self, trainer: Any) -> None:
         trainer.config.collect_cache = True
 
+    def _find_loaders(self, trainer: Any) -> list[tuple[str, Any]]:
+        out: list[tuple[str, Any]] = []
+        seen: set[str] = set()
+
+        def add(name: str, loader: Any) -> None:
+            if name and name not in seen:
+                seen.add(name)
+                out.append((name, loader))
+
+        for split_name, loader in resolve_splits(trainer, self.splits):
+            if loader is not None or trainer.get_cached_split_outputs(split_name) is not None:
+                add(split_name, loader)
+
+        selectors = [self.splits] if isinstance(self.splits, str) else list(self.splits) if self.splits else ["val"]
+        for attr in ("_val_loaders", "_train_loaders", "_test_loaders", "_loaders"):
+            loaders = getattr(trainer, attr, None)
+            if not isinstance(loaders, dict):
+                continue
+
+            for selector in selectors:
+                selector = str(selector)
+                if selector in {"train", "val", "test"}:
+                    for split_name, loader in loaders.items():
+                        if split_name == selector or split_name.startswith(f"{selector}_"):
+                            add(split_name, loader)
+                            
+                    continue
+
+                if selector in loaders:
+                    add(selector, loaders[selector])
+
+        return out
+
     @torch.no_grad()
     def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
         logger = getattr(trainer, "mlflow_logger", None)
         grouped_by_split: dict[str, dict[str, list[dict[str, float | int]]]] = {}
 
-        for split_name, _ in resolve_splits(trainer, self.splits):
+        for split_name, _ in self._find_loaders(trainer):
             cached = trainer.get_cached_split_outputs(split_name)
             if cached is None or cached.targets is None:
                 continue
 
-            split_group = split_name.split("_", 1)[0]
+            parts = split_name.split("_")
+            split_group = parts[0]
+            if split_group in {"train", "val", "test"} and len(parts) > 1 and parts[1] in {
+                "train",
+                "dev",
+                "val",
+                "devel",
+                "test",
+            }:
+                split_group = parts[1]
+            
             grouped = self._group_data(cached)
             for corpus_name, rows in grouped.items():
                 grouped_by_split.setdefault(split_group, {}).setdefault(corpus_name, []).extend(rows)
@@ -93,7 +139,7 @@ class GroupingCallback(BaseCallback):
 
                 self._info(
                     trainer,
-                    f"[GroupingCallback] "
+                    "[GroupingCallback] "
                     + " | ".join(
                         f"{metric_scope}/{key}={value:.4f}"
                         for key, value in metrics.items()
@@ -112,7 +158,7 @@ class GroupingCallback(BaseCallback):
 
                 self._info(
                     trainer,
-                    f"[GroupingCallback] "
+                    "[GroupingCallback] "
                     + " | ".join(
                         f"{metric_scope}/{key}={value:.4f}"
                         for key, value in metrics.items()
