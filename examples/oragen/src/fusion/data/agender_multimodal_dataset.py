@@ -47,7 +47,6 @@ class AGenderMultimodalDataset(Dataset):
         corpus_name: str,
         gender_num_classes: int,
         include_mask: bool = False,
-        mask_num_classes: int = 0,
         channels: list[str] | None = None,
         vad_metadata: dict[str, list[dict[str, int]]] | None = None,
         sr: int = 16000,
@@ -72,8 +71,7 @@ class AGenderMultimodalDataset(Dataset):
         self.corpus_name = corpus_name
         self.gender_num_classes = int(gender_num_classes)
         self.include_mask = bool(include_mask)
-        self.mask_num_classes = int(mask_num_classes)
-        self.channels = channels or ["c"]
+        self.channels = [str(channel).strip().lower() for channel in (channels or ["c"])]
 
         self.dataset_type = _enum_value(DatasetType, dataset_type)
         self.features_type = _enum_value(FeaturesType, features_type)
@@ -131,9 +129,10 @@ class AGenderMultimodalDataset(Dataset):
             raise ValueError("image_feature_extractor config is required to compute missing multimodal features.")
 
         self.image_feature_extractor = ImageFeatureExtractor(
-            hf_model_name=self.audio_feature_extractor_cfg["hf_model_name"],
-            checkpoint_path=self.audio_feature_extractor_cfg["checkpoint_path"],
+            hf_model_name=self.image_feature_extractor_cfg["hf_model_name"],
+            checkpoint_path=self.image_feature_extractor_cfg["checkpoint_path"],
             features_type=self.features_type,
+            win_max_length=self.win_max_length,
         )
 
     def _prepare_data(self) -> list[dict[str, Any]]:
@@ -257,6 +256,9 @@ class AGenderMultimodalDataset(Dataset):
         new_info = []
         for sample in info:
             if "child" in str(sample["gen"]).lower() and self.gender_num_classes < 3:
+                continue
+
+            if str(sample["channel"]).lower() not in self.channels:
                 continue
 
             gen = gender_label_to_int(sample["gen"], self.gender_num_classes)

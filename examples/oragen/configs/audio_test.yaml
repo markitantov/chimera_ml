@@ -34,10 +34,6 @@ data:
         data_root: "data/TIMIT"
         labels_file_path: "data/metadata/labels/timit_labels.csv"
         vad_path: "data/metadata/vad/timit_vad.pickle"
-      VOXCELEB2:
-        data_root: "data/AgeGenderDatabases/VoxCeleb2"
-        labels_file_path: "data/AgeGenderDatabases/metadata/labels/voxceleb2_labels.csv"
-        vad_path: "data/AgeGenderDatabases/metadata/vad/voxceleb2_vad.pickle"
 
 model:
   name: "agender_audio_w2v2_model"

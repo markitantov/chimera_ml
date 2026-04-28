@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from common.utils import DatasetType, FeaturesType, load_pickle
+from common.utils import DatasetType, FeaturesType, compute_class_weights, load_pickle
 from fusion.augmentation.modality_augmentation import ModalityDropAugmentation
 from fusion.data.agender_multimodal_dataset import AGenderMultimodalDataset
 from torch.utils.data import ConcatDataset, Dataset
@@ -81,7 +81,6 @@ class AgenderFusionDataModule(DataModule):
                 "corpus_name": corpus_name,
                 "gender_num_classes": self.gender_num_classes,
                 "include_mask": self.include_mask,
-                "mask_num_classes": self.mask_num_classes,
                 "channels": self.channels,
                 "vad_metadata": vad,
                 "sr": self.sr,
@@ -148,19 +147,17 @@ class AgenderFusionDataModule(DataModule):
 
         if train_gen_counts:
             counts = np.sum(train_gen_counts, axis=0)
-            total = counts.sum()
-            self.gender_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
+            self.gender_class_weights = compute_class_weights(counts)
 
         else:
             self.gender_class_weights = [1.0] * int(self.gender_num_classes)
 
-        if train_mask_counts:
-            counts = np.sum(train_mask_counts, axis=0)
-            total = counts.sum()
-            self.mask_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
-
-        else:
-            self.mask_class_weights = [1.0] * int(self.mask_num_classes)
+        if self.include_mask:
+            if train_mask_counts:
+                counts = np.sum(train_mask_counts, axis=0)
+                self.mask_class_weights = compute_class_weights(counts)
+            else:
+                self.mask_class_weights = [1.0] * int(self.mask_num_classes)
 
 
 @DATAMODULES.register("agender_fusion_datamodule")

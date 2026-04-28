@@ -73,8 +73,10 @@ class ImageFeatureExtractor:
         hf_model_name: str,
         checkpoint_path: str,
         features_type: FeaturesType,
+        win_max_length: int,
     ) -> None:
         self.features_type = FeaturesType(features_type)
+        self.win_max_length = win_max_length
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         if "gsa" in checkpoint_path.lower():

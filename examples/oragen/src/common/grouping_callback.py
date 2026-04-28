@@ -116,6 +116,9 @@ class GroupingCallback(BaseCallback):
             ):
                 split_group = parts[1]
 
+            if split_group in {"dev", "devel", "val"}:
+                split_group = "dev"
+
             grouped = self._group_data(cached)
             for corpus_name, rows in grouped.items():
                 grouped_by_split.setdefault(split_group, {}).setdefault(corpus_name, []).extend(rows)

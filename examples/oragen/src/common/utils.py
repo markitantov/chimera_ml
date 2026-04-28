@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import PIL
+import numpy as np
 import torch
 
 
@@ -18,6 +19,17 @@ class FeaturesType(IntEnum):
     EARLY = 1
     INTERMEDIATE = 2
     LATE = 3
+
+
+def compute_class_weights(counts: np.ndarray) -> list[float]:
+    counts = np.asarray(counts, dtype=np.float64)
+    positive = counts > 0
+    if not np.any(positive):
+        return [1.0] * len(counts)
+
+    weights = np.ones_like(counts, dtype=np.float64)
+    weights[positive] = counts[positive].sum() / (len(counts) * counts[positive])
+    return weights.tolist()
 
 
 def load_pickle(path: str | Path) -> Any:

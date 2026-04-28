@@ -93,6 +93,13 @@ class AGenderLoss(BaseLoss):
 
 @LOSSES.register("agender_loss")
 def agender_loss(context=None, **params):
+    include_mask = False
+    if context is not None:
+        include_mask = bool(context.get("data.include_mask", False))
+
+    if "mask_alpha" not in params and include_mask:
+        params["mask_alpha"] = 1.0
+
     gender_weights = params.pop("gender_weights", None)
     if gender_weights is None and context is not None:
         gender_weights = context.get("data.gender_class_weights")

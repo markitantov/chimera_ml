@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from audio.data.agender_audio_dataset import AGenderAudioDataset
-from common.utils import load_pickle
+from common.utils import compute_class_weights, load_pickle
 from torch.utils.data import ConcatDataset, Dataset
 
 from chimera_ml.core.registry import DATAMODULES
@@ -113,8 +113,7 @@ class AgenderAudioDataModule(DataModule):
 
         if train_counts:
             counts = np.sum(train_counts, axis=0)
-            total = counts.sum()
-            self.gender_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
+            self.gender_class_weights = compute_class_weights(counts)
         else:
             self.gender_class_weights = [1.0] * self.gender_num_classes
 
