@@ -3,8 +3,7 @@ import torch
 
 class PreprocessInput(torch.nn.Module):
     def __init__(self) -> None:
-        super(PreprocessInput, self).__init__()
-        pass
+        super().__init__()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.to(torch.float32)
