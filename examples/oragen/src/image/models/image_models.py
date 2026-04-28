@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from common.utils import multitask_dict_to_tensor
 from transformers import ViTForImageClassification
 
 from chimera_ml.core.batch import Batch
@@ -25,8 +25,7 @@ class DPAL(nn.Module):
         
         scores = torch.bmm(queries, keys.transpose(1, 2)) / (self.input_dim**0.5)
         attention = self.softmax(scores)
-        weighted = torch.bmm(attention, values)
-        return weighted
+        return torch.bmm(attention, values)
 
 
 class GAL(nn.Module):
@@ -48,8 +47,7 @@ class GAL(nn.Module):
         h_f1 = torch.tanh(torch.matmul(f1, self.WF1))
         h_f2 = torch.tanh(torch.matmul(f2, self.WF2))
         z_f = torch.softmax(torch.matmul(torch.cat([f1, f2], dim=1), self.WF), dim=1)
-        h_f = z_f * h_f1 + (1 - z_f) * h_f2
-        return h_f
+        return z_f * h_f1 + (1 - z_f) * h_f2
 
 
 class StatisticalPoolingLayer(nn.Module):
@@ -59,8 +57,7 @@ class StatisticalPoolingLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         mean_x = torch.mean(x, dim=1)
         std_x = torch.std(x, dim=1)
-        stat_x = torch.cat((mean_x, std_x), dim=1)
-        return stat_x
+        return torch.cat((mean_x, std_x), dim=1)
 
 
 class ModelV1(nn.Module):
@@ -83,8 +80,7 @@ class ModelV1(nn.Module):
         x1 = self.stat_pool(x1)
         x2 = self.stat_pool(x2)
         gx = self.gal(x1, x2)
-        gx = self.drop_fcl(self.fcl(gx))
-        return gx
+        return self.drop_fcl(self.fcl(gx))
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         gx = self.features(x)
