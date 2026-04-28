@@ -1,0 +1,83 @@
+seed: 0
+experiment_info:
+  params:
+    experiment_name: "agender"
+    run_name: "audio"
+    datetime_format: "%Y-%m-%d_%H-%M"
+
+data:
+  name: "agender_audio_datamodule"
+  params:
+    batch_size: 16
+    drop_last_train: true
+    num_workers: 8
+    sr: 16000
+    win_max_length: 4
+    win_shift: 2
+    win_min_length: 1
+    features_file_name: "SAMPLES"
+    features_root: "data/agender_features"
+    preprocessor_name: "facebook/wav2vec2-large-robust"
+    gender_class_names: ["female", "male"]
+    train_subsets: []
+    val_subsets: ["dev", "val", "devel", "test"]
+    corpora:
+      AGENDER:
+        data_root: "data/aGender/agender_distribution_wav/wav_traindevel"
+        labels_file_path: "data/metadata/labels/agender_labels.csv"
+        vad_path: "data/metadata/vad/agender_vad.pickle"
+      COMMONVOICE:
+        data_root: "data/CommonVoice"
+        labels_file_path: "data/metadata/labels/commonvoice_labels.csv"
+        vad_path: "data/metadata/vad/commonvoice_vad.pickle"
+      TIMIT:
+        data_root: "data/TIMIT"
+        labels_file_path: "data/metadata/labels/timit_labels.csv"
+        vad_path: "data/metadata/vad/timit_vad.pickle"
+      VOXCELEB2:
+        data_root: "data/AgeGenderDatabases/VoxCeleb2"
+        labels_file_path: "data/AgeGenderDatabases/metadata/labels/voxceleb2_labels.csv"
+        vad_path: "data/AgeGenderDatabases/metadata/vad/voxceleb2_vad.pickle"
+
+model:
+  name: "agender_audio_w2v2_model"
+  params:
+    model_name: "facebook/wav2vec2-large-robust"
+
+train:
+  params:
+    epochs: 1
+    mixed_precision: true
+    device: "cuda"
+    log_every_steps: 1
+    grad_clip_norm: 1.0
+    collect_cache: true
+
+optimizer:
+  name: "adamw_optimizer"
+  params:
+    lr: 1.0e-5
+    weight_decay: 0.01
+
+loss:
+  name: "agender_loss"
+  params:
+    gender_alpha: 1.0
+    age_alpha: 1.0
+
+metrics:
+  - name: "age_mae_metric"
+    params: {}
+  - name: "age_pcc_metric"
+    params: {}
+  - name: "gender_prf_macro_metric"
+    params: {}
+
+callbacks:
+  - name: "grouping_callback"
+    params:
+      splits: ["val"]
+      metric_prefix: "grouped"
+      cc_metric_name: "all"
+      artifact_path: "figures"
+      log_confusion_matrix: true

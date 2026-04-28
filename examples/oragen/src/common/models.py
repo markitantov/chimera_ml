@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -14,6 +13,7 @@ class ScaledDotProductAttentionMultiHead(nn.Module):
     def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask=None):
         if mask is not None:
             raise ValueError("Attention masks are not supported yet")
+        
         attention_weights = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(key.shape[-1])
         attention_weights = self.softmax(attention_weights)
         return torch.matmul(attention_weights, value), attention_weights
@@ -31,7 +31,7 @@ class PositionWiseFeedForward(nn.Module):
 
 
 class AddAndNorm(nn.Module):
-    def __init__(self, input_dim: int, dropout: Optional[float] = 0.1) -> None:
+    def __init__(self, input_dim: int, dropout: float | None = 0.1) -> None:
         super().__init__()
         self.layer_norm = nn.LayerNorm(input_dim)
         self.dropout = nn.Dropout(dropout) if dropout is not None else None
@@ -39,11 +39,12 @@ class AddAndNorm(nn.Module):
     def forward(self, x: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
         if self.dropout is not None:
             x = self.dropout(x)
+        
         return self.layer_norm(x + residual)
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, input_dim: int, num_heads: int, dropout: Optional[float] = 0.1) -> None:
+    def __init__(self, input_dim: int, num_heads: int, dropout: float | None = 0.1) -> None:
         super().__init__()
         if input_dim % num_heads != 0:
             raise ValueError("input_dim must be divisible by num_heads")
@@ -63,7 +64,7 @@ class MultiHeadAttention(nn.Module):
         queries = self.query_w(queries).view(batch_size, len_query, self.num_heads, self.head_dim).transpose(1, 2)
         keys = self.keys_w(keys).view(batch_size, len_keys, self.num_heads, self.head_dim).transpose(1, 2)
         values = self.values_w(values).view(batch_size, len_values, self.num_heads, self.head_dim).transpose(1, 2)
-        values, attention_weights = self.attention(queries, keys, values, mask=mask)
+        values, _attention_weights = self.attention(queries, keys, values, mask=mask)
         out = values.transpose(1, 2).contiguous().view(batch_size, len_values, self.num_heads * self.head_dim)
         return self.ff_layer_after_concat(out)
 
@@ -92,7 +93,7 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, input_dim: int, num_heads: int, dropout: Optional[float] = 0.1, positional_encoding: bool = True):
+    def __init__(self, input_dim: int, num_heads: int, dropout: float | None = 0.1, positional_encoding: bool = True):
         super().__init__()
         self.positional_encoding = PositionalEncoding(input_dim) if positional_encoding else None
         self.self_attention = MultiHeadAttention(input_dim, num_heads, dropout=dropout)
@@ -105,6 +106,7 @@ class TransformerLayer(nn.Module):
             key = self.positional_encoding(key)
             value = self.positional_encoding(value)
             query = self.positional_encoding(query)
+        
         x = self.self_attention(queries=query, keys=key, values=value, mask=mask)
         x = self.add_norm_after_attention(x, query)
         return self.add_norm_after_ff(self.feed_forward(x), x)

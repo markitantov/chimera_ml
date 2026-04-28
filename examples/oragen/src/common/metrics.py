@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import torch
+from utils import TensorMetricAdapter
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import METRICS
@@ -9,7 +10,6 @@ from chimera_ml.core.types import ModelOutput
 from chimera_ml.metrics.base import BaseMetric
 from chimera_ml.metrics.prf_metric import PRFMetric
 from chimera_ml.metrics.regression_metric import MAEMetric
-from utils import TensorMetricAdapter
 
 
 @dataclass

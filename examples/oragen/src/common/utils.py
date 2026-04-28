@@ -4,9 +4,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-import torch
-
 import PIL
+import torch
 
 
 class DatasetType(IntEnum):
