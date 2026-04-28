@@ -38,6 +38,7 @@ def _confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) 
 class GroupingCallback(BaseCallback):
     splits: list[str] = field(default_factory=lambda: ["val"])
     gender_class_names: list[str] | None = None
+    mask_class_names: list[str] | None = None
     age_scale: float = 100.0
     metric_prefix: str = "grouped"
     cc_metric_name: str = "all" # cross-corpus metric name
@@ -49,6 +50,9 @@ class GroupingCallback(BaseCallback):
     def __post_init__(self) -> None:
         self.gender_class_names = [str(name) for name in (self.gender_class_names or ["female", "male"])]
         self.gender_num_classes = len(self.gender_class_names)
+
+        self.mask_class_names = [str(name) for name in self.mask_class_names] if self.mask_class_names else None
+        self.mask_num_classes = len(self.mask_class_names) if self.mask_class_names else 0
 
     def on_fit_start(self, trainer: Any) -> None:
         trainer.config.collect_cache = True
@@ -125,17 +129,31 @@ class GroupingCallback(BaseCallback):
 
                 if logger is not None:
                     logger.log_metrics(grouped_metrics, step=epoch)
-                    fig = _plot_confusion_matrix(
-                        cm=self._compute_confusion_matrix(rows),
-                        labels=self.gender_class_names,
-                        title=self.title_template.format(corpus=corpus_name, epoch=epoch),
-                    )
-                    logger.log_artifact_bytes(
-                        _fig_to_png_bytes(fig),
-                        artifact_path=f"{self.artifact_path}/{metric_scope}",
-                        filename=self.filename_template.format(corpus=corpus_name, epoch=epoch),
-                    )
-                    plt.close(fig)
+                    if self.log_confusion_matrix:
+                        fig = _plot_confusion_matrix(
+                            cm=self._compute_confusion_matrix(rows),
+                            labels=self.gender_class_names,
+                            title=self.title_template.format(corpus=corpus_name, epoch=epoch),
+                        )
+                        logger.log_artifact_bytes(
+                            _fig_to_png_bytes(fig),
+                            artifact_path=f"{self.artifact_path}/{metric_scope}",
+                            filename=self.filename_template.format(corpus=corpus_name, epoch=epoch),
+                        )
+                        plt.close(fig)
+
+                        if self.mask_num_classes > 0 and self._has_mask_rows(rows):
+                            mask_fig = _plot_confusion_matrix(
+                                cm=self._compute_mask_confusion_matrix(rows),
+                                labels=self.mask_class_names,
+                                title=self.title_template.format(corpus=f"{corpus_name} Mask", epoch=epoch),
+                            )
+                            logger.log_artifact_bytes(
+                                _fig_to_png_bytes(mask_fig),
+                                artifact_path=f"{self.artifact_path}/{metric_scope}",
+                                filename=f"mask_{self.filename_template.format(corpus=corpus_name, epoch=epoch)}",
+                            )
+                            plt.close(mask_fig)
 
                 self._info(
                     trainer,
@@ -183,6 +201,18 @@ class GroupingCallback(BaseCallback):
             age_preds = torch.sigmoid(pred_chunk[:bs, self.gender_num_classes]).numpy() * self.age_scale
             gen_targets = target_chunk[:bs, 0].long().numpy()
             age_targets = target_chunk[:bs, 1].float().numpy() * self.age_scale
+            has_mask = (
+                self.mask_num_classes > 0
+                and target_chunk.shape[1] > 2
+                and pred_chunk.shape[1] >= self.gender_num_classes + 1 + self.mask_num_classes
+            )
+
+            if has_mask:
+                mask_logits = pred_chunk[:bs, self.gender_num_classes + 1 : (
+                    self.gender_num_classes + 1 + self.mask_num_classes
+                )]
+                mask_probs = torch.softmax(mask_logits, dim=-1).numpy()
+                mask_targets = target_chunk[:bs, 2].long().numpy()
 
             for idx in range(bs):
                 meta = chunk_meta[idx]
@@ -197,6 +227,9 @@ class GroupingCallback(BaseCallback):
                         "gen_target": int(gen_targets[idx]),
                         "age_target": float(age_targets[idx]),
                     }
+                    if has_mask:
+                        grouped[key]["mask_probs"] = []
+                        grouped[key]["mask_target"] = int(mask_targets[idx])
 
                 bucket = grouped[key]
                 if bucket["gen_target"] != int(gen_targets[idx]):
@@ -210,23 +243,35 @@ class GroupingCallback(BaseCallback):
                         f"[GroupingCallback] Inconsistent age_target for {corpus_name}/{filename}: "
                         f"{bucket['age_target']} != {float(age_targets[idx])}"
                     )
+
+                if has_mask and bucket["mask_target"] != int(mask_targets[idx]):
+                    raise ValueError(
+                        f"[GroupingCallback] Inconsistent mask_target for {corpus_name}/{filename}: "
+                        f"{bucket['mask_target']} != {int(mask_targets[idx])}"
+                    )
                 
                 bucket["gen_probs"].append(gen_probs[idx])
                 bucket["age_preds"].append(float(age_preds[idx]))
+                if has_mask:
+                    bucket["mask_probs"].append(mask_probs[idx])
 
             meta_index += bs
 
         per_corpus: dict[str, list[dict[str, float | int]]] = {}
         for (corpus_name, _filename), values in grouped.items():
             mean_probs = np.mean(values["gen_probs"], axis=0)
-            per_corpus.setdefault(corpus_name, []).append(
-                {
-                    "gen_target": int(values["gen_target"]),
-                    "gen_pred": int(np.argmax(mean_probs)),
-                    "age_target": float(values["age_target"]),
-                    "age_pred": float(np.mean(values["age_preds"])),
-                }
-            )
+            row = {
+                "gen_target": int(values["gen_target"]),
+                "gen_pred": int(np.argmax(mean_probs)),
+                "age_target": float(values["age_target"]),
+                "age_pred": float(np.mean(values["age_preds"])),
+            }
+            if self.mask_num_classes > 0 and "mask_probs" in values:
+                mean_mask_probs = np.mean(values["mask_probs"], axis=0)
+                row["mask_target"] = int(values["mask_target"])
+                row["mask_pred"] = int(np.argmax(mean_mask_probs))
+
+            per_corpus.setdefault(corpus_name, []).append(row)
 
         return per_corpus
 
@@ -256,6 +301,35 @@ class GroupingCallback(BaseCallback):
             "num_files": float(len(rows)),
         }
 
+        if self.mask_num_classes > 0 and self._has_mask_rows(rows):
+            mask_cm = self._compute_mask_confusion_matrix(rows).astype(np.float64)
+            mask_tp = np.diag(mask_cm)
+            mask_precision_den = mask_cm.sum(axis=0)
+            mask_recall_den = mask_cm.sum(axis=1)
+
+            mask_precision = np.divide(
+                mask_tp,
+                mask_precision_den,
+                out=np.zeros_like(mask_tp),
+                where=mask_precision_den != 0,
+            )
+            mask_recall = np.divide(
+                mask_tp,
+                mask_recall_den,
+                out=np.zeros_like(mask_tp),
+                where=mask_recall_den != 0,
+            )
+            mask_f1_den = mask_precision + mask_recall
+            mask_f1 = np.divide(
+                2 * mask_precision * mask_recall,
+                mask_f1_den,
+                out=np.zeros_like(mask_tp),
+                where=mask_f1_den != 0,
+            )
+            metrics["mask_precision"] = float(np.mean(mask_precision))
+            metrics["mask_uar"] = float(np.mean(mask_recall))
+            metrics["mask_macro_f1"] = float(np.mean(mask_f1))
+
         if len(rows) >= 2:
             age_true_centered = age_true - np.mean(age_true)
             age_pred_centered = age_pred - np.mean(age_pred)
@@ -271,11 +345,23 @@ class GroupingCallback(BaseCallback):
         y_pred = np.asarray([row["gen_pred"] for row in rows], dtype=np.int64)
         return _confusion_matrix(y_true, y_pred, self.gender_num_classes)
 
+    def _compute_mask_confusion_matrix(self, rows: list[dict[str, float | int]]) -> np.ndarray:
+        y_true = np.asarray([row["mask_target"] for row in rows if "mask_target" in row], dtype=np.int64)
+        y_pred = np.asarray([row["mask_pred"] for row in rows if "mask_pred" in row], dtype=np.int64)
+        return _confusion_matrix(y_true, y_pred, self.mask_num_classes)
+
+    def _has_mask_rows(self, rows: list[dict[str, float | int]]) -> bool:
+        return bool(rows) and all("mask_target" in row and "mask_pred" in row for row in rows)
+
 
 @CALLBACKS.register("grouping_callback")
 def grouping_callback(context = None, **params):
     gender_class_names = params.pop("gender_class_names", None)
     if gender_class_names is None and context is not None:
         gender_class_names = context.get("data.gender_class_names")
+
+    mask_class_names = params.pop("mask_class_names", None)
+    if mask_class_names is None and context is not None:
+        mask_class_names = context.get("data.mask_class_names")
     
-    return GroupingCallback(gender_class_names=gender_class_names, **params)
+    return GroupingCallback(gender_class_names=gender_class_names, mask_class_names=mask_class_names, **params)

@@ -3,6 +3,7 @@ import warnings
 
 _MODULES_TO_REGISTER: tuple[str, ...] = (
     "audio.data.agender_audio_datamodule",
+    "fusion.data.agender_multimodal_datamodule",
     "audio.models.audio_models",
     "audio.models.audio_sota_model",
     "image.models.image_models",
