@@ -81,7 +81,7 @@ class AGenderAudioDataset(Dataset):
             print(f"Feature index saved to '{stats_path}'.")
         else:
             print(f"Using cached feature index from '{stats_path}'.")
-        
+
         self.info, self.stats = self._filter_samples(info)
         print(
             f"Ready: num_windows={len(self.info)}, "
@@ -114,7 +114,7 @@ class AGenderAudioDataset(Dataset):
                 continue
 
             windows_before_vad += len(windows)
-            
+
             if self.vad_metadata:
                 windows = find_intersections(
                     windows,
@@ -152,7 +152,7 @@ class AGenderAudioDataset(Dataset):
                 f"windows_before_vad={windows_before_vad}, "
                 f"windows_after_vad={windows_after_vad}"
             )
-        
+
         return info
 
     def _filter_samples(self, info: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -165,29 +165,29 @@ class AGenderAudioDataset(Dataset):
                 "mask": np.zeros(6, dtype=np.int64),
             },
         }
-        
+
         new_info = []
         for sample in info:
             if "child" in str(sample["gen"]).lower() and self.gender_num_classes < 3:
                 continue
-            
+
             gen = gender_label_to_int(sample["gen"], self.gender_num_classes)
             age = float(sample["age"]) / 100.0
             mask = mask_label_to_int(sample["mask"])
-            
-            new_info.append({**sample, "gen": gen, "age": age, "mask": mask})            
+
+            new_info.append({**sample, "gen": gen, "age": age, "mask": mask})
             stats["fns"][sample["fn"]] = {"gen": gen, "age": age, "mask": mask}
             stats["counts"]["gen"][gen] += 1
             stats["counts"]["age"] += age
             stats["counts"]["mask"][mask] += 1
 
         total = max(int(stats["counts"]["gen"].sum()), 1)
-            
+
         stats["majority_class"]["gen"] = int(np.argmax(stats["counts"]["gen"]))
         stats["majority_class"]["age"] = float(stats["counts"]["age"] / total)
         stats["majority_class"]["mask"] = int(np.argmax(stats["counts"]["mask"]))
         return new_info, stats
-    
+
     def __len__(self) -> int:
         return len(self.info)
 
@@ -196,7 +196,7 @@ class AGenderAudioDataset(Dataset):
         audio = load_pickle(self.full_features_path / waveform_cache_name(data["fn"], data["w_idx"]))
         if audio is None:
             raise FileNotFoundError(self.full_features_path / waveform_cache_name(data["fn"], data["w_idx"]))
-    
+
         if self.transform:
             audio = self.transform(audio)
 
@@ -211,7 +211,7 @@ class AGenderAudioDataset(Dataset):
             audio_tensor = audio.to(dtype=torch.float32)
         else:
             audio_tensor = torch.tensor(audio, dtype=torch.float32)
-        
+
         return {
             "inputs": {"audio": audio_tensor},
             "target": target,

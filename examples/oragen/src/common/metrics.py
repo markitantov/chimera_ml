@@ -27,7 +27,7 @@ class AgeMAEMetric(BaseMetric):
     def update(self, output: ModelOutput, batch: Batch) -> None:
         if batch.targets is None:
             return
-        
+
         age_pred = torch.sigmoid((output.aux or {})["age"]) * self.age_scale
         age_target = batch.targets[:, 1].float() * self.age_scale
         self._metric.update(age_pred, age_target)
@@ -52,7 +52,7 @@ class GenderPRFMetric(BaseMetric):
     def update(self, output: ModelOutput, batch: Batch) -> None:
         if batch.targets is None:
             return
-        
+
         gen_logits = (output.aux or {})["gen"]
         gen_target = batch.targets[:, 0].long()
         self._metric.update(gen_logits, gen_target)
@@ -61,7 +61,7 @@ class GenderPRFMetric(BaseMetric):
         values = self._metric.compute()
         if not values:
             return {}
-        
+
         return {
             "gen_precision": values["macro_precision"],
             "gen_uar": values["macro_recall"],
@@ -84,7 +84,7 @@ class MaskUARMetric(BaseMetric):
     def update(self, output: ModelOutput, batch: Batch) -> None:
         if batch.targets is None or "mask" not in (output.aux or {}) or batch.targets.shape[1] <= 2:
             return
-        
+
         mask_logits = (output.aux or {})["mask"]
         mask_target = batch.targets[:, 2].long()
         self._metric.update(mask_logits, mask_target)

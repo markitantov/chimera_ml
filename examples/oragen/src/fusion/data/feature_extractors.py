@@ -1,4 +1,3 @@
-
 import torch
 from audio.models.audio_models import (
     AGenderAudioHuBERTModel,
@@ -19,14 +18,14 @@ class AudioFeatureExtractor:
     def __init__(
         self,
         hf_model_name: str,
-        checkpoint_path: str,       
+        checkpoint_path: str,
         features_type: FeaturesType,
         sr: int = 16000,
         win_max_length: int = 4,
-        gender_num_classes: int | None = None
+        gender_num_classes: int | None = None,
     ) -> None:
         self.features_type = FeaturesType(features_type)
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         model_config = AutoConfig.from_pretrained(hf_model_name)
         model_config.output_size = gender_num_classes + 1
@@ -34,7 +33,7 @@ class AudioFeatureExtractor:
 
         if "hubert" in hf_model_name:
             self.model = AGenderAudioHuBERTModel.from_pretrained(hf_model_name, config=model_config)
-            
+
             self.preprocessor = HuBERTDataPreprocessor(
                 preprocessor_name=hf_model_name,
                 sr=sr,
@@ -42,7 +41,7 @@ class AudioFeatureExtractor:
             )
         else:
             self.model = AGenderAudioW2V2Model.from_pretrained(hf_model_name, config=model_config)
-            
+
             self.preprocessor = Wav2Vec2DataPreprocessor(
                 preprocessor_name=hf_model_name,
                 sr=sr,
@@ -54,7 +53,6 @@ class AudioFeatureExtractor:
         self.model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         self.model.to(self.device)
         self.model.eval()
-        
 
     def __call__(self, waveform: torch.Tensor) -> torch.Tensor:
         waveform = self.preprocessor(waveform).unsqueeze(0).to(self.device)
@@ -73,11 +71,11 @@ class ImageFeatureExtractor:
     def __init__(
         self,
         hf_model_name: str,
-        checkpoint_path: str,       
+        checkpoint_path: str,
         features_type: FeaturesType,
     ) -> None:
         self.features_type = FeaturesType(features_type)
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         if "gsa" in checkpoint_path.lower():
             self.model = AGenderImageVITGSAModel()

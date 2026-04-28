@@ -27,12 +27,12 @@ from tqdm import tqdm
 def _enum_value(enum_cls, value):
     if isinstance(value, enum_cls):
         return value
-    
+
     if isinstance(value, str):
         key = value.strip().upper()
         if key in enum_cls.__members__:
             return enum_cls[key]
-        
+
     return enum_cls(int(value))
 
 
@@ -80,9 +80,9 @@ class AGenderMultimodalDataset(Dataset):
 
         self.audio_feature_extractor_cfg = audio_feature_extractor_cfg
         self.image_feature_extractor_cfg = image_feature_extractor_cfg
-        
+
         self.display_filtering_stats = display_filtering_stats
-        
+
         self.audio_feature_extractor: AudioFeatureExtractor | None = None
         self.image_feature_extractor: ImageFeatureExtractor | None = None
 
@@ -117,7 +117,7 @@ class AGenderMultimodalDataset(Dataset):
     def init_feature_extractors(self) -> None:
         if self.audio_feature_extractor_cfg is None:
             raise ValueError("audio_feature_extractor config is required to compute missing multimodal features.")
-        
+
         self.audio_feature_extractor = AudioFeatureExtractor(
             hf_model_name=self.audio_feature_extractor_cfg["hf_model_name"],
             checkpoint_path=self.audio_feature_extractor_cfg["checkpoint_path"],
@@ -129,7 +129,7 @@ class AGenderMultimodalDataset(Dataset):
 
         if self.image_feature_extractor_cfg is None:
             raise ValueError("image_feature_extractor config is required to compute missing multimodal features.")
-        
+
         self.image_feature_extractor = ImageFeatureExtractor(
             hf_model_name=self.audio_feature_extractor_cfg["hf_model_name"],
             checkpoint_path=self.audio_feature_extractor_cfg["checkpoint_path"],
@@ -138,13 +138,11 @@ class AGenderMultimodalDataset(Dataset):
 
     def _prepare_data(self) -> list[dict[str, Any]]:
         info: list[dict[str, Any]] = []
-        
+
         self.init_feature_extractors()
 
         records = (
-            self.labels_metadata.sort_values("audio_file_path")
-            .drop_duplicates(["audio_file_path"], keep="last")
-            .copy()
+            self.labels_metadata.sort_values("audio_file_path").drop_duplicates(["audio_file_path"], keep="last").copy()
         ).to_dict("records")
         files_without_windows_before_vad = 0
         files_without_windows_after_vad = 0
@@ -181,8 +179,12 @@ class AGenderMultimodalDataset(Dataset):
 
             windows_after_vad += len(windows)
 
-            if (('lQxVumsa0QE/00053' in sample_filename) or ('x9K8-IfuOMg/00490' in sample_filename)
-            or ('x9K8-IfuOMg/00491' in sample_filename) or ('StiTPpXXhe0/00079' in sample_filename)):
+            if (
+                ("lQxVumsa0QE/00053" in sample_filename)
+                or ("x9K8-IfuOMg/00490" in sample_filename)
+                or ("x9K8-IfuOMg/00491" in sample_filename)
+                or ("StiTPpXXhe0/00079" in sample_filename)
+            ):
                 continue
 
             for w_idx, window in enumerate(windows):
@@ -205,8 +207,8 @@ class AGenderMultimodalDataset(Dataset):
                 )
 
                 features = {
-                    'acoustic_features': self.audio_feature_extractor(wave), 
-                    'visual_features': self.image_feature_extractor([str(path) for path in images_fp])
+                    "acoustic_features": self.audio_feature_extractor(wave),
+                    "visual_features": self.image_feature_extractor([str(path) for path in images_fp]),
                 }
 
                 save_pickle(features, self.full_features_path / waveform_cache_name(sample_filename, w_idx))
@@ -219,7 +221,7 @@ class AGenderMultimodalDataset(Dataset):
                 f"windows_before_vad={windows_before_vad}, "
                 f"windows_after_vad={windows_after_vad}"
             )
-        
+
         return info
 
     def _window_images(self, sample: dict[str, Any], window: dict[str, int]) -> tuple[list[str], list[Path]]:
@@ -228,8 +230,7 @@ class AGenderMultimodalDataset(Dataset):
         start_second = int(window["start"] / self.sr) + 1
         end_second = int(window["end"] / self.sr) + 1
         images_fn = [
-            f"{image_parts[0]}__s{frame_idx:03d}{image_parts[1]}"
-            for frame_idx in range(start_second, end_second)
+            f"{image_parts[0]}__s{frame_idx:03d}{image_parts[1]}" for frame_idx in range(start_second, end_second)
         ]
 
         images_fp = [self.data_root / image_fn for image_fn in images_fn]
@@ -237,8 +238,7 @@ class AGenderMultimodalDataset(Dataset):
         missing = [str(path) for path in images_fp if not path.exists()]
         if missing:
             raise FileNotFoundError(
-                "Missing visual frames required for multimodal feature extraction: "
-                + ", ".join(missing[:5])
+                "Missing visual frames required for multimodal feature extraction: " + ", ".join(missing[:5])
             )
 
         return images_fn, images_fp
@@ -253,7 +253,7 @@ class AGenderMultimodalDataset(Dataset):
                 "mask": np.zeros(6, dtype=np.int64),
             },
         }
-        
+
         new_info = []
         for sample in info:
             if "child" in str(sample["gen"]).lower() and self.gender_num_classes < 3:
@@ -274,7 +274,7 @@ class AGenderMultimodalDataset(Dataset):
         stats["majority_class"]["age"] = float(stats["counts"]["age"] / total)
         stats["majority_class"]["mask"] = int(np.argmax(stats["counts"]["mask"]))
         return new_info, stats
-    
+
     def __len__(self) -> int:
         return len(self.info)
 
@@ -282,7 +282,7 @@ class AGenderMultimodalDataset(Dataset):
         data = self.info[index]
         features = load_pickle(self.full_features_path / waveform_cache_name(data["fn"], data["w_idx"]))
         if features is None:
-            raise FileNotFoundError(self.full_features_path / waveform_cache_name(data["fn"], data["w_idx"]))        
+            raise FileNotFoundError(self.full_features_path / waveform_cache_name(data["fn"], data["w_idx"]))
 
         audio = torch.as_tensor(features["acoustic_features"], dtype=torch.float32)
         image = torch.as_tensor(features["visual_features"], dtype=torch.float32)

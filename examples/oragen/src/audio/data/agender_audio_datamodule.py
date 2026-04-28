@@ -34,7 +34,7 @@ class AgenderAudioDataModule(DataModule):
     def __post_init__(self) -> None:
         if not self.corpora:
             raise ValueError("AgenderAudioDataModule requires a non-empty 'corpora' mapping.")
-        
+
         if self.gender_class_names is not None:
             self.gender_class_names = [str(name) for name in self.gender_class_names]
             self.gender_num_classes = len(self.gender_class_names)
@@ -98,7 +98,7 @@ class AgenderAudioDataModule(DataModule):
                     subset_labels = labels[labels["subset"] == subset_name].copy()
                     if subset_labels.empty:
                         continue
-                    
+
                     dataset_key = f"{subset_name}/{corpus_name}"
                     test_datasets[dataset_key] = AGenderAudioDataset(
                         labels_metadata=subset_labels,
@@ -114,14 +114,11 @@ class AgenderAudioDataModule(DataModule):
         if train_counts:
             counts = np.sum(train_counts, axis=0)
             total = counts.sum()
-            self.gender_class_weights = (
-                (counts / total).tolist()
-                if total > 0
-                else [1.0] * len(counts)
-            )
+            self.gender_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
         else:
             self.gender_class_weights = [1.0] * self.gender_num_classes
 
+
 @DATAMODULES.register("agender_audio_datamodule")
-def agender_audio_datamodule(context = None, **params):
+def agender_audio_datamodule(context=None, **params):
     return AgenderAudioDataModule(**params)

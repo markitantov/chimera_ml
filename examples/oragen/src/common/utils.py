@@ -24,7 +24,7 @@ def load_pickle(path: str | Path) -> Any:
     path = Path(path)
     if not path.exists():
         return None
-    
+
     with path.open("rb") as f:
         return pickle.load(f)
 
@@ -42,10 +42,10 @@ def read_audio(filepath: str | Path, sample_rate: int) -> torch.Tensor:
     wave, sr = torchaudio.load(str(filepath))
     if wave.size(0) > 1:
         wave = wave.mean(dim=0, keepdim=True)
-    
+
     if sr != sample_rate:
         wave = torchaudio.transforms.Resample(orig_freq=sr, new_freq=sample_rate)(wave)
-    
+
     return wave.squeeze(0)
 
 
@@ -70,17 +70,17 @@ def slice_audio(
         if chunk_end <= end_time:
             timings.append({"start": cursor, "end": chunk_end})
             # if tail exact `win_max_length` seconds
-            if chunk_end == end_time: 
+            if chunk_end == end_time:
                 break
 
-        else: # if tail less then `win_max_length` seconds
+        else:  # if tail less then `win_max_length` seconds
             if end_time - cursor >= win_min_length:
                 timings.append({"start": cursor, "end": end_time})
-            
+
             break
-        
+
         cursor += win_shift
-    
+
     return timings
 
 
@@ -94,18 +94,18 @@ def find_intersections(x: list[dict[str, int]], y: list[dict[str, int]], min_len
         # Right bound for intersecting segment
         right = min(int(x[i]["end"]), int(y[j]["end"]))
 
-        # If segment is valid and 
+        # If segment is valid and
         # length of intersection not less then `min_length` seconds
-        if left <= right and right - left >= min_length: 
+        if left <= right and right - left >= min_length:
             timings.append({"start": left, "end": right})
-        
-        # If i-th interval's right bound is 
+
+        # If i-th interval's right bound is
         # smaller increment i else increment j
         if x[i]["end"] < y[j]["end"]:
             i += 1
         else:
             j += 1
-    
+
     return timings
 
 
@@ -180,19 +180,14 @@ def ensure_existing_file(path: str | Path, *, hint: str) -> None:
 
 
 def define_context_length(win_max_length: int = 4) -> int:
-    return {
-        1: 49,
-        2: 99,
-        3: 149,
-        4: 199
-    }[win_max_length]
-    
-    
+    return {1: 49, 2: 99, 3: 149, 4: 199}[win_max_length]
+
+
 def read_img(path: str):
     img = PIL.Image.open(path)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+
     return img
 
 
@@ -200,6 +195,5 @@ def multitask_dict_to_tensor(outputs: dict[str, torch.Tensor]) -> torch.Tensor:
     parts = [outputs["gen"], outputs["age"].unsqueeze(-1)]
     if "mask" in outputs:
         parts.append(outputs["mask"])
-    
-    return torch.cat(parts, dim=-1)
 
+    return torch.cat(parts, dim=-1)

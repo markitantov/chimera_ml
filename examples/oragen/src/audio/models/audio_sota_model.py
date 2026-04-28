@@ -43,7 +43,7 @@ class AgeGenderSOTAModel(Wav2Vec2PreTrainedModel):
         hidden_states = torch.mean(hidden_states, dim=1)
         logits_age = self.age(hidden_states)
         logits_gender = self.gender(hidden_states)
-        outputs = {'gen': logits_gender[:, 0:2], 'age': logits_age[:, 0]}
+        outputs = {"gen": logits_gender[:, 0:2], "age": logits_age[:, 0]}
         return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)
 
 

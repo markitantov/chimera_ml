@@ -19,12 +19,12 @@ from chimera_ml.models.base import BaseModel
 def _features_type(value) -> FeaturesType:
     if isinstance(value, FeaturesType):
         return value
-    
+
     if isinstance(value, str):
         key = value.strip().upper()
         if key in FeaturesType.__members__:
             return FeaturesType[key]
-        
+
     return FeaturesType(int(value))
 
 
@@ -33,63 +33,63 @@ class MTCMAModelV1(nn.Module):
         super().__init__()
         self.dim_q = dim_q
         self.dim_v = dim_v
-        
+
         self.norm_q = nn.LayerNorm(dim_q)
         self.norm_k = nn.LayerNorm(dim_v)
         self.norm_v = nn.LayerNorm(dim_v)
-        
+
         self.fc_q = nn.Linear(dim_q, 256)
         self.fc_k = nn.Linear(dim_v, 256)
         self.fc_v = nn.Linear(dim_v, 256)
 
-        self.self_attention = MultiHeadAttention(input_dim=256, num_heads=4, dropout=.2)
-        
+        self.self_attention = MultiHeadAttention(input_dim=256, num_heads=4, dropout=0.2)
+
         self.mlp = nn.Sequential(
-          nn.Linear(256, 128),
-          nn.GELU(),
-          nn.Dropout(.2),
-          nn.LayerNorm(128),
-          nn.Linear(128, 256),
-          nn.GELU(),
-          nn.Dropout(.2),
+            nn.Linear(256, 128),
+            nn.GELU(),
+            nn.Dropout(0.2),
+            nn.LayerNorm(128),
+            nn.Linear(128, 256),
+            nn.GELU(),
+            nn.Dropout(0.2),
         )
 
     def forward(self, queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
         queries = self.fc_q(self.norm_q(queries))
         keys = self.fc_k(self.norm_k(keys))
         values = self.fc_v(self.norm_v(values))
-        
+
         x = self.self_attention(queries=queries, keys=keys, values=values, mask=None)
         return x + self.mlp(x)
-    
+
 
 class MTCMAModelV2(nn.Module):
     def __init__(self, dim_q: int, dim_v: int, num_heads: int = 4) -> None:
         super().__init__()
         self.dim_q = dim_q
         self.dim_v = dim_v
-        
+
         self.norm_q = nn.LayerNorm(dim_q)
         self.norm_k = nn.LayerNorm(dim_v)
         self.norm_v = nn.LayerNorm(dim_v)
-        
-        self.self_attention = MultiHeadAttention(input_dim=256, num_heads=4, dropout=.2)
-        
+
+        self.self_attention = MultiHeadAttention(input_dim=256, num_heads=4, dropout=0.2)
+
         self.mlp = nn.Sequential(
-          nn.Linear(256, 128),
-          nn.GELU(),
-          nn.Dropout(.2),
-          nn.LayerNorm(128),
-          nn.Linear(128, 256),
-          nn.GELU(),
-          nn.Dropout(.2),
+            nn.Linear(256, 128),
+            nn.GELU(),
+            nn.Dropout(0.2),
+            nn.LayerNorm(128),
+            nn.Linear(128, 256),
+            nn.GELU(),
+            nn.Dropout(0.2),
         )
 
     def forward(self, queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
         queries = self.norm_q(queries)
         keys = self.norm_k(keys)
         values = self.norm_v(values)
-        
+
         x = self.self_attention(queries=queries, keys=keys, values=values, mask=None)
         return x + self.mlp(x)
 
@@ -97,42 +97,42 @@ class MTCMAModelV2(nn.Module):
 class AVModelV1(BaseModel):
     def __init__(self, features_type: FeaturesType | int | str) -> None:
         super().__init__()
-        
+
         self.features_type = _features_type(features_type)
-        
+
         # Image feature branch
         if self.features_type == FeaturesType.EARLY:
             self.downsampling_a = nn.Linear(199, 4)
             self.downsampling_v = nn.Identity()
-            
+
             self.mtcma_av = MTCMAModelV1(dim_q=512, dim_v=151296)
             self.mtcma_va = MTCMAModelV1(dim_q=151296, dim_v=512)
         elif self.features_type == FeaturesType.INTERMEDIATE:
             self.downsampling_a = nn.Linear(199, 4)
             self.downsampling_v = nn.Identity()
-            
+
             self.mtcma_av = MTCMAModelV1(dim_q=1024, dim_v=9984)
             self.mtcma_va = MTCMAModelV1(dim_q=9984, dim_v=1024)
         else:
             self.downsampling_a = nn.Identity()
             self.downsampling_v = nn.Linear(4, 1)
-            
+
             self.mtcma_av = MTCMAModelV1(dim_q=256, dim_v=128, num_heads=1)
             self.mtcma_va = MTCMAModelV1(dim_q=128, dim_v=256, num_heads=1)
-        
+
         self.stp = StatPoolLayer(dim=1)
-        
+
         self.fc = nn.Linear(512, 256)
         self.relu = nn.ReLU()
-        self.dp = nn.Dropout(p=.3)
-        
+        self.dp = nn.Dropout(p=0.3)
+
         self.cl_head = AGenderClassificationHead(input_size=256, output_size=3)
 
     def forward(self, batch: Batch) -> ModelOutput:
         a, v = batch.inputs["audio"], batch.inputs["image"]
         bs = a.shape[0]
-        
-        if self.features_type == FeaturesType.EARLY:    
+
+        if self.features_type == FeaturesType.EARLY:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
         elif self.features_type == FeaturesType.INTERMEDIATE:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
@@ -140,20 +140,20 @@ class AVModelV1(BaseModel):
         else:
             v = v.permute(0, 2, 1)
             a = a.unsqueeze(dim=1).permute(0, 2, 1)
-        
+
         a = self.downsampling_a(a)
         v = self.downsampling_v(v)
-        
+
         a = a.permute(0, 2, 1)
         v = v.permute(0, 2, 1)
-        
+
         av = self.mtcma_av(queries=a, keys=v, values=v)
         va = self.mtcma_va(queries=v, keys=a, values=a)
-        
+
         x = torch.cat((av, va), dim=1)
         x = self.stp(x)
-        
-        x = self.dp(self.relu(self.fc(x)))        
+
+        x = self.dp(self.relu(self.fc(x)))
         outputs = self.cl_head(x)
         return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)
 
@@ -195,33 +195,25 @@ class AVModelV2(BaseModel):
                 Permute((0, 2, 1)),
                 nn.Linear(128, 256),
             )
-            
+
         num_heads = 1 if self.features_type == FeaturesType.LATE else 4
         self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
         self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
-        
-        self.stp = StatPoolLayer(dim=1)
-        
-        out_features = 256 if self.features_type == FeaturesType.LATE else 512
-        
-        self.gender_branch = nn.Sequential(
-            nn.Linear(out_features, 256),
-            nn.ReLU(),
-            nn.Dropout(p=.3)
-        )
 
-        self.age_branch = nn.Sequential(
-            nn.Linear(out_features, 256),
-            nn.ReLU(),
-            nn.Dropout(p=.3)
-        )
-        
+        self.stp = StatPoolLayer(dim=1)
+
+        out_features = 256 if self.features_type == FeaturesType.LATE else 512
+
+        self.gender_branch = nn.Sequential(nn.Linear(out_features, 256), nn.ReLU(), nn.Dropout(p=0.3))
+
+        self.age_branch = nn.Sequential(nn.Linear(out_features, 256), nn.ReLU(), nn.Dropout(p=0.3))
+
         self.cl_head = AGenderClassificationHeadV2(256)
 
     def forward(self, batch: Batch) -> ModelOutput:
         a, v = batch.inputs["audio"], batch.inputs["image"]
-        bs = a.shape[0]        
-        if self.features_type == FeaturesType.EARLY:    
+        bs = a.shape[0]
+        if self.features_type == FeaturesType.EARLY:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
         elif self.features_type == FeaturesType.INTERMEDIATE:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
@@ -289,33 +281,25 @@ class AVModelV3(BaseModel):
                 Permute((0, 2, 1)),
                 nn.Linear(128, 256),
             )
-            
+
         num_heads = 1 if self.features_type == FeaturesType.LATE else 4
         self.mtcma_av = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
         self.mtcma_va = MTCMAModelV2(dim_q=256, dim_v=256, num_heads=num_heads)
-        
-        self.stp = StatPoolLayer(dim=1)
-        
-        out_features = 256 if self.features_type == FeaturesType.LATE else 512
-        
-        self.gender_branch = nn.Sequential(
-            nn.Linear(out_features, 256),
-            nn.ReLU(),
-            nn.Dropout(p=.3)
-        )
 
-        self.age_branch = nn.Sequential(
-            nn.Linear(out_features, 256),
-            nn.ReLU(),
-            nn.Dropout(p=.3)
-        )
-        
+        self.stp = StatPoolLayer(dim=1)
+
+        out_features = 256 if self.features_type == FeaturesType.LATE else 512
+
+        self.gender_branch = nn.Sequential(nn.Linear(out_features, 256), nn.ReLU(), nn.Dropout(p=0.3))
+
+        self.age_branch = nn.Sequential(nn.Linear(out_features, 256), nn.ReLU(), nn.Dropout(p=0.3))
+
         self.cl_head = AGenderClassificationHead(256, output_size=3)
-        
+
     def get_agender_features(self, batch: Batch) -> ModelOutput:
         a, v = batch.inputs["audio"], batch.inputs["image"]
-        bs = a.shape[0]        
-        if self.features_type == FeaturesType.EARLY:    
+        bs = a.shape[0]
+        if self.features_type == FeaturesType.EARLY:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
         elif self.features_type == FeaturesType.INTERMEDIATE:
             v = v.reshape(bs, 4, -1).permute(0, 2, 1)
@@ -327,11 +311,11 @@ class AVModelV3(BaseModel):
         a = self.downsampling_a(a)
         v = self.downsampling_v(v)
 
-        av = self.mtcma_av(queries=a, keys=v, values=v) # -> va
-        va = self.mtcma_va(queries=v, keys=a, values=a) # -> av
+        av = self.mtcma_av(queries=a, keys=v, values=v)  # -> va
+        va = self.mtcma_va(queries=v, keys=a, values=a)  # -> av
 
-        av = a + av # -> a + va
-        va = v + va # -> v + av
+        av = a + av  # -> a + va
+        va = v + va  # -> v + av
         if self.features_type == FeaturesType.LATE:
             av = av.squeeze()
             va = va.squeeze()
@@ -351,64 +335,64 @@ class MaskAgenderAVModelV1(BaseModel):
     def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
         self.av_model = AVModelV3(features_type=features_type)
-            
+
         if checkpoint_path:
             checkpoint = torch.load(checkpoint_path)
-            self.av_model.load_state_dict(checkpoint['model_state_dict'])
-            
+            self.av_model.load_state_dict(checkpoint["model_state_dict"])
+
         for param in self.av_model.parameters():
             param.requires_grad = False
-        
+
         self.cl_maskhead = nn.Linear(256, 6)
 
     def forward(self, batch: Batch) -> ModelOutput:
         x_gender, x_age = self.av_model.get_agender_features(batch)
         agender_res = self.av_model.cl_head(x_gender + x_age)
-        mask_res = {'mask': self.cl_maskhead(x_gender + x_age)}
+        mask_res = {"mask": self.cl_maskhead(x_gender + x_age)}
         outputs = {**agender_res, **mask_res}
         return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)
-    
-    
+
+
 class MaskAgenderAVModelV2(BaseModel):
     def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
-        
+
         self.av_model = AVModelV3(features_type=features_type)
-        
+
         if checkpoint_path:
             checkpoint = torch.load(checkpoint_path)
-            self.av_model.load_state_dict(checkpoint['model_state_dict'])
-            
+            self.av_model.load_state_dict(checkpoint["model_state_dict"])
+
         for param in self.av_model.parameters():
             param.requires_grad = False
-        
+
         self.av_model.cl_head = MaskAGenderClassificationHead(256, output_size=3)
 
     def forward(self, batch: Batch) -> ModelOutput:
         x_gender, x_age = self.av_model.get_agender_features(batch)
         outputs = self.av_model.cl_head(x_gender + x_age)
         return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)
-              
+
 
 class MaskAgenderAVModelV3(BaseModel):
     def __init__(self, features_type: FeaturesType | int | str, checkpoint_path: str | None = None) -> None:
         super().__init__()
-        
+
         self.av_model = AVModelV3(features_type=features_type)
-        
+
         if checkpoint_path:
             checkpoint = torch.load(checkpoint_path)
-            self.av_model.load_state_dict(checkpoint['model_state_dict'])
-        
+            self.av_model.load_state_dict(checkpoint["model_state_dict"])
+
         self.av_model.cl_head = MaskAGenderClassificationHead(256, output_size=3)
 
     def forward(self, batch: Batch) -> ModelOutput:
         x_gender, x_age = self.av_model.get_agender_features(batch)
         outputs = self.av_model.cl_head(x_gender + x_age)
-        return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)   
+        return ModelOutput(preds=multitask_dict_to_tensor(outputs), aux=outputs)
 
 
-'''
+"""
 EARLY
 A: torch.Size([512, 199])
 V: torch.Size([4, 197, 768])
@@ -420,10 +404,11 @@ V: torch.Size([4, 13, 768])
 LATE
 A: torch.Size([256])
 V: torch.Size([4, 128])
-'''
+"""
+
 
 @MODELS.register("agender_multimodal_model_v1")
-def agender_multimodal_model_v1(context = None, **params):
+def agender_multimodal_model_v1(context=None, **params):
     features_type = params.pop("features_type", None)
     if features_type is None and context is not None:
         features_type = context.get("data.features_type", FeaturesType.LATE)
@@ -431,7 +416,7 @@ def agender_multimodal_model_v1(context = None, **params):
     include_mask = params.pop("include_mask", None)
     if include_mask is None and context is not None:
         include_mask = bool(context.get("data.include_mask", False))
-    
+
     if include_mask:
         return MaskAgenderAVModelV1(features_type=features_type, **params)
 
@@ -439,7 +424,7 @@ def agender_multimodal_model_v1(context = None, **params):
 
 
 @MODELS.register("agender_multimodal_model_v2")
-def agender_multimodal_model_v2(context = None, **params):
+def agender_multimodal_model_v2(context=None, **params):
     features_type = params.pop("features_type", None)
     if features_type is None and context is not None:
         features_type = context.get("data.features_type", FeaturesType.LATE)
@@ -447,7 +432,7 @@ def agender_multimodal_model_v2(context = None, **params):
     include_mask = params.pop("include_mask", None)
     if include_mask is None and context is not None:
         include_mask = bool(context.get("data.include_mask", False))
-    
+
     if include_mask:
         return MaskAgenderAVModelV2(features_type=features_type, **params)
 
@@ -455,7 +440,7 @@ def agender_multimodal_model_v2(context = None, **params):
 
 
 @MODELS.register("agender_multimodal_model_v3")
-def agender_multimodal_model_v3(context = None, **params):
+def agender_multimodal_model_v3(context=None, **params):
     features_type = params.pop("features_type", None)
     if features_type is None and context is not None:
         features_type = context.get("data.features_type", FeaturesType.LATE)
@@ -463,7 +448,7 @@ def agender_multimodal_model_v3(context = None, **params):
     include_mask = params.pop("include_mask", None)
     if include_mask is None and context is not None:
         include_mask = bool(context.get("data.include_mask", False))
-    
+
     if include_mask:
         return MaskAgenderAVModelV3(features_type=features_type, **params)
 

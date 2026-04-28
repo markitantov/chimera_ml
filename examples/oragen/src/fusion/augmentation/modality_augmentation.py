@@ -17,23 +17,23 @@ class ModalityDropAugmentation(torch.nn.Module):
 
         if random.random() < self.video_drop_prob:
             video = torch.zeros_like(video)
-        
+
         return audio, video
-    
+
 
 class MultiAugment(torch.nn.Module):
     def __init__(self, dataset_type) -> None:
         super().__init__()
         self.dataset_type = dataset_type
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         a_data, v_data = x
         if self.dataset_type == DatasetType.BOTH:
             return a_data, v_data
-        
+
         if self.dataset_type == DatasetType.AUDIO:
             v_data = torch.zeros(v_data.shape)
         else:
             a_data = torch.zeros(a_data.shape)
-        
+
         return a_data, v_data

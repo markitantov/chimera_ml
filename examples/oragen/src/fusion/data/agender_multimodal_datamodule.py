@@ -41,7 +41,7 @@ class AgenderFusionDataModule(DataModule):
         context.set("data.include_mask", bool(self.include_mask))
         context.set("data.mask_class_names", list(self.mask_class_names or []))
         context.set("data.mask_class_weights", list(getattr(self, "mask_class_weights", [])))
-    
+
         context.set("data.features_type", self.features_type)
 
     def __post_init__(self) -> None:
@@ -54,7 +54,7 @@ class AgenderFusionDataModule(DataModule):
 
         if self.include_mask and self.mask_class_names is None:
             raise ValueError("AgenderFusionDataModule requires a mask class names")
-        
+
         if self.include_mask and self.mask_class_names is not None:
             self.mask_class_names = [str(name) for name in self.mask_class_names]
             self.mask_num_classes = len(self.mask_class_names)
@@ -73,7 +73,7 @@ class AgenderFusionDataModule(DataModule):
             labels["subset"] = labels["subset"].astype(str)
             if "voxceleb" in corpus_name.lower():
                 labels["subset"] = labels["subset"].replace({"dev": "train", "test": "dev"})
-                
+
             vad = load_pickle(cfg.get("vad_path")) if cfg.get("vad_path") else None
             common = {
                 "data_root": cfg["data_root"],
@@ -133,7 +133,7 @@ class AgenderFusionDataModule(DataModule):
                     subset_labels = labels[labels["subset"] == subset_name].copy()
                     if subset_labels.empty:
                         continue
-                    
+
                     dataset_key = f"{subset_name}/{corpus_name}"
                     test_datasets[dataset_key] = AGenderMultimodalDataset(
                         labels_metadata=subset_labels,
@@ -149,11 +149,7 @@ class AgenderFusionDataModule(DataModule):
         if train_gen_counts:
             counts = np.sum(train_gen_counts, axis=0)
             total = counts.sum()
-            self.gender_class_weights = (
-                (counts / total).tolist()
-                if total > 0
-                else [1.0] * len(counts)
-            )
+            self.gender_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
 
         else:
             self.gender_class_weights = [1.0] * int(self.gender_num_classes)
@@ -161,11 +157,7 @@ class AgenderFusionDataModule(DataModule):
         if train_mask_counts:
             counts = np.sum(train_mask_counts, axis=0)
             total = counts.sum()
-            self.mask_class_weights = (
-                (counts / total).tolist()
-                if total > 0
-                else [1.0] * len(counts)
-            )
+            self.mask_class_weights = (counts / total).tolist() if total > 0 else [1.0] * len(counts)
 
         else:
             self.mask_class_weights = [1.0] * int(self.mask_num_classes)

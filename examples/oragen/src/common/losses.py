@@ -11,20 +11,20 @@ from chimera_ml.losses.base import BaseLoss
 class CCCLoss(nn.Module):
     """Lin's Concordance Correlation Coefficient: https://en.wikipedia.org/wiki/Concordance_correlation_coefficient
     Measures the agreement between two variables
-    
+
     It is a product of
     - precision (pearson correlation coefficient) and
     - accuracy (closeness to 45 degree line)
-    
+
     Interpretation
     - rho =  1: perfect agreement
     - rho =  0: no agreement
     - rho = -1: perfect disagreement
-    
+
     Args:
         eps (float, optional): Avoiding division by zero. Defaults to 1e-8.
     """
-    
+
     def __init__(self, eps: float = 1e-8) -> None:
         super().__init__()
         self.eps = eps
@@ -92,7 +92,7 @@ class AGenderLoss(BaseLoss):
 
 
 @LOSSES.register("agender_loss")
-def agender_loss(context = None, **params):
+def agender_loss(context=None, **params):
     gender_weights = params.pop("gender_weights", None)
     if gender_weights is None and context is not None:
         gender_weights = context.get("data.gender_class_weights")
@@ -100,5 +100,5 @@ def agender_loss(context = None, **params):
     mask_weights = params.pop("mask_weights", None)
     if mask_weights is None and context is not None:
         mask_weights = context.get("data.mask_class_weights")
-    
+
     return AGenderLoss(gender_weights=gender_weights, mask_weights=mask_weights, **params)

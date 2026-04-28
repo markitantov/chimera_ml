@@ -18,10 +18,10 @@ from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
 def _as_chunks(value: torch.Tensor | list[torch.Tensor] | None) -> list[torch.Tensor]:
     if value is None:
         return []
-    
+
     if torch.is_tensor(value):
         return [value.detach().cpu()]
-    
+
     return [chunk.detach().cpu() for chunk in value if torch.is_tensor(chunk)]
 
 
@@ -30,7 +30,7 @@ def _confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) 
     valid = (y_true >= 0) & (y_true < num_classes) & (y_pred >= 0) & (y_pred < num_classes)
     if np.any(valid):
         np.add.at(cm, (y_true[valid], y_pred[valid]), 1)
-    
+
     return cm
 
 
@@ -41,7 +41,7 @@ class GroupingCallback(BaseCallback):
     mask_class_names: list[str] | None = None
     age_scale: float = 100.0
     metric_prefix: str = "grouped"
-    cc_metric_name: str = "all" # cross-corpus metric name
+    cc_metric_name: str = "all"  # cross-corpus metric name
     log_confusion_matrix: bool = True
     artifact_path: str = "figures"
     filename_template: str = "confusion_matrix_epoch_{epoch}.png"
@@ -82,7 +82,7 @@ class GroupingCallback(BaseCallback):
                     for split_name, loader in loaders.items():
                         if split_name == selector or split_name.startswith(f"{selector}_"):
                             add(split_name, loader)
-                            
+
                     continue
 
                 if selector in loaders:
@@ -102,15 +102,20 @@ class GroupingCallback(BaseCallback):
 
             parts = split_name.split("_")
             split_group = parts[0]
-            if split_group in {"train", "val", "test"} and len(parts) > 1 and parts[1] in {
-                "train",
-                "dev",
-                "val",
-                "devel",
-                "test",
-            }:
+            if (
+                split_group in {"train", "val", "test"}
+                and len(parts) > 1
+                and parts[1]
+                in {
+                    "train",
+                    "dev",
+                    "val",
+                    "devel",
+                    "test",
+                }
+            ):
                 split_group = parts[1]
-            
+
             grouped = self._group_data(cached)
             for corpus_name, rows in grouped.items():
                 grouped_by_split.setdefault(split_group, {}).setdefault(corpus_name, []).extend(rows)
@@ -159,9 +164,7 @@ class GroupingCallback(BaseCallback):
                     trainer,
                     "[GroupingCallback] "
                     + " | ".join(
-                        f"{metric_scope}/{key}={value:.4f}"
-                        for key, value in metrics.items()
-                        if key != "num_files"
+                        f"{metric_scope}/{key}={value:.4f}" for key, value in metrics.items() if key != "num_files"
                     ),
                 )
 
@@ -178,9 +181,7 @@ class GroupingCallback(BaseCallback):
                     trainer,
                     "[GroupingCallback] "
                     + " | ".join(
-                        f"{metric_scope}/{key}={value:.4f}"
-                        for key, value in metrics.items()
-                        if key != "num_files"
+                        f"{metric_scope}/{key}={value:.4f}" for key, value in metrics.items() if key != "num_files"
                     ),
                 )
 
@@ -208,9 +209,9 @@ class GroupingCallback(BaseCallback):
             )
 
             if has_mask:
-                mask_logits = pred_chunk[:bs, self.gender_num_classes + 1 : (
-                    self.gender_num_classes + 1 + self.mask_num_classes
-                )]
+                mask_logits = pred_chunk[
+                    :bs, self.gender_num_classes + 1 : (self.gender_num_classes + 1 + self.mask_num_classes)
+                ]
                 mask_probs = torch.softmax(mask_logits, dim=-1).numpy()
                 mask_targets = target_chunk[:bs, 2].long().numpy()
 
@@ -237,7 +238,7 @@ class GroupingCallback(BaseCallback):
                         f"[GroupingCallback] Inconsistent gen_target for {corpus_name}/{filename}: "
                         f"{bucket['gen_target']} != {int(gen_targets[idx])}"
                     )
-                
+
                 if bucket["age_target"] != float(age_targets[idx]):
                     raise ValueError(
                         f"[GroupingCallback] Inconsistent age_target for {corpus_name}/{filename}: "
@@ -249,7 +250,7 @@ class GroupingCallback(BaseCallback):
                         f"[GroupingCallback] Inconsistent mask_target for {corpus_name}/{filename}: "
                         f"{bucket['mask_target']} != {int(mask_targets[idx])}"
                     )
-                
+
                 bucket["gen_probs"].append(gen_probs[idx])
                 bucket["age_preds"].append(float(age_preds[idx]))
                 if has_mask:
@@ -334,9 +335,7 @@ class GroupingCallback(BaseCallback):
             age_true_centered = age_true - np.mean(age_true)
             age_pred_centered = age_pred - np.mean(age_pred)
             denom = np.sqrt(np.sum(age_true_centered**2)) * np.sqrt(np.sum(age_pred_centered**2))
-            metrics["age_pcc"] = 0.0 if denom == 0.0 else float(
-                np.sum(age_true_centered * age_pred_centered) / denom
-            )
+            metrics["age_pcc"] = 0.0 if denom == 0.0 else float(np.sum(age_true_centered * age_pred_centered) / denom)
 
         return metrics
 
@@ -355,7 +354,7 @@ class GroupingCallback(BaseCallback):
 
 
 @CALLBACKS.register("grouping_callback")
-def grouping_callback(context = None, **params):
+def grouping_callback(context=None, **params):
     gender_class_names = params.pop("gender_class_names", None)
     if gender_class_names is None and context is not None:
         gender_class_names = context.get("data.gender_class_names")
@@ -363,5 +362,5 @@ def grouping_callback(context = None, **params):
     mask_class_names = params.pop("mask_class_names", None)
     if mask_class_names is None and context is not None:
         mask_class_names = context.get("data.mask_class_names")
-    
+
     return GroupingCallback(gender_class_names=gender_class_names, mask_class_names=mask_class_names, **params)

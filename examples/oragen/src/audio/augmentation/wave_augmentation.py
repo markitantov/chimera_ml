@@ -11,7 +11,7 @@ class PolarityInversion(torch.nn.Module):
 
     def forward(self, wave: torch.Tensor) -> torch.Tensor:
         return torch.neg(wave)
-    
+
 
 class WhiteNoise(torch.nn.Module):
     def __init__(self, min_snr: float = 0.0001, max_snr: float = 0.005) -> None:
@@ -23,7 +23,7 @@ class WhiteNoise(torch.nn.Module):
         std = torch.std(audio).numpy()
         noise_std = random.uniform(self.min_snr * std, self.max_snr * std)
         noise = np.random.normal(0.0, noise_std, size=audio.shape).astype(np.float32)
-        
+
         return audio + torch.Tensor(noise)
 
 
@@ -63,10 +63,9 @@ class ResampleAudio(torch.nn.Module):
     def __init__(self, orig_sr: int = 32000, new_sr: int = 16000) -> None:
         super().__init__()
         if orig_sr != new_sr:
-            self.transforms = torchaudio.transforms.Resample(orig_freq=orig_sr,
-                                                             new_freq=new_sr)
+            self.transforms = torchaudio.transforms.Resample(orig_freq=orig_sr, new_freq=new_sr)
         else:
             self.transforms = None
-    
+
     def forward(self, wave: torch.Tensor) -> torch.Tensor:
         return self.transforms(wave) if self.transforms else wave

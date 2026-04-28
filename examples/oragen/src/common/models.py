@@ -13,7 +13,7 @@ class ScaledDotProductAttentionMultiHead(nn.Module):
     def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask=None):
         if mask is not None:
             raise ValueError("Attention masks are not supported yet")
-        
+
         attention_weights = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(key.shape[-1])
         attention_weights = self.softmax(attention_weights)
         return torch.matmul(attention_weights, value), attention_weights
@@ -39,7 +39,7 @@ class AddAndNorm(nn.Module):
     def forward(self, x: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
         if self.dropout is not None:
             x = self.dropout(x)
-        
+
         return self.layer_norm(x + residual)
 
 
@@ -48,7 +48,7 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         if input_dim % num_heads != 0:
             raise ValueError("input_dim must be divisible by num_heads")
-        
+
         self.input_dim = input_dim
         self.num_heads = num_heads
         self.head_dim = input_dim // num_heads
@@ -106,7 +106,7 @@ class TransformerLayer(nn.Module):
             key = self.positional_encoding(key)
             value = self.positional_encoding(value)
             query = self.positional_encoding(query)
-        
+
         x = self.self_attention(queries=query, keys=key, values=value, mask=mask)
         x = self.add_norm_after_attention(x, query)
         return self.add_norm_after_ff(self.feed_forward(x), x)

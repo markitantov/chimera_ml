@@ -43,7 +43,7 @@ class AGenderAudioW2V2Model(Wav2Vec2PreTrainedModel, BaseModel):
 
     def early_features(self, x: torch.Tensor) -> torch.Tensor:
         return self.wav2vec2.feature_extractor(x)
-    
+
     def intermediate_features(self, x: torch.Tensor) -> torch.Tensor:
         return self.wav2vec2(x)[0]
 
@@ -53,7 +53,7 @@ class AGenderAudioW2V2Model(Wav2Vec2PreTrainedModel, BaseModel):
         x = self.relu(self.transformer_block2(x, x, x))
         x = self.stp(x)
         return self.dp(self.relu(self.fc1(x)))
-    
+
     def forward(self, batch: Batch) -> ModelOutput:
         lf = self.late_features(batch.inputs["audio"])
         outputs = self.cl_head(lf)
@@ -111,7 +111,7 @@ class AGenderAudioHuBERTModel(HubertPreTrainedModel, BaseModel):
 def build_audio_model_config(
     *,
     model_name: str,
-    context = None,
+    context=None,
 ):
     win_max_length = context.get("data.win_max_length")
     gender_class_names = context.get("data.gender_class_names")
@@ -130,7 +130,7 @@ def _reset_custom_buffers(model: torch.nn.Module) -> None:
 @MODELS.register("agender_audio_w2v2_model")
 def agender_audio_w2v2_model(
     model_name: str,
-    context = None,
+    context=None,
 ):
     model_config = build_audio_model_config(
         model_name=model_name,
@@ -144,7 +144,7 @@ def agender_audio_w2v2_model(
 @MODELS.register("agender_audio_hubert_model")
 def agender_audio_hubert_model(
     model_name: str,
-    context = None,
+    context=None,
 ):
     model_config = build_audio_model_config(
         model_name=model_name,
