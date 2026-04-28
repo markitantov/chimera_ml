@@ -31,6 +31,31 @@ def non_finite_debug_context(
     return f"preds={preds}, loss={loss_summary}, inputs={inputs}, targets={targets}"
 
 
+def _non_finite_step_message(
+    *,
+    split: str,
+    epoch: int,
+    global_step: int,
+    out: ModelOutput,
+    loss: torch.Tensor | None,
+    batch: Batch,
+) -> str | None:
+    """Return a fail-fast message for non-finite predictions/loss values."""
+    if out.preds is not None and not torch.isfinite(out.preds).all():
+        return (
+            f"Non-finite predictions detected at split='{split}', epoch={epoch}, global_step={global_step}. "
+            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
+        )
+
+    if loss is not None and not torch.isfinite(loss).all():
+        return (
+            f"Non-finite loss detected at split='{split}', epoch={epoch}, global_step={global_step}. "
+            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
+        )
+
+    return None
+
+
 def assert_finite_step(
     *,
     split: str,
@@ -41,38 +66,13 @@ def assert_finite_step(
     batch: Batch,
 ) -> None:
     """Fail fast on NaN/Inf values and include enough context to debug the source."""
-    if out.preds is not None and not torch.isfinite(out.preds).all():
-        raise FloatingPointError(
-            f"Non-finite predictions detected at split='{split}', epoch={epoch}, global_step={global_step}. "
-            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
-        )
-
-    if loss is not None and not torch.isfinite(loss).all():
-        raise FloatingPointError(
-            f"Non-finite loss detected at split='{split}', epoch={epoch}, global_step={global_step}. "
-            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
-        )
-
-
-def assert_finite_gradients(
-    *,
-    model: torch.nn.Module,
-    split: str,
-    epoch: int,
-    global_step: int,
-    out: ModelOutput,
-    loss: torch.Tensor,
-    batch: Batch,
-) -> None:
-    """Fail fast on NaN/Inf gradients after backward/unscale."""
-    bad_grad_names = [
-        name
-        for name, param in model.named_parameters()
-        if param.grad is not None and not torch.isfinite(param.grad).all()
-    ]
-    if bad_grad_names:
-        raise FloatingPointError(
-            f"Non-finite gradients detected at split='{split}', epoch={epoch}, global_step={global_step}. "
-            f"bad_grad_params={bad_grad_names}. "
-            f"{non_finite_debug_context(out=out, loss=loss, batch=batch)}"
-        )
+    message = _non_finite_step_message(
+        split=split,
+        epoch=epoch,
+        global_step=global_step,
+        out=out,
+        loss=loss,
+        batch=batch,
+    )
+    if message is not None:
+        raise FloatingPointError(message)

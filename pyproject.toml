@@ -1,6 +1,6 @@
 [project]
 name = "chimera-ml"
-version = "0.2.2"
+version = "0.2.2.post0"
 description = "Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations) - a lightweight training framework for configurable uni-modal and multi-modal experiments."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
