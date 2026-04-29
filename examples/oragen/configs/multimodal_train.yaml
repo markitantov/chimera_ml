@@ -49,7 +49,7 @@ data:
 model:
   name: "agender_multimodal_model_v3"
   params:
-    
+
 train:
   params:
     epochs: 5
