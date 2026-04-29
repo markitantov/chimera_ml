@@ -4,8 +4,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-import PIL
 import numpy as np
+import PIL
 import torch
 
 

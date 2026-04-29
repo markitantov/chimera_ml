@@ -16,7 +16,7 @@ class ModalityDropAugmentation(torch.nn.Module):
         self.video_drop_prob = float(video_drop_prob)
         if keep_both_prob is None:
             keep_both_prob = 1.0 - self.audio_drop_prob - self.video_drop_prob
-        
+
         self.keep_both_prob = float(keep_both_prob)
 
         probs = {
