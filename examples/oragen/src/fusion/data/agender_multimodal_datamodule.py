@@ -24,6 +24,7 @@ class AgenderFusionDataModule(DataModule):
     features_type: FeaturesType | int | str = FeaturesType.LATE
     dataset_type: DatasetType | int | str = DatasetType.BOTH
     augmentation: bool = False
+    augmentation_params: dict[str, Any] | None = None
     audio_feature_extractor: dict[str, Any] | None = None
     image_feature_extractor: dict[str, Any] | None = None
     sr: int = 16000
@@ -103,7 +104,9 @@ class AgenderFusionDataModule(DataModule):
                 train_dataset = AGenderMultimodalDataset(
                     labels_metadata=subset_labels,
                     features_file_name=f"{corpus_name}_{subset_name.upper()}_{self.features_file_name}",
-                    transform=ModalityDropAugmentation() if self.augmentation else None,
+                    transform=(
+                        ModalityDropAugmentation(**(self.augmentation_params or {})) if self.augmentation else None
+                    ),
                     **common,
                 )
                 train_datasets.append(train_dataset)
