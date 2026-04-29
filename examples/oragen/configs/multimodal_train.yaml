@@ -1,0 +1,120 @@
+seed: 0
+experiment_info:
+  params:
+    experiment_name: "agender"
+    run_name: "fusion"
+    datetime_format: "%Y-%m-%d_%H-%M"
+
+data:
+  name: "agender_fusion_datamodule"
+  params:
+    batch_size: 16
+    drop_last_train: true
+    num_workers: 8
+    sr: 16000
+    win_max_length: 4
+    win_shift: 2
+    win_min_length: 1
+    features_file_name: "SAMPLES"
+    features_root: "data/AgeGenderDatabases/agender_mm_features"
+    gender_class_names: ["female", "male"]
+    include_mask: false
+    mask_class_names: ["No mask", "Tissue mask", "Medical mask", "Protective mask (ffp2/ffp3)", "Respirator", "Protective face shield"]
+    channels: ["c"]
+    features_type: "INTERMEDIATE"
+    dataset_type: "BOTH"
+    augmentation: true
+    augmentation_params:
+      keep_both_prob: 0.5
+      audio_drop_prob: 0.25
+      video_drop_prob: 0.25
+    audio_feature_extractor:
+      hf_model_name: "facebook/wav2vec2-large-robust"
+      checkpoint_path: "logs/agender/audio_train_2026-04-28_20-20_agender_audio_w2v2_model_9ab9a1b7/checkpoints/last.pt"
+    image_feature_extractor:
+      hf_model_name: "nateraw/vit-age-classifier"
+      checkpoint_path: "logs/combined_vit_DPAL_weights.pt"
+    train_subsets: ["train"] # exception for VOXCELEB - dev
+    val_subsets: ["dev", "test", "devel"] # exception for VOXCELEB - test
+    corpora:
+      VOXCELEB2:
+        data_root: "data/AgeGenderDatabases/VoxCeleb2"
+        labels_file_path: "data/AgeGenderDatabases/metadata/labels/voxceleb2_labels.csv"
+        vad_path: "data/AgeGenderDatabases/metadata/vad/voxceleb2_vad.pickle"
+      BRAVEMASKS:
+        data_root: "data/BRAVE-MASKS_PROCESSED"
+        labels_file_path: "data/AgeGenderDatabases/metadata/labels/bravemasks_labels.csv"
+        vad_path: "data/AgeGenderDatabases/metadata/vad/bravemasks_vad.pickle"
+
+model:
+  name: "agender_multimodal_model_v3"
+  params:
+
+train:
+  params:
+    epochs: 5
+    mixed_precision: true
+    device: "cuda"
+    log_every_steps: 500
+    grad_clip_norm: 1.0
+    collect_cache: true
+
+optimizer:
+  name: "adamw_optimizer"
+  params:
+    lr: 1.0e-5
+    weight_decay: 0.01
+
+loss:
+  name: "agender_loss"
+  params:
+    gender_alpha: 1.0
+    age_alpha: 1.0
+
+metrics:
+  - name: "age_mae_metric"
+    params: {}
+  - name: "age_pcc_metric"
+    params: {}
+  - name: "gender_prf_macro_metric"
+    params: {}
+
+logging:
+  - name: "console_file_logger"
+    params:
+      log_path: "logs"
+      log_file: "train.log"
+      console_level: "INFO"
+      file_level: "INFO"
+  - name: "mlflow_logger"
+    params:
+      tracking_uri: "sqlite:///logs/mlflow.db"
+
+callbacks:
+  - name: "grouping_callback"
+    params:
+      splits: ["val"]
+      metric_prefix: "grouped"
+      cc_metric_name: "all"
+      artifact_path: "figures"
+      log_confusion_matrix: true
+  - name: "early_stopping_callback"
+    params:
+      monitor: "dev_ALL_grouped/age_mae"
+      mode: "min"
+      patience: 2
+  - name: "checkpoint_callback"
+    params:
+      log_path: "logs"
+      filename_template: "epoch={epoch}_{monitor}={value:.4f}.pt"
+      monitor: "dev_ALL_grouped/age_mae"
+      mode: "min"
+      save_top_k: 5
+      save_last: true
+  - name: "snapshot_callback"
+    params:
+      log_path: "logs"
+      include:
+        - "src"
+      save_code_zip: true
+      save_config: true

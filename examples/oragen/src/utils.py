@@ -8,25 +8,6 @@ from chimera_ml.core.types import ModelOutput
 from chimera_ml.metrics.base import BaseMetric
 
 
-def ccc_1d(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
-    """
-    pred, target: [B]
-    Returns: 1 - CCC (so lower is better).
-    """
-    pred = pred.float()
-    target = target.float()
-
-    pred_mean = pred.mean()
-    target_mean = target.mean()
-
-    pred_var = pred.var(unbiased=False)
-    target_var = target.var(unbiased=False)
-
-    cov = ((pred - pred_mean) * (target - target_mean)).mean()
-
-    return (2.0 * cov) / (pred_var + target_var + (pred_mean - target_mean).pow(2) + eps)
-
-
 @dataclass
 class TensorMetricAdapter:
     """Adapter to feed raw (preds, targets) tensors into a metric that expects (ModelOutput, Batch).

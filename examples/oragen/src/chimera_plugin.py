@@ -2,19 +2,15 @@ import importlib
 import warnings
 
 _MODULES_TO_REGISTER: tuple[str, ...] = (
-    "audio.data.audio_va_datamodule",
-    "audio.models.wavlm_s2s_model",
-    "audio.loss.audio_ccc_mse_loss",
-    "audio.optimizers.adamw_two_group_optimizer",
-    "audio.schedulers.named_reduceonplateau_scheduler",
-    "audio.callbacks.audio_framewise_callback",
-    "audio.callbacks.audio_windowwise_callback",
-    "audio.callbacks.audio_unfreeze_backbone_callback",
-    "metrics.va_ccc_metric",
-    "fusion.data.fusion_va_datamodule",
-    "fusion.models.fusion_model",
-    "fusion.loss.fusion_ccc_mse_loss",
-    "fusion.callbacks.fusion_framewise_callback",
+    "audio.data.agender_audio_datamodule",
+    "fusion.data.agender_multimodal_datamodule",
+    "audio.models.audio_models",
+    "audio.models.audio_sota_model",
+    "image.models.image_models",
+    "fusion.models.fusion_models",
+    "common.losses",
+    "common.metrics",
+    "common.grouping_callback",
 )
 
 
@@ -25,7 +21,7 @@ def register() -> None:
         except ModuleNotFoundError as exc:
             # Optional runtime dependency is missing (e.g. torchaudio for audio datamodules).
             # Keep plugin registration usable for available components (e.g. fusion pipeline).
-            if exc.name in {"torchaudio"}:
+            if exc.name in {"torchaudio", "torchvision", "transformers", "pandas"}:
                 continue
             warnings.warn(f"Failed to import '{module_name}': {exc}", stacklevel=2)
         except Exception as exc:

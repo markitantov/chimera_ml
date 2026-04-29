@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- New `examples/oragen` plugin package with audio and multimodal ORAGEN pipelines, configs, training entrypoints, and documentation.
+
 ### Planned
 
 - Built-in CLI inference pipeline command for end-to-end production-style inference (for example:

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chimera-ml-oragen"
+version = "0.1.0"
+description = "Age estimation and gender recognition (ORAGEN) example plugin for chimera_ml"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "chimera-ml>=0.2.1",
+  "torch==2.10.0",
+  "torchaudio==2.10.0",
+  "torchvision==0.25.0",
+  "torchcodec==0.10.0",
+  "transformers",
+  "soundfile",
+  "pandas",
+  "mlflow",
+]
+
+[project.urls]
+Homepage = "https://smil-spcras.github.io/ORAGEN/"
+Paper = "https://doi.org/10.1016/j.eswa.2025.127473"
+
+[project.entry-points."chimera_ml.plugins"]
+oragen = "chimera_plugin:register"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["chimera_plugin", "train", "utils"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
