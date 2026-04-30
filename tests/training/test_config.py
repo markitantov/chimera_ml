@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from chimera_ml.training.config import ExperimentConfig, load_yaml
+from chimera_ml.core.config import ExperimentConfig, load_yaml
 
 
 def test_load_yaml_reads_file(tmp_path: Path):

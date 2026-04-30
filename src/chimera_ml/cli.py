@@ -1,5 +1,6 @@
 import platform
 import sys
+import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from itertools import product
 from pathlib import Path
@@ -9,7 +10,14 @@ import torch
 import typer
 from torch.utils.data import DataLoader
 
+from chimera_ml.core.config import ExperimentConfig
 from chimera_ml.data.loader_utils import normalize_loaders
+from chimera_ml.inference import (
+    InferenceConfig,
+    InferenceContext,
+    build_inference_pipeline,
+    resolve_inference_device,
+)
 from chimera_ml.logging.utils import generate_run_name
 from chimera_ml.training.builders import (
     BuildContext,
@@ -23,7 +31,6 @@ from chimera_ml.training.builders import (
     build_scheduler,
     build_train_config,
 )
-from chimera_ml.training.config import ExperimentConfig
 from chimera_ml.training.trainer import Trainer
 from chimera_ml.utils.seed import define_seed
 
@@ -63,6 +70,7 @@ def _available_registries() -> dict[str, Any]:
         CALLBACKS,
         COLLATES,
         DATAMODULES,
+        INFERENCE_STEPS,
         LOGGERS,
         LOSSES,
         METRICS,
@@ -81,6 +89,7 @@ def _available_registries() -> dict[str, Any]:
         "callbacks": CALLBACKS,
         "collates": COLLATES,
         "loggers": LOGGERS,
+        "inference_steps": INFERENCE_STEPS,
     }
 
 
@@ -288,6 +297,61 @@ def validate_config(
     typer.echo(f"Config '{config_path}' is valid.")
 
 
+@app.command("inference")
+def inference(
+    input_path: str = typer.Option(..., "--input", "-i", help="Path to input video/audio file."),
+    output_path: str | None = typer.Option(None, "--output", "-o", help="Where to save inference JSON."),
+    config_path: str = typer.Option(..., "--config-path", "-c", help="Path to inference YAML config."),
+    device: str | None = typer.Option(None, "--device", help="Runtime device: cpu|cuda|auto."),
+    work_dir: str | None = typer.Option(None, "--work-dir", help="Working directory for intermediate artifacts."),
+):
+    """Run an inference pipeline built from registry steps and YAML config."""
+    typer.echo(f"[inference] Loading config: {config_path}")
+    cfg = InferenceConfig.from_yaml(config_path)
+    resolved_output = Path(output_path) if output_path is not None else None
+    if resolved_output is not None:
+        write_json_predictions_cfg = cfg.section("steps", name="write_json_predictions_step")
+        existing_output_path = (
+            (write_json_predictions_cfg.get("params") or {}).get("output_path") if write_json_predictions_cfg else None
+        )
+
+        if not write_json_predictions_cfg:
+            typer.echo(
+                "[inference] Step 'write_json_predictions_step' not found; "
+                f"creating one with output_path={resolved_output}"
+            )
+        elif existing_output_path is not None and str(existing_output_path) != str(resolved_output):
+            typer.echo(
+                "[inference] write_json_predictions_step.output_path differs from config; "
+                f"overriding '{existing_output_path}' -> '{resolved_output}'"
+            )
+
+        if cfg.get("steps") is None:
+            cfg.raw["steps"] = []
+
+        cfg.set_at_path("steps.write_json_predictions_step.params.output_path", str(resolved_output))
+
+    input_file = Path(input_path)
+    resolved_work_dir = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="chimera-inference-"))
+    resolved_work_dir.mkdir(parents=True, exist_ok=True)
+
+    runtime_device = resolve_inference_device(device or cfg.runtime_device())
+    ctx = InferenceContext(
+        input_path=input_file,
+        work_dir=resolved_work_dir,
+        device=runtime_device,
+        config=cfg.raw,
+    )
+
+    pipeline = build_inference_pipeline(cfg)
+    typer.echo(f"[inference] Running pipeline '{pipeline.name}' on device={runtime_device}")
+    ctx = pipeline.run(ctx)
+    if resolved_output is not None:
+        typer.echo(f"[inference] Done. Output: {resolved_output}")
+    else:
+        typer.echo("[inference] Done.")
+
+
 @registry_app.command("list")
 def registry_list(
     kind: str | None = typer.Option(
@@ -295,7 +359,7 @@ def registry_list(
         "--type",
         help=(
             "Filter by registry name: datamodules|models|losses|metrics|optimizers|"
-            "schedulers|callbacks|collates|loggers."
+            "schedulers|callbacks|collates|loggers|inference_steps."
         ),
     ),
 ):

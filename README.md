@@ -69,7 +69,8 @@ chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
 chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--max-trials N]
 chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
-chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules]
+chimera-ml inference -i <input.mp4> [-o <out.json>] --config-path <inference.yaml> [--device cpu|cuda|auto] [--work-dir <dir>]
+chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules|inference_steps]
 chimera-ml plugins list [--group chimera_ml.plugins]
 ```
 
@@ -103,6 +104,13 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - optionally loads checkpoint (`model_state_dict` or raw state dict),
 - evaluates over merged `train`/`val`/`test` loader splits when available.
 
+`inference`:
+
+- loads a small sequential inference pipeline from YAML,
+- builds steps from the `inference_steps` registry,
+- runs them on a shared `InferenceContext`,
+- keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
+
 `registry list`:
 
 - prints currently registered keys (including keys loaded from plugins).
@@ -110,6 +118,13 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 `plugins list`:
 
 - prints discovered Python entry points for plugin group `chimera_ml.plugins`.
+
+Inference example from this repo:
+
+```bash
+pip install -e examples/oragen
+chimera-ml inference -i video.mp4 -o out.json --config-path examples/oragen/configs/inference.yaml
+```
 
 ## YAML Config Model
 
