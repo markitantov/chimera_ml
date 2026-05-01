@@ -106,9 +106,12 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 
 `inference`:
 
-- loads a small sequential inference pipeline from YAML,
+- loads a small inference pipeline from YAML,
 - builds steps from the `inference_steps` registry,
 - runs them on a shared `InferenceContext`,
+- runs sequentially by default in plain config order,
+- enables DAG/parallel scheduling only when `pipeline.parallel: true` is set,
+- uses `after` for explicit dependencies between steps in parallel mode,
 - keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
 
 `registry list`:
@@ -124,6 +127,75 @@ Inference example from this repo:
 ```bash
 pip install -e examples/oragen
 chimera-ml inference -i video.mp4 -o out.json --config-path examples/oragen/configs/inference.yaml
+```
+
+For DAG inference configs:
+
+- each step still uses the normal config shape: `name` plus optional `params`
+- if `pipeline.parallel` is omitted or set to `false`, the pipeline runs sequentially in config order
+- if `pipeline.parallel: true`, all steps become DAG nodes and `after` lists their explicit dependencies
+- in parallel mode, steps without `after` become root nodes and may start immediately
+- if parallel mode is enabled but no step has `after`, the builder emits a warning
+- by default, dependency names refer to the step `name`
+- use `id` only for the steps that need it, for example when the same step `name` is reused multiple times
+- if two DAG steps write the same artifact key, the pipeline raises an error
+
+Sequential example:
+
+```yaml
+steps:
+  - name: extract_audio
+    params:
+      sample_rate: 16000
+      mono: true
+
+  - name: vad
+    params:
+      threshold: 0.5
+      model: /path/to/vad
+```
+
+Example where only repeated steps need `id`:
+
+```yaml
+pipeline:
+  parallel: true
+
+steps:
+  - name: extract_audio
+    params:
+      sample_rate: 16000
+      mono: true
+
+  - name: sample_frames
+    params:
+      fps: 5
+
+  - name: vad
+    after: [extract_audio]
+    params:
+      threshold: 0.5
+      model: /path/to/vad
+
+  - id: detector_fast
+    name: detect_faces
+    after: [sample_frames]
+    params:
+      conf: 0.25
+      model: /path/to/fast_face_detector
+
+  - id: detector_accurate
+    name: detect_faces
+    after: [sample_frames]
+    params:
+      conf: 0.5
+      model: /path/to/accurate_face_detector
+
+  - name: build_windows
+    after: [vad, detector_fast, detector_accurate]
+    params:
+      window_sec: 10
+      stride_sec: 5
 ```
 
 ## YAML Config Model

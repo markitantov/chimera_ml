@@ -13,7 +13,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Planned
 
 - Built-in CLI inference pipeline command for end-to-end production-style inference (for example:
-  `chimera-ml infer --config-path ... --input ... --output-dir ...`). The command should support
+  `chimera-ml inference --config-path ... --input ... --output-dir ...`). The command should support
   plugin-defined pipeline stages such as media ingestion, audio extraction, frame extraction/downsampling,
   ASR/text extraction, modality-specific preprocessing, checkpoint loading, model inference, and structured
   prediction/artifact export.

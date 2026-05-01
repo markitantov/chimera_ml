@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from chimera_ml.core.config import ExperimentConfig, load_yaml
+from chimera_ml.training import ExperimentConfig as TrainingExperimentConfig
 
 
 def test_load_yaml_reads_file(tmp_path: Path):
@@ -126,3 +127,7 @@ def test_apply_overrides_updates_named_list_entries():
 
     assert raw["callbacks"][0]["params"]["monitor"] == "val/ccc"
     assert raw["callbacks"][1]["params"]["patience"] == 2
+
+
+def test_training_import_experiment_config_is_backward_compatible():
+    assert TrainingExperimentConfig is ExperimentConfig

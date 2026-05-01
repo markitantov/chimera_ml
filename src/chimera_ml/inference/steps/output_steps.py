@@ -7,11 +7,6 @@ from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference.context import InferenceContext
 
 
-def serialize_infer_output(payload: dict[str, object]) -> str:
-    """Serialize inference output payload to formatted JSON."""
-    return json.dumps(payload, indent=2)
-
-
 @dataclass
 class WriteJsonPredictionsStep:
     output_path: str | None = None

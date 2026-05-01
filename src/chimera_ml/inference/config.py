@@ -18,6 +18,18 @@ class InferenceConfig(ExperimentConfig):
         return str(name) if name else "inference_pipeline"
 
     @property
+    def parallel(self) -> bool:
+        pipeline_cfg = self.raw.get("pipeline", {})
+        if not isinstance(pipeline_cfg, dict):
+            return False
+
+        value = pipeline_cfg.get("parallel", False)
+        if not isinstance(value, bool):
+            raise TypeError("Inference config field 'pipeline.parallel' must be a boolean.")
+
+        return value
+
+    @property
     def steps(self) -> list[dict[str, Any]]:
         steps_cfg = self.raw.get("steps", [])
         if not isinstance(steps_cfg, list):
