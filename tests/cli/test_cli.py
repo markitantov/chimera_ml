@@ -479,6 +479,201 @@ def test_cli_eval_uses_weights_only_when_loading_checkpoint(monkeypatch):
     assert seen_kwargs.get("weights_only") is True
 
 
+def test_cli_inference_builds_pipeline_and_runs(monkeypatch, tmp_path, capsys):
+    seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+
+    class _PipelineStub:
+        name = "demo_inference"
+
+        def run(self, ctx):
+            seen["ctx"] = ctx
+            return ctx
+
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(lambda cls, _: cls({"pipeline": {"name": "demo_inference"}, "steps": []})),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", lambda cfg: _PipelineStub())
+    monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
+
+    output_path = tmp_path / "out.json"
+    work_dir = tmp_path / "work"
+    cli.inference(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        config_path="inference.yaml",
+        device="auto",
+        work_dir=str(work_dir),
+    )
+
+    ctx = seen["ctx"]
+    assert ctx.input_path == input_path
+    assert ctx.work_dir == work_dir
+    assert ctx.device == "cpu"
+    assert ctx.config["steps"][-1] == {
+        "name": "write_json_predictions_step",
+        "params": {"output_path": str(output_path)},
+    }
+    assert "Step 'write_json_predictions_step' not found; creating one" in capsys.readouterr().out
+
+
+def test_cli_inference_overrides_write_json_path(monkeypatch, tmp_path, capsys):
+    seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+
+    class _PipelineStub:
+        name = "demo_inference"
+
+        def run(self, ctx):
+            seen["ctx"] = ctx
+            return ctx
+
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(
+            lambda cls, _: cls(
+                {
+                    "pipeline": {"name": "demo_inference"},
+                    "steps": [{"name": "write_json_predictions_step", "params": {"output_path": "old.json"}}],
+                }
+            )
+        ),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", lambda cfg: _PipelineStub())
+    monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
+
+    output_path = tmp_path / "out.json"
+    cli.inference(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        config_path="inference.yaml",
+        device="auto",
+        work_dir=str(tmp_path / "work"),
+    )
+
+    out = capsys.readouterr().out
+    assert seen["ctx"].config["steps"] == [
+        {"name": "write_json_predictions_step", "params": {"output_path": str(output_path)}}
+    ]
+    assert "overriding 'old.json'" in out
+
+
+def test_cli_inference_leaves_config_unchanged_without_output_override(monkeypatch, tmp_path, capsys):
+    seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+
+    class _PipelineStub:
+        name = "demo_inference"
+
+        def run(self, ctx):
+            seen["ctx"] = ctx
+            return ctx
+
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(
+            lambda cls, _: cls(
+                {
+                    "pipeline": {"name": "demo_inference"},
+                    "steps": [{"name": "print_json_predictions_step", "params": {}}],
+                }
+            )
+        ),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", lambda cfg: _PipelineStub())
+    monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
+
+    cli.inference(
+        input_path=str(input_path),
+        output_path=None,
+        config_path="inference.yaml",
+        device="auto",
+        work_dir=str(tmp_path / "work"),
+    )
+
+    ctx = seen["ctx"]
+    assert ctx.config["steps"] == [{"name": "print_json_predictions_step", "params": {}}]
+    assert "creating one" not in capsys.readouterr().out
+
+
+def test_cli_inference_creates_steps_section_when_missing(monkeypatch, tmp_path, capsys):
+    seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+
+    class _PipelineStub:
+        name = "demo_inference"
+
+        def run(self, ctx):
+            seen["ctx"] = ctx
+            return ctx
+
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(lambda cls, _: cls({"pipeline": {"name": "demo_inference"}})),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", lambda cfg: _PipelineStub())
+    monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
+
+    output_path = tmp_path / "out.json"
+    cli.inference(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        config_path="inference.yaml",
+        device="auto",
+        work_dir=str(tmp_path / "work"),
+    )
+
+    assert seen["ctx"].config["steps"] == [
+        {"name": "write_json_predictions_step", "params": {"output_path": str(output_path)}}
+    ]
+    assert "Step 'write_json_predictions_step' not found; creating one" in capsys.readouterr().out
+
+
+def test_cli_inference_creates_temp_work_dir_when_missing(monkeypatch, tmp_path, capsys):
+    seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+
+    class _PipelineStub:
+        name = "demo_inference"
+
+        def run(self, ctx):
+            seen["ctx"] = ctx
+            return ctx
+
+    generated_work_dir = tmp_path / "generated-work-dir"
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(lambda cls, _: cls({"pipeline": {"name": "demo_inference"}, "steps": []})),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", lambda cfg: _PipelineStub())
+    monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
+    monkeypatch.setattr(cli.tempfile, "mkdtemp", lambda prefix: str(generated_work_dir))
+
+    cli.inference(
+        input_path=str(input_path),
+        output_path=None,
+        config_path="inference.yaml",
+        device="auto",
+        work_dir=None,
+    )
+
+    ctx = seen["ctx"]
+    assert ctx.work_dir == generated_work_dir
+    assert generated_work_dir.exists()
+    assert "[inference] Done." in capsys.readouterr().out
+
+
 class _RegistryStub:
     def __init__(self, items):
         self._items = list(items)

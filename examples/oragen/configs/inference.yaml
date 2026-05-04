@@ -1,0 +1,39 @@
+pipeline:
+  name: "oragen_inference"
+  parallel: false
+
+steps:
+  - name: "extract_audio_step"
+    params:
+      sample_rate: 16000
+
+  - name: "vad_step"
+
+  - name: "resolve_checkpoints_step"
+    params:
+      checkpoints:
+        audio: "https://huggingface.co/markitantov/ORAGEN/resolve/main/audio_model.pt"
+        image: "https://huggingface.co/markitantov/ORAGEN/resolve/main/image_model.pt"
+        fusion: "https://huggingface.co/markitantov/ORAGEN/resolve/main/multimodal_model.pt"
+
+  - name: "face_detection_step"
+    params:
+      model: "yolo26n.pt"
+      fps: 1.0
+
+  - name: "build_windows_step"
+    params:
+      win_max_length: 4
+      win_shift: 2
+      win_min_length: 1
+
+  - name: "extract_features_step"
+    params:
+      gender_class_names: ["female", "male"]
+      age_scale: 100.0
+
+  - name: "fusion_step"
+
+  - name: "aggregate_windows_step"
+
+  - name: "print_json_predictions_step"

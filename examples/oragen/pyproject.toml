@@ -18,6 +18,10 @@ dependencies = [
   "soundfile",
   "pandas",
   "mlflow",
+  "requests",
+  "Pillow",
+  "opencv-python",
+  "ultralytics",
 ]
 
 [project.urls]

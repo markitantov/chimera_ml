@@ -69,7 +69,8 @@ chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
 chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--max-trials N]
 chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
-chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules]
+chimera-ml inference -i <input.mp4> [-o <out.json>] --config-path <inference.yaml> [--device cpu|cuda|auto] [--work-dir <dir>]
+chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules|inference_steps]
 chimera-ml plugins list [--group chimera_ml.plugins]
 ```
 
@@ -103,6 +104,17 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - optionally loads checkpoint (`model_state_dict` or raw state dict),
 - evaluates over merged `train`/`val`/`test` loader splits when available.
 
+`inference`:
+
+- loads a small inference pipeline from YAML,
+- builds steps from the `inference_steps` registry,
+- runs them on a shared `InferenceContext`,
+- runs sequentially by default in plain config order,
+- enables DAG/parallel scheduling only when `pipeline.parallel: true` is set,
+- uses `after` for explicit dependencies between steps in parallel mode,
+- keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
+- supports a built-in `resolve_checkpoints_step` that resolves local paths or downloads remote checkpoints into the inference work directory cache and stores resolved local files in `artifacts["checkpoints"]`,
+
 `registry list`:
 
 - prints currently registered keys (including keys loaded from plugins).
@@ -110,6 +122,92 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 `plugins list`:
 
 - prints discovered Python entry points for plugin group `chimera_ml.plugins`.
+
+Inference example from this repo:
+
+```bash
+pip install -e examples/oragen
+chimera-ml inference -i video.mp4 -o out.json --config-path examples/oragen/configs/inference.yaml
+```
+
+For DAG inference configs:
+
+- each step still uses the normal config shape: `name` plus optional `params`
+- if `pipeline.parallel` is omitted or set to `false`, the pipeline runs sequentially in config order
+- if `pipeline.parallel: true`, all steps become DAG nodes and `after` lists their explicit dependencies
+- in parallel mode, steps without `after` become root nodes and may start immediately
+- if parallel mode is enabled but no step has `after`, the builder emits a warning
+- by default, dependency names refer to the step `name`
+- use `id` only for the steps that need it, for example when the same step `name` is reused multiple times
+- if two DAG steps write the same artifact key, the pipeline raises an error
+
+Sequential example:
+
+```yaml
+steps:
+  - name: resolve_checkpoints_step
+    params:
+      cache_dir: model_cache
+      checkpoints:
+        fusion: https://example.com/models/fusion.pt
+
+  - name: extract_audio
+    params:
+      sample_rate: 16000
+      mono: true
+
+  - name: vad
+    params:
+      threshold: 0.5
+      model: /path/to/vad
+
+  - name: plugin_fusion_step
+    params:
+      checkpoint_key: fusion
+```
+
+Example where only repeated steps need `id`:
+
+```yaml
+pipeline:
+  parallel: true
+
+steps:
+  - name: extract_audio
+    params:
+      sample_rate: 16000
+      mono: true
+
+  - name: sample_frames
+    params:
+      fps: 5
+
+  - name: vad
+    after: [extract_audio]
+    params:
+      threshold: 0.5
+      model: /path/to/vad
+
+  - id: detector_fast
+    name: detect_faces
+    after: [sample_frames]
+    params:
+      conf: 0.25
+      model: /path/to/fast_face_detector
+
+  - id: detector_accurate
+    name: detect_faces
+    after: [sample_frames]
+    params:
+      conf: 0.5
+      model: /path/to/accurate_face_detector
+
+  - name: build_windows
+    after: [vad, detector_fast, detector_accurate]
+    params:
+      window_sec: 10
+      stride_sec: 5
+```
 
 ## YAML Config Model
 

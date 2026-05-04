@@ -11,6 +11,10 @@ _MODULES_TO_REGISTER: tuple[str, ...] = (
     "common.losses",
     "common.metrics",
     "common.grouping_callback",
+    "inference.preprocessing",
+    "inference.face_detection",
+    "inference.extract_features",
+    "inference.fusion",
 )
 
 
