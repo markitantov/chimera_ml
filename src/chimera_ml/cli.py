@@ -332,6 +332,10 @@ def inference(
         cfg.set_at_path("steps.write_json_predictions_step.params.output_path", str(resolved_output))
 
     input_file = Path(input_path)
+    if not input_file.exists():
+        typer.echo(f"[inference] File not found: {input_file}")
+        raise typer.Exit(code=1)
+
     resolved_work_dir = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="chimera-inference-"))
     resolved_work_dir.mkdir(parents=True, exist_ok=True)
 
