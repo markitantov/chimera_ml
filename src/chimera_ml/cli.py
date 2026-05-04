@@ -349,7 +349,12 @@ def inference(
 
     pipeline = build_inference_pipeline(cfg)
     typer.echo(f"[inference] Running pipeline '{pipeline.name}' on device={runtime_device}")
-    ctx = pipeline.run(ctx)
+    try:
+        ctx = pipeline.run(ctx)
+    except FileNotFoundError as exc:
+        typer.echo(f"[inference] {exc}")
+        raise typer.Exit(code=1) from exc
+
     if resolved_output is not None:
         typer.echo(f"[inference] Done. Output: {resolved_output}")
     else:

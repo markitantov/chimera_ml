@@ -4,7 +4,7 @@ from typing import Any
 
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference.config import InferenceConfig
-from chimera_ml.inference.pipeline import InferencePipeline, InferenceGraphNode
+from chimera_ml.inference.pipeline import InferenceGraphNode, InferencePipeline
 from chimera_ml.inference.steps.base import BaseInferenceStep
 from chimera_ml.training.builders import build_from_registry
 

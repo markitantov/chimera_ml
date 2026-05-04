@@ -28,7 +28,11 @@ class AudioFeatureExtractor:
         device: str | torch.device | None = None,
     ) -> None:
         self.features_type = FeaturesType(features_type)
-        self.device = torch.device(device) if device is not None else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device(device)
+            if device is not None
+            else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
 
         model_config = AutoConfig.from_pretrained(hf_model_name)
         model_config.output_size = gender_num_classes + 1
@@ -81,7 +85,11 @@ class ImageFeatureExtractor:
     ) -> None:
         self.features_type = FeaturesType(features_type)
         self.win_max_length = win_max_length
-        self.device = torch.device(device) if device is not None else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device(device)
+            if device is not None
+            else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
 
         if "gsa" in checkpoint_path.lower():
             self.model = AGenderImageVITGSAModel()
@@ -93,7 +101,7 @@ class ImageFeatureExtractor:
         self.model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         self.model.to(self.device)
         self.model.eval()
-        
+
     def __call__(self, images_or_paths: list[Any]) -> torch.Tensor:
         images_or_paths = images_or_paths[: self.win_max_length] + (
             [images_or_paths[-1]] * max(0, self.win_max_length - len(images_or_paths))

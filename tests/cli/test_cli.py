@@ -481,6 +481,8 @@ def test_cli_eval_uses_weights_only_when_loading_checkpoint(monkeypatch):
 
 def test_cli_inference_builds_pipeline_and_runs(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
 
     class _PipelineStub:
         name = "demo_inference"
@@ -500,7 +502,7 @@ def test_cli_inference_builds_pipeline_and_runs(monkeypatch, tmp_path, capsys):
     output_path = tmp_path / "out.json"
     work_dir = tmp_path / "work"
     cli.inference(
-        input_path="video.mp4",
+        input_path=str(input_path),
         output_path=str(output_path),
         config_path="inference.yaml",
         device="auto",
@@ -508,7 +510,7 @@ def test_cli_inference_builds_pipeline_and_runs(monkeypatch, tmp_path, capsys):
     )
 
     ctx = seen["ctx"]
-    assert ctx.input_path.name == "video.mp4"
+    assert ctx.input_path == input_path
     assert ctx.work_dir == work_dir
     assert ctx.device == "cpu"
     assert ctx.config["steps"][-1] == {
@@ -520,6 +522,8 @@ def test_cli_inference_builds_pipeline_and_runs(monkeypatch, tmp_path, capsys):
 
 def test_cli_inference_overrides_write_json_path(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
 
     class _PipelineStub:
         name = "demo_inference"
@@ -545,7 +549,7 @@ def test_cli_inference_overrides_write_json_path(monkeypatch, tmp_path, capsys):
 
     output_path = tmp_path / "out.json"
     cli.inference(
-        input_path="video.mp4",
+        input_path=str(input_path),
         output_path=str(output_path),
         config_path="inference.yaml",
         device="auto",
@@ -561,6 +565,8 @@ def test_cli_inference_overrides_write_json_path(monkeypatch, tmp_path, capsys):
 
 def test_cli_inference_leaves_config_unchanged_without_output_override(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
 
     class _PipelineStub:
         name = "demo_inference"
@@ -585,7 +591,7 @@ def test_cli_inference_leaves_config_unchanged_without_output_override(monkeypat
     monkeypatch.setattr(cli, "resolve_inference_device", lambda _: "cpu")
 
     cli.inference(
-        input_path="video.mp4",
+        input_path=str(input_path),
         output_path=None,
         config_path="inference.yaml",
         device="auto",
@@ -599,6 +605,8 @@ def test_cli_inference_leaves_config_unchanged_without_output_override(monkeypat
 
 def test_cli_inference_creates_steps_section_when_missing(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
 
     class _PipelineStub:
         name = "demo_inference"
@@ -617,7 +625,7 @@ def test_cli_inference_creates_steps_section_when_missing(monkeypatch, tmp_path,
 
     output_path = tmp_path / "out.json"
     cli.inference(
-        input_path="video.mp4",
+        input_path=str(input_path),
         output_path=str(output_path),
         config_path="inference.yaml",
         device="auto",
@@ -632,6 +640,8 @@ def test_cli_inference_creates_steps_section_when_missing(monkeypatch, tmp_path,
 
 def test_cli_inference_creates_temp_work_dir_when_missing(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
 
     class _PipelineStub:
         name = "demo_inference"
@@ -651,7 +661,7 @@ def test_cli_inference_creates_temp_work_dir_when_missing(monkeypatch, tmp_path,
     monkeypatch.setattr(cli.tempfile, "mkdtemp", lambda prefix: str(generated_work_dir))
 
     cli.inference(
-        input_path="video.mp4",
+        input_path=str(input_path),
         output_path=None,
         config_path="inference.yaml",
         device="auto",

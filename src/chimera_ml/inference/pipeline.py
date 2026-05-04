@@ -37,14 +37,14 @@ def _prepare_nodes(nodes: list["InferenceGraphNode"]) -> dict[str, "InferenceGra
     def _visit(node_id: str) -> None:
         if status[node_id] == 1:
             raise ValueError(f"Inference pipeline dependency cycle detected at step '{node_id}'.")
-        
+
         if status[node_id] == 2:
             return
 
         status[node_id] = 1
         for dependency_id in node_map[node_id].after:
             _visit(dependency_id)
-        
+
         status[node_id] = 2
 
     for node in nodes:
@@ -115,8 +115,7 @@ class InferencePipeline:
                 if not running:
                     unresolved = {node.node_id: list(node.after) for node in pending.values()}
                     raise ValueError(
-                        "Inference pipeline has unresolved step dependencies or a dependency cycle: "
-                        f"{unresolved}"
+                        f"Inference pipeline has unresolved step dependencies or a dependency cycle: {unresolved}"
                     )
 
                 completed_futures, _ = wait(running, return_when=FIRST_COMPLETED)

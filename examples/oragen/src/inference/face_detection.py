@@ -1,13 +1,14 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import cv2
+from inference.utils import load_model
 from PIL import Image
 
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference import InferenceContext
-
-from inference.utils import load_model
 
 
 @dataclass
@@ -30,7 +31,7 @@ class FaceDetectionStep:
         if source_fps <= 0:
             source_fps = max(float(self.fps), 1.0)
 
-        frame_interval = max(int(round(source_fps / max(float(self.fps), 1e-6))), 1)
+        frame_interval = max(round(source_fps / max(float(self.fps), 1e-6)), 1)
         frames: list[dict[str, Any]] = []
         faces: list[dict[str, Any]] = []
         frame_index = 0
@@ -114,18 +115,18 @@ class FaceDetectionStep:
             result.boxes.conf.cpu().tolist(),
             strict=False,
         ):
-            x1, y1, x2, y2 = [int(round(value)) for value in box]
+            x1, y1, x2, y2 = [round(value) for value in box]
             box_width = max(x2 - x1, 1)
             box_height = max(y2 - y1, 1)
-            expand_x = int(round(box_width * self.expand_ratio))
-            expand_y = int(round(box_height * self.expand_ratio))
+            expand_x = round(box_width * self.expand_ratio)
+            expand_y = round(box_height * self.expand_ratio)
             clipped_box = {
                 "x1": max(0, x1 - expand_x),
                 "y1": max(0, y1 - expand_y),
                 "x2": min(image_width, x2 + expand_x),
                 "y2": min(image_height, y2 + expand_y),
             }
-            
+
             area = max(clipped_box["x2"] - clipped_box["x1"], 0) * max(clipped_box["y2"] - clipped_box["y1"], 0)
             rank = (area, float(score))
             if best_rank is not None and rank <= best_rank:
@@ -135,9 +136,7 @@ class FaceDetectionStep:
             best_face = {
                 "frame_index": int(frame_index),
                 "timestamp": float(timestamp),
-                "crop_image": image.crop(
-                    (clipped_box["x1"], clipped_box["y1"], clipped_box["x2"], clipped_box["y2"])
-                ),
+                "crop_image": image.crop((clipped_box["x1"], clipped_box["y1"], clipped_box["x2"], clipped_box["y2"])),
                 "score": float(score),
                 "box": clipped_box,
             }
@@ -149,12 +148,23 @@ class FaceDetectionStep:
             return self._detector
 
         from ultralytics import YOLO
+        from ultralytics.utils.downloads import attempt_download_asset
 
         model_ref = self.model
         if isinstance(model_ref, dict):
-            model_ref = str(load_model(model_ref, cache_dir=work_dir / "model_cache"))
+            model_ref = model_ref.get("url") or model_ref.get("path")
+            if model_ref is None:
+                raise ValueError("face_detection_step model dict must contain 'url' or 'path'.")
 
-        self._detector = YOLO(str(model_ref))
+        parsed = urlparse(str(model_ref))
+        if parsed.scheme in {"http", "https"}:
+            model_path = load_model(str(model_ref), cache_dir=work_dir / "model_cache")
+        else:
+            local_path = Path(str(model_ref)).expanduser()
+            model_path = str(local_path) if local_path.exists() else str(work_dir / "model_cache" / local_path.name)
+
+        model_path = attempt_download_asset(model_path)
+        self._detector = YOLO(str(model_path))
         return self._detector
 
 

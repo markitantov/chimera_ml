@@ -1,6 +1,6 @@
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any
-import subprocess
 
 import torch
 import torchaudio
@@ -37,7 +37,7 @@ class ExtractAudioStep:
 
         if self.mono:
             command.extend(["-ac", "1"])
-        
+
         command.append(str(output_path))
         _run_command(command)
 
@@ -51,6 +51,7 @@ class ExtractAudioStep:
         ctx.set_artifact("audio_sample_rate", int(sample_rate))
         output_path.unlink(missing_ok=True)
         return ctx
+
 
 @dataclass
 class VadStep:

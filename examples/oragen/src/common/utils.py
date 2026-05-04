@@ -197,10 +197,7 @@ def define_context_length(win_max_length: int = 4) -> int:
 
 
 def read_img(path: str | Image.Image):
-    if isinstance(path, Image.Image):
-        img = path
-    else:
-        img = PIL.Image.open(path)
+    img = path if isinstance(path, Image.Image) else PIL.Image.open(path)
 
     if img.mode != "RGB":
         img = img.convert("RGB")

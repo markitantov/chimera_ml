@@ -66,7 +66,7 @@ def _state_dict_size_mb(state_dict: dict[str, Any]) -> float:
     for value in state_dict.values():
         if torch.is_tensor(value):
             total_bytes += value.numel() * value.element_size()
-    
+
     return total_bytes / 1024 / 1024
 
 

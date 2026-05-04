@@ -1,22 +1,20 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import torch
+from fusion.models.fusion_models import AVModelV3
+from inference.utils import load_model
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference import InferenceContext
-
-from inference.utils import load_model
-from fusion.models.fusion_models import AVModelV3
 
 
 @dataclass
 class FusionStep:
     checkpoint: str
     batch_size: int = 8
-    gender_class_names: list[str] = field(default_factory=lambda: ["female", "male"]) 
+    gender_class_names: list[str] = field(default_factory=lambda: ["female", "male"])
     age_scale: float = 100.0
     _model: Any = field(default=None, init=False, repr=False)
 
@@ -67,19 +65,23 @@ class FusionStep:
 
         ctx.set_artifact("window_predictions", predictions)
         return ctx
-    
+
     def _load_model(self, ctx: InferenceContext) -> Any:
         if self._model is not None:
             return self._model
-        
-        checkpoint_path = str(load_model(self.checkpoint, cache_dir=ctx.work_dir / "model_cache"))
+
+        try:
+            checkpoint_path = str(load_model(self.checkpoint, cache_dir=ctx.work_dir / "model_cache"))
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(f"Invalid checkpoint path for fusion_step.checkpoint: {self.checkpoint}") from exc
+
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         model = AVModelV3(features_type=ctx.get_artifact("features_type"))
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         model.to(ctx.device)
         model.eval()
         self._model = model
-        
+
         return model
 
 
@@ -106,9 +108,13 @@ class AggregateWindowsStep:
         first_window = window_predictions[0]
         gender_class_names = list(first_window["gender_probs"].keys())
         mean_gender_probs = {
-            class_name: round(float(
-                sum(float(item["gender_probs"][class_name]) for item in window_predictions) / len(window_predictions)
-            ), 6)
+            class_name: round(
+                float(
+                    sum(float(item["gender_probs"][class_name]) for item in window_predictions)
+                    / len(window_predictions)
+                ),
+                6,
+            )
             for class_name in gender_class_names
         }
 

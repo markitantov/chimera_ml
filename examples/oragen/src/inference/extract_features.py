@@ -2,14 +2,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import torch
+from common.utils import FeaturesType, find_intersections, slice_audio
+from fusion.data.feature_extractors import AudioFeatureExtractor, ImageFeatureExtractor
+from inference.utils import load_model
 from PIL import Image
 
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference import InferenceContext
-
-from common.utils import FeaturesType, find_intersections, slice_audio
-from fusion.data.feature_extractors import AudioFeatureExtractor, ImageFeatureExtractor
-from inference.utils import load_model
 
 
 @dataclass
@@ -37,7 +36,7 @@ class BuildWindowsStep:
         )
 
         prepared_windows: list[dict[str, Any]] = []
-        slot_count = max(int(round(self.win_max_length * self.fps)), 1)
+        slot_count = max(round(self.win_max_length * self.fps), 1)
         slot_duration_sec = 1.0 / self.fps
 
         for index, window in enumerate(windows):
@@ -106,18 +105,14 @@ class ExtractFeaturesStep:
         for window in ctx.get_artifact("windows", []):
             wave = audio_waveform[int(window["start"]) : int(window["end"])].clone()
             audio_features = (
-                self._audio_extractor(wave)
-                if bool(window["has_speech"])
-                else self._zero_audio_features.clone()
+                self._audio_extractor(wave) if bool(window["has_speech"]) else self._zero_audio_features.clone()
             )
 
             image_features = self._zero_image_features.clone()
             present_slots = [
-                (slot_index, image)
-                for slot_index, image in enumerate(window["face_slots"])
-                if image is not None
+                (slot_index, image) for slot_index, image in enumerate(window["face_slots"]) if image is not None
             ]
-            
+
             if present_slots:
                 slot_indices = [slot_index for slot_index, _ in present_slots]
                 slot_images = [image for _, image in present_slots]
@@ -143,19 +138,21 @@ class ExtractFeaturesStep:
     def _init_extractors(self, work_dir: str) -> None:
         if self._audio_extractor is not None and self._image_extractor is not None:
             return
-        
+
         if self.audio_checkpoint is None or self.image_checkpoint is None:
-            raise ValueError(
-                "extract_features_step requires 'audio_checkpoint' and 'image_checkpoint' in params."
-            )
+            raise ValueError("extract_features_step requires 'audio_checkpoint' and 'image_checkpoint' in params.")
 
         cache_dir = work_dir / "model_cache"
+        try:
+            audio_checkpoint_path = str(load_model(self.audio_checkpoint, cache_dir=cache_dir))
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"Invalid checkpoint path for extract_features_step.audio_checkpoint: {self.audio_checkpoint}"
+            ) from exc
+
         self._audio_extractor = AudioFeatureExtractor(
             hf_model_name="facebook/wav2vec2-large-robust",
-            checkpoint_path=str(load_model(
-                self.audio_checkpoint, 
-                cache_dir=cache_dir)
-            ),
+            checkpoint_path=audio_checkpoint_path,
             features_type=self.features_type,
             sr=self.sample_rate,
             win_max_length=self.win_max_length,
@@ -163,12 +160,16 @@ class ExtractFeaturesStep:
             device=self.device,
         )
 
+        try:
+            image_checkpoint_path = str(load_model(self.image_checkpoint, cache_dir=cache_dir))
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"Invalid checkpoint path for extract_features_step.image_checkpoint: {self.image_checkpoint}"
+            ) from exc
+
         self._image_extractor = ImageFeatureExtractor(
             hf_model_name="nateraw/vit-age-classifier",
-            checkpoint_path=str(load_model(
-                self.image_checkpoint, 
-                cache_dir=cache_dir)
-            ),
+            checkpoint_path=image_checkpoint_path,
             features_type=self.features_type,
             win_max_length=self.win_max_length,
             device=self.device,

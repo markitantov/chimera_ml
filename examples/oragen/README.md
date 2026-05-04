@@ -16,10 +16,11 @@ This `chimera-ml` example provides:
 
 - audio pipeline (`audio_*` configs),
 - multimodal fusion pipeline (`multimodal_*` configs),
+- registry-driven video inference pipeline (`inference.yaml`),
 - registry components loaded via entry point `chimera_ml.plugins`.
 
-Code lives in `src/`, configs in `configs/`, and the helper export script in
-`scripts/`.
+Code lives in `src/`, training configs in `configs/`, the inference config in
+`configs/inference.yaml`, and the helper export script in `scripts/`.
 
 Registered components:
 
@@ -32,6 +33,11 @@ Registered components:
 - metrics: `age_mae_metric`, `age_pcc_metric`,
   `gender_prf_macro_metric`, `mask_uar_metric`
 - callback: `grouping_callback`
+- inference steps: `extract_audio_step`, `vad_step`, `face_detection_step`,
+  `build_windows_step`, `extract_features_step`, `fusion_step`,
+  `aggregate_windows_step`
+- built-in inference output steps used by the config:
+  `print_json_predictions_step`, `write_json_predictions_step`
 
 Packaging note: `setuptools` discovers all packages under `src`
 automatically.
@@ -95,6 +101,96 @@ chimera-ml validate-config --config-path examples/oragen/configs/multimodal_trai
 ```
 
 ## 5) Run Experiments
+
+Inference from video:
+
+```bash
+chimera-ml inference \
+  --input video.mp4 \
+  --output out.json \
+  --config-path examples/oragen/configs/inference.yaml
+```
+
+The ready-to-run inference config expects:
+
+- a readable input video path
+- `ffmpeg` available in the environment
+- trained checkpoint files at the paths declared in
+  `configs/inference.yaml`
+
+Current inference flow:
+
+- convert input video to mono `16 kHz` audio
+- run Silero VAD
+- sample video at `1 fps`
+- detect the best face on each sampled frame with `YOLO("yolo26n.pt")`
+- build fixed `4s` windows
+- extract audio and image features
+- run `agender_multimodal_model_v3`
+- aggregate window predictions for the whole video
+
+If a checkpoint path is wrong, inference now fails with a direct message such as:
+
+```text
+[inference] Invalid checkpoint path for fusion_step.checkpoint: logs/agender_models/multimodal_model.pt
+```
+
+`yolo26n.pt` is cached under the inference work directory in `model_cache/`.
+
+DAG inference:
+
+You can also describe inference as a small DAG instead of a purely sequential
+list of steps. For that, annotate steps with:
+
+- each step still has the same shape as before: `name` plus optional `params`
+- set `pipeline.parallel: true` to switch the whole inference config into DAG mode
+- without `pipeline.parallel: true`, steps still run sequentially in config order
+- `after`: which earlier steps must finish before this one starts in DAG mode
+
+By default, a DAG node is identified by its step `name`. If the same step name
+is reused multiple times in one DAG, assign explicit `id` values only to those
+repeated steps and reference them from `after`.
+
+If two DAG steps write the same artifact key, the pipeline raises an error.
+If DAG mode is enabled but no step uses `after`, the builder emits a warning.
+
+Example where only repeated steps need `id`:
+
+```yaml
+pipeline:
+  parallel: true
+
+steps:
+  - name: extract_audio_step
+    params:
+      sample_rate: 16000
+
+  - name: vad_step
+    after: [extract_audio_step]
+
+  - id: detector_fast
+    name: face_detection_step
+    after: [extract_audio_step]
+    params:
+      conf: 0.25
+      model: yolo26n.pt
+      fps: 1.0
+
+  - id: detector_accurate
+    name: face_detection_step
+    after: [extract_audio_step]
+    params:
+      conf: 0.5
+      model: yolo26n.pt
+      fps: 1.0
+
+  - name: build_windows_step
+    after: [vad_step, detector_fast, detector_accurate]
+    params:
+      win_max_length: 4
+      win_shift: 2
+      win_min_length: 1
+```
 
 Multimodal training:
 
