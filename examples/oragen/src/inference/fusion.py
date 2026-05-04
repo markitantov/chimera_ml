@@ -3,7 +3,7 @@ from typing import Any
 
 import torch
 from fusion.models.fusion_models import AVModelV3
-from inference.utils import load_model
+from inference.utils import resolve_checkpoint_path
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
@@ -12,7 +12,6 @@ from chimera_ml.inference import InferenceContext
 
 @dataclass
 class FusionStep:
-    checkpoint: str
     batch_size: int = 8
     gender_class_names: list[str] = field(default_factory=lambda: ["female", "male"])
     age_scale: float = 100.0
@@ -70,10 +69,10 @@ class FusionStep:
         if self._model is not None:
             return self._model
 
-        try:
-            checkpoint_path = str(load_model(self.checkpoint, cache_dir=ctx.work_dir / "model_cache"))
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(f"Invalid checkpoint path for fusion_step.checkpoint: {self.checkpoint}") from exc
+        checkpoint_path = resolve_checkpoint_path(
+            ctx,
+            checkpoint_key="fusion",
+        )
 
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         model = AVModelV3(features_type=ctx.get_artifact("features_type"))

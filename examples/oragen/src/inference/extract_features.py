@@ -4,7 +4,7 @@ from typing import Any
 import torch
 from common.utils import FeaturesType, find_intersections, slice_audio
 from fusion.data.feature_extractors import AudioFeatureExtractor, ImageFeatureExtractor
-from inference.utils import load_model
+from inference.utils import resolve_checkpoint_path
 from PIL import Image
 
 from chimera_ml.core.registry import INFERENCE_STEPS
@@ -74,8 +74,6 @@ class BuildWindowsStep:
 
 @dataclass
 class ExtractFeaturesStep:
-    audio_checkpoint: str
-    image_checkpoint: str
     sample_rate: int = 16000
     win_max_length: float = 4.0
     features_type: FeaturesType = FeaturesType.INTERMEDIATE
@@ -95,7 +93,7 @@ class ExtractFeaturesStep:
         ctx.set_artifact("gender_class_names", self.gender_class_names)
         ctx.set_artifact("age_scale", self.age_scale)
 
-        self._init_extractors(ctx.work_dir)
+        self._init_extractors(ctx)
 
         audio_waveform = ctx.get_artifact("audio_waveform")
         if audio_waveform is None:
@@ -135,20 +133,11 @@ class ExtractFeaturesStep:
         ctx.set_artifact("features", features)
         return ctx
 
-    def _init_extractors(self, work_dir: str) -> None:
+    def _init_extractors(self, ctx: InferenceContext) -> None:
         if self._audio_extractor is not None and self._image_extractor is not None:
             return
 
-        if self.audio_checkpoint is None or self.image_checkpoint is None:
-            raise ValueError("extract_features_step requires 'audio_checkpoint' and 'image_checkpoint' in params.")
-
-        cache_dir = work_dir / "model_cache"
-        try:
-            audio_checkpoint_path = str(load_model(self.audio_checkpoint, cache_dir=cache_dir))
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(
-                f"Invalid checkpoint path for extract_features_step.audio_checkpoint: {self.audio_checkpoint}"
-            ) from exc
+        audio_checkpoint_path = resolve_checkpoint_path(ctx, checkpoint_key="audio")
 
         self._audio_extractor = AudioFeatureExtractor(
             hf_model_name="facebook/wav2vec2-large-robust",
@@ -160,12 +149,10 @@ class ExtractFeaturesStep:
             device=self.device,
         )
 
-        try:
-            image_checkpoint_path = str(load_model(self.image_checkpoint, cache_dir=cache_dir))
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(
-                f"Invalid checkpoint path for extract_features_step.image_checkpoint: {self.image_checkpoint}"
-            ) from exc
+        image_checkpoint_path = resolve_checkpoint_path(
+            ctx,
+            checkpoint_key="image",
+        )
 
         self._image_extractor = ImageFeatureExtractor(
             hf_model_name="nateraw/vit-age-classifier",

@@ -115,8 +115,8 @@ The ready-to-run inference config expects:
 
 - a readable input video path
 - `ffmpeg` available in the environment
-- trained checkpoint files at the paths declared in
-  `configs/inference.yaml`
+- network access for the first checkpoint download, or already cached/local ORAGEN checkpoints
+- enough writable space in the inference work directory for `model_cache/`
 
 Current inference flow:
 
@@ -125,17 +125,43 @@ Current inference flow:
 - sample video at `1 fps`
 - detect the best face on each sampled frame with `YOLO("yolo26n.pt")`
 - build fixed `4s` windows
+- resolve ORAGEN audio/image/fusion checkpoints with `resolve_checkpoints_step`
 - extract audio and image features
 - run `agender_multimodal_model_v3`
 - aggregate window predictions for the whole video
 
-If a checkpoint path is wrong, inference now fails with a direct message such as:
+The ORAGEN inference config resolves model weights into the shared `checkpoints`
+artifact before downstream steps run:
 
-```text
-[inference] Invalid checkpoint path for fusion_step.checkpoint: logs/agender_models/multimodal_model.pt
+```yaml
+- name: "resolve_checkpoints_step"
+  params:
+    cache_dir: "model_cache"
+    checkpoints:
+      audio: "https://huggingface.co/markitantov/ORAGEN/resolve/main/audio_model.pt"
+      image: "https://huggingface.co/markitantov/ORAGEN/resolve/main/image_model.pt"
+      fusion: "https://huggingface.co/markitantov/ORAGEN/resolve/main/multimodal_model.pt"
+
+- name: "extract_features_step"
+  params:
+    audio_checkpoint_key: "audio"
+    image_checkpoint_key: "image"
+
+- name: "fusion_step"
+  params:
+    checkpoint_key: "fusion"
 ```
 
-`yolo26n.pt` is cached under the inference work directory in `model_cache/`.
+On the first run, `resolve_checkpoints_step` prints where each checkpoint is
+downloaded and stores it under `<work_dir>/model_cache/`. Later runs reuse the
+resolved local file from the same cache directory.
+
+If a checkpoint key is missing from `artifacts["checkpoints"]`, or the resolved
+path is not a file, inference now fails early with a direct message from the
+step that requested it.
+
+`yolo26n.pt` is still resolved separately by Ultralytics. In this ORAGEN config,
+that ends up under the same inference work-directory `model_cache/` area.
 
 DAG inference:
 

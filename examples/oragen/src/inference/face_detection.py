@@ -4,7 +4,6 @@ from typing import Any
 from urllib.parse import urlparse
 
 import cv2
-from inference.utils import load_model
 from PIL import Image
 
 from chimera_ml.core.registry import INFERENCE_STEPS
@@ -21,7 +20,8 @@ class FaceDetectionStep:
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
         ctx.set_artifact("fps", float(self.fps))
-        detector = self._load_detector(ctx.work_dir)
+        cache_dir = ctx.get_artifact("cache_dir")
+        detector = self._load_detector(Path(cache_dir))
 
         capture = cv2.VideoCapture(str(ctx.input_path))
         if not capture.isOpened():
@@ -143,27 +143,32 @@ class FaceDetectionStep:
 
         return best_face
 
-    def _load_detector(self, work_dir) -> Any:
+    def _load_detector(self, cache_dir: Path) -> Any:
         if self._detector is not None:
             return self._detector
 
-        from ultralytics import YOLO
-        from ultralytics.utils.downloads import attempt_download_asset
+        from ultralytics import YOLO, settings
+        from ultralytics.utils.downloads import attempt_download_asset, safe_download
 
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        settings.update({"weights_dir": str(cache_dir)})
         model_ref = self.model
         if isinstance(model_ref, dict):
             model_ref = model_ref.get("url") or model_ref.get("path")
             if model_ref is None:
                 raise ValueError("face_detection_step model dict must contain 'url' or 'path'.")
 
+        print(f"[inference] face_detection_step: resolving detector weights {model_ref}")
+        local_path = Path(str(model_ref)).expanduser()
         parsed = urlparse(str(model_ref))
-        if parsed.scheme in {"http", "https"}:
-            model_path = load_model(str(model_ref), cache_dir=work_dir / "model_cache")
+        if local_path.exists():
+            model_path = local_path
+        elif parsed.scheme in {"http", "https"}:
+            model_path = cache_dir / Path(parsed.path).name
+            safe_download(url=str(model_ref), file=model_path, min_bytes=1e5)
         else:
-            local_path = Path(str(model_ref)).expanduser()
-            model_path = str(local_path) if local_path.exists() else str(work_dir / "model_cache" / local_path.name)
+            model_path = Path(str(attempt_download_asset(cache_dir / str(model_ref)))).expanduser()
 
-        model_path = attempt_download_asset(model_path)
         self._detector = YOLO(str(model_path))
         return self._detector
 

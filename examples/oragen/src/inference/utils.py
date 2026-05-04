@@ -1,31 +1,22 @@
-from contextlib import suppress
 from pathlib import Path
-from urllib.parse import urlparse
 
-import requests
+from chimera_ml.inference import InferenceContext
 
 
-def load_model(model_url: str, cache_dir: str | Path, force_reload: bool = False) -> str | None:
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
+def resolve_checkpoint_path(ctx: InferenceContext, checkpoint_key: str) -> str:
+    checkpoints = ctx.get_artifact("checkpoints", {})
+    if not isinstance(checkpoints, dict):
+        raise TypeError("Inference artifact 'checkpoints' must be a dict when present.")
 
-    local_path = Path(model_url).expanduser()
-    if local_path.exists():
-        return str(local_path)
+    resolved_path = checkpoints.get(checkpoint_key)
+    if resolved_path is None:
+        raise FileNotFoundError(f"Missing checkpoint key '{checkpoint_key}' in inference artifact 'checkpoints' ")
 
-    parsed = urlparse(model_url)
-    if parsed.scheme in {"http", "https"}:
-        file_name = Path(parsed.path).name or local_path.name
-        file_path = cache_dir / file_name
-        if file_path.exists() and not force_reload:
-            return str(file_path)
+    path = Path(str(resolved_path)).expanduser()
+    if path.is_file():
+        return str(path.resolve())
 
-        with suppress(Exception), requests.get(model_url, stream=True) as response:
-            response.raise_for_status()
-            with file_path.open("wb") as file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    file.write(chunk)
+    if path.exists():
+        raise FileNotFoundError(f"Resolved checkpoint for key '{checkpoint_key}' is not a file: {path} ")
 
-            return str(file_path)
-
-    raise FileNotFoundError(f"Model file not found: {model_url}")
+    raise FileNotFoundError(f"Resolved checkpoint for key '{checkpoint_key}' does not exist: {path} ")
