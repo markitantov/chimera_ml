@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 import subprocess
 
@@ -102,4 +101,3 @@ def extract_audio_step(**params: Any) -> ExtractAudioStep:
 @INFERENCE_STEPS.register("vad_step")
 def vad_step(**params: Any) -> VadStep:
     return VadStep(**params)
-

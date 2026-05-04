@@ -18,16 +18,14 @@ class BuildWindowsStep:
     win_max_length: float = 4.0
     win_shift: float = 2.0
     win_min_length: float = 1.0
-    frame_rate: float = 1.0
+    fps: float = 1.0
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
         audio_num_samples = int(ctx.get_artifact("audio_num_samples", 0))
         self.sample_rate = int(ctx.get_artifact("audio_sample_rate"))
+        self.fps = float(ctx.get_artifact("fps"))
         ctx.set_artifact("win_max_length", self.win_max_length)
-        ctx.set_artifact("win_shift", self.win_shift)
-        ctx.set_artifact("win_min_length", self.win_min_length)
         vad_segments = list(ctx.get_artifact("vad_segments", []))
-        frames = list(ctx.get_artifact("frames", []))
         faces = list(ctx.get_artifact("faces", []))
 
         windows = slice_audio(
@@ -39,8 +37,8 @@ class BuildWindowsStep:
         )
 
         prepared_windows: list[dict[str, Any]] = []
-        slot_count = max(int(round(self.win_max_length * self.frame_rate)), 1)
-        slot_duration_sec = 1.0 / self.frame_rate
+        slot_count = max(int(round(self.win_max_length * self.fps)), 1)
+        slot_duration_sec = 1.0 / self.fps
 
         for index, window in enumerate(windows):
             start_sample = int(window["start"])
@@ -83,11 +81,12 @@ class ExtractFeaturesStep:
     win_max_length: float = 4.0
     features_type: FeaturesType = FeaturesType.INTERMEDIATE
     gender_class_names: list[str] = field(default_factory=lambda: ["female", "male"])
+    age_scale: float = 100.0
 
     _audio_extractor: Any = field(default=None, init=False, repr=False)
     _image_extractor: Any = field(default=None, init=False, repr=False)
-    _dummy_audio_features: torch.Tensor | None = field(default=None, init=False, repr=False)
-    _dummy_image: Image.Image | None = field(default=None, init=False, repr=False)
+    _zero_audio_features: torch.Tensor | None = field(default=None, init=False, repr=False)
+    _zero_image_features: torch.Tensor | None = field(default=None, init=False, repr=False)
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
         self.sample_rate = int(ctx.get_artifact("audio_sample_rate"))
@@ -95,6 +94,7 @@ class ExtractFeaturesStep:
         self.device = ctx.device
         ctx.set_artifact("features_type", self.features_type)
         ctx.set_artifact("gender_class_names", self.gender_class_names)
+        ctx.set_artifact("age_scale", self.age_scale)
 
         self._init_extractors(ctx.work_dir)
 
@@ -108,14 +108,21 @@ class ExtractFeaturesStep:
             audio_features = (
                 self._audio_extractor(wave)
                 if bool(window["has_speech"])
-                else self._dummy_audio_features.clone()
+                else self._zero_audio_features.clone()
             )
 
-            image_inputs = [
-                image if image is not None else self._dummy_image
-                for image in window["face_slots"]
+            image_features = self._zero_image_features.clone()
+            present_slots = [
+                (slot_index, image)
+                for slot_index, image in enumerate(window["face_slots"])
+                if image is not None
             ]
-            image_features = self._image_extractor(image_inputs)
+            
+            if present_slots:
+                slot_indices = [slot_index for slot_index, _ in present_slots]
+                slot_images = [image for _, image in present_slots]
+                slot_features = self._image_extractor(slot_images)[: len(slot_indices)]
+                image_features[slot_indices] = slot_features
 
             features.append(
                 {
@@ -168,8 +175,9 @@ class ExtractFeaturesStep:
         )
 
         dummy_wave = torch.zeros(self.sample_rate * self.win_max_length, dtype=torch.float32)
-        self._dummy_audio_features = self._audio_extractor(dummy_wave)
-        self._dummy_image = Image.new("RGB", (224, 224), color=0)
+        self._zero_audio_features = torch.zeros_like(self._audio_extractor(dummy_wave))
+        dummy_image = Image.new("RGB", (224, 224), color=0)
+        self._zero_image_features = torch.zeros_like(self._image_extractor([dummy_image]))
 
 
 @INFERENCE_STEPS.register("build_windows_step")

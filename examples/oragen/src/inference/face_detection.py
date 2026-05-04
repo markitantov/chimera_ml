@@ -19,7 +19,9 @@ class FaceDetectionStep:
     _detector: Any = field(default=None, init=False, repr=False)
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
+        ctx.set_artifact("fps", float(self.fps))
         detector = self._load_detector(ctx.work_dir)
+
         capture = cv2.VideoCapture(str(ctx.input_path))
         if not capture.isOpened():
             raise ValueError(f"Unable to open video file: {ctx.input_path}")
@@ -64,6 +66,7 @@ class FaceDetectionStep:
                     frame_index=sampled_index,
                     device=ctx.device,
                 )
+
                 if best_face is not None:
                     faces.append(best_face)
 
@@ -96,6 +99,7 @@ class FaceDetectionStep:
             verbose=False,
             device=device,
         )
+
         result = results[0]
         if result.boxes is None:
             return None
@@ -104,7 +108,7 @@ class FaceDetectionStep:
         best_face: dict[str, Any] | None = None
         best_rank: tuple[int, float] | None = None
 
-        for box, cls_idx, score in zip(
+        for box, _, score in zip(
             result.boxes.xyxy.cpu().tolist(),
             result.boxes.cls.cpu().tolist(),
             result.boxes.conf.cpu().tolist(),
@@ -121,6 +125,7 @@ class FaceDetectionStep:
                 "x2": min(image_width, x2 + expand_x),
                 "y2": min(image_height, y2 + expand_y),
             }
+            
             area = max(clipped_box["x2"] - clipped_box["x1"], 0) * max(clipped_box["y2"] - clipped_box["y1"], 0)
             rank = (area, float(score))
             if best_rank is not None and rank <= best_rank:
@@ -147,7 +152,7 @@ class FaceDetectionStep:
 
         model_ref = self.model
         if isinstance(model_ref, dict):
-            model_ref = str(load_model(model_ref, cache_dir=work_dir / "hf_cache"))
+            model_ref = str(load_model(model_ref, cache_dir=work_dir / "model_cache"))
 
         self._detector = YOLO(str(model_ref))
         return self._detector
