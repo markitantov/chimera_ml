@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 from audio.models.audio_models import (
     AGenderAudioHuBERTModel,
@@ -23,9 +25,10 @@ class AudioFeatureExtractor:
         sr: int = 16000,
         win_max_length: int = 4,
         gender_num_classes: int | None = None,
+        device: str | torch.device | None = None,
     ) -> None:
         self.features_type = FeaturesType(features_type)
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device) if device is not None else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         model_config = AutoConfig.from_pretrained(hf_model_name)
         model_config.output_size = gender_num_classes + 1
@@ -74,10 +77,11 @@ class ImageFeatureExtractor:
         checkpoint_path: str,
         features_type: FeaturesType,
         win_max_length: int,
+        device: str | torch.device | None = None,
     ) -> None:
         self.features_type = FeaturesType(features_type)
         self.win_max_length = win_max_length
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device) if device is not None else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         if "gsa" in checkpoint_path.lower():
             self.model = AGenderImageVITGSAModel()
@@ -89,12 +93,12 @@ class ImageFeatureExtractor:
         self.model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         self.model.to(self.device)
         self.model.eval()
-
-    def __call__(self, image_paths: list[str]) -> torch.Tensor:
-        image_paths = image_paths[: self.win_max_length] + (
-            [image_paths[-1]] * max(0, self.win_max_length - len(image_paths))
+        
+    def __call__(self, images_or_paths: list[Any]) -> torch.Tensor:
+        images_or_paths = images_or_paths[: self.win_max_length] + (
+            [images_or_paths[-1]] * max(0, self.win_max_length - len(images_or_paths))
         )
-        images = [self.preprocessor(read_img(path)) for path in image_paths]
+        images = [self.preprocessor(read_img(item)) for item in images_or_paths]
         batched_images = torch.stack(images, dim=0).to(self.device)
 
         with torch.no_grad():

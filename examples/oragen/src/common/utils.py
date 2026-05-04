@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import PIL
 import torch
+from PIL import Image
 
 
 class DatasetType(IntEnum):
@@ -195,8 +196,12 @@ def define_context_length(win_max_length: int = 4) -> int:
     return {1: 49, 2: 99, 3: 149, 4: 199}[win_max_length]
 
 
-def read_img(path: str):
-    img = PIL.Image.open(path)
+def read_img(path: str | Image.Image):
+    if isinstance(path, Image.Image):
+        img = path
+    else:
+        img = PIL.Image.open(path)
+
     if img.mode != "RGB":
         img = img.convert("RGB")
 
