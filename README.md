@@ -113,6 +113,7 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - enables DAG/parallel scheduling only when `pipeline.parallel: true` is set,
 - uses `after` for explicit dependencies between steps in parallel mode,
 - keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
+- supports a built-in `resolve_checkpoints_step` that resolves local paths or downloads remote checkpoints into the inference work directory cache and stores resolved local files in `artifacts["checkpoints"]`,
 
 `registry list`:
 
@@ -144,6 +145,12 @@ Sequential example:
 
 ```yaml
 steps:
+  - name: resolve_checkpoints_step
+    params:
+      cache_dir: model_cache
+      checkpoints:
+        fusion: https://example.com/models/fusion.pt
+
   - name: extract_audio
     params:
       sample_rate: 16000
@@ -153,6 +160,10 @@ steps:
     params:
       threshold: 0.5
       model: /path/to/vad
+
+  - name: plugin_fusion_step
+    params:
+      checkpoint_key: fusion
 ```
 
 Example where only repeated steps need `id`:

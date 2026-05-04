@@ -6,17 +6,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-04
+
 ### Added
 
-- New `examples/oragen` plugin package with audio and multimodal ORAGEN pipelines, configs, training entrypoints, and documentation.
-
-### Planned
-
-- Built-in CLI inference pipeline command for end-to-end production-style inference (for example:
-  `chimera-ml inference --config-path ... --input ... --output-dir ...`). The command should support
-  plugin-defined pipeline stages such as media ingestion, audio extraction, frame extraction/downsampling,
-  ASR/text extraction, modality-specific preprocessing, checkpoint loading, model inference, and structured
-  prediction/artifact export.
+- Built-in CLI `inference` flow based on a shared `InferenceContext` and registry-driven inference steps.
+- Inference pipeline support for both sequential execution and DAG/parallel execution with explicit `after` dependencies.
+- Built-in inference output steps for JSON printing and JSON file export.
+- Built-in `resolve_checkpoints_step` for resolving local or remote checkpoints into local cached files and exposing them via `artifacts["checkpoints"]`.
+- New `examples/oragen` plugin package with audio and multimodal ORAGEN training/inference pipelines, configs, export helper script, and documentation.
+- Automated tests covering inference pipeline execution, DAG behavior, CLI wiring, and checkpoint resolution.
 
 ## [0.2.2] - 2026-04-28
 

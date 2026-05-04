@@ -57,6 +57,37 @@ def test_inference_pipeline_executes_steps_in_config_order(tmp_path):
     assert ctx.artifacts["order"] == ["first", "second"]
 
 
+def test_inference_pipeline_prints_step_start_messages(tmp_path, capsys):
+    first_name = f"test_inference_log_first_{uuid4().hex}"
+    second_name = f"test_inference_log_second_{uuid4().hex}"
+
+    @INFERENCE_STEPS.register(first_name)
+    def _first_step():
+        return _OrderStep("first")
+
+    @INFERENCE_STEPS.register(second_name)
+    def _second_step():
+        return _OrderStep("second")
+
+    pipeline = build_inference_pipeline(
+        InferenceConfig(
+            {
+                "pipeline": {"name": "demo"},
+                "steps": [
+                    {"name": first_name},
+                    {"name": second_name},
+                ],
+            }
+        )
+    )
+
+    pipeline.run(_make_ctx(tmp_path))
+
+    out = capsys.readouterr().out
+    assert f"[inference] Starting step '{first_name}' (_OrderStep)" in out
+    assert f"[inference] Starting step '{second_name}' (_OrderStep)" in out
+
+
 def test_build_inference_step_resolves_registry_step_params(tmp_path):
     step_name = f"test_inference_step_{uuid4().hex}"
     seen: dict[str, object] = {}

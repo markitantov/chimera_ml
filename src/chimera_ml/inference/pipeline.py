@@ -109,6 +109,8 @@ class InferencePipeline:
                         artifacts=deepcopy(working_ctx.artifacts),
                     )
                     baseline = deepcopy(step_ctx.artifacts)
+                    print(f"[inference] Starting step '{node.node_id}' ({node.step.__class__.__name__})")
+
                     future = executor.submit(self._run_step, node.step, step_ctx)
                     running[future] = (node, baseline)
 

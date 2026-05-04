@@ -25,6 +25,7 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "chimera_ml.callbacks.snapshot_callback",
     "chimera_ml.callbacks.telegram_notifier_callback",
     "chimera_ml.data.masking_collate",
+    "chimera_ml.inference.steps.checkpoint_steps",
     "chimera_ml.inference.steps.output_steps",
 )
 
