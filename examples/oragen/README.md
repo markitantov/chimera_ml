@@ -114,7 +114,8 @@ chimera-ml inference \
 The ready-to-run inference config expects:
 
 - a readable input video path
-- `ffmpeg` available in the environment
+- Python dependencies from `examples/oragen/pyproject.toml` installed
+- either a working `torchcodec` runtime for your platform, or `ffmpeg` available as a fallback
 - network access for the first checkpoint download, or already cached/local ORAGEN checkpoints
 - enough writable space in the inference work directory for `model_cache/`
 

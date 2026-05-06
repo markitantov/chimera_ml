@@ -1,5 +1,6 @@
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -9,39 +10,92 @@ from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.inference import InferenceContext
 
 
-def _run_command(command: list[str]) -> None:
+def _decode_with_torchcodec(*, input_path: Path, sample_rate: int) -> tuple[torch.Tensor, int]:
+    from torchcodec.decoders import AudioDecoder
+
+    decoder = AudioDecoder(
+        input_path,
+        sample_rate=sample_rate,
+    )
+    samples = decoder.get_all_samples()
+    return samples.data, int(samples.sample_rate)
+
+
+def _decode_with_ffmpeg(
+    *,
+    input_path: Path,
+    work_dir: Path,
+    sample_rate: int,
+    mono: bool,
+    codec: str,
+) -> tuple[torch.Tensor, int]:
+    output_path = work_dir / f"{input_path.stem}_audio.wav"
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-async",
+        "1",
+        "-vn",
+        "-acodec",
+        codec,
+        "-ar",
+        str(sample_rate),
+    ]
+
+    if mono:
+        command.extend(["-ac", "1"])
+
+    command.append(str(output_path))
     subprocess.run(command, check=True, capture_output=True, text=True)
+
+    try:
+        waveform, actual_sample_rate = torchaudio.load(str(output_path))
+    finally:
+        output_path.unlink(missing_ok=True)
+
+    return waveform, int(actual_sample_rate)
 
 
 @dataclass
 class ExtractAudioStep:
+    backend: str = "auto"
     sample_rate: int = 16000
     mono: bool = True
     codec: str = "pcm_s16le"
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
-        output_path = ctx.work_dir / f"{ctx.input_path.stem}_audio.wav"
-        command = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(ctx.input_path),
-            "-async",
-            "1",
-            "-vn",
-            "-acodec",
-            self.codec,
-            "-ar",
-            str(self.sample_rate),
-        ]
+        decoder_errors: list[str] = []
 
-        if self.mono:
-            command.extend(["-ac", "1"])
+        try:
+            if self.backend in {"auto", "torchcodec"}:
+                waveform, sample_rate = _decode_with_torchcodec(
+                    input_path=ctx.input_path,
+                    sample_rate=self.sample_rate,
+                )
+            else:
+                raise RuntimeError("torchcodec backend is disabled")
+        except Exception as exc:
+            decoder_errors.append(f"torchcodec: {exc}")
+            if self.backend == "torchcodec":
+                raise ValueError(f"Unable to decode audio from media file: {ctx.input_path}") from exc
 
-        command.append(str(output_path))
-        _run_command(command)
+            try:
+                waveform, sample_rate = _decode_with_ffmpeg(
+                    input_path=ctx.input_path,
+                    work_dir=ctx.work_dir,
+                    sample_rate=self.sample_rate,
+                    mono=self.mono,
+                    codec=self.codec,
+                )
+            except Exception as ffmpeg_exc:
+                decoder_errors.append(f"ffmpeg: {ffmpeg_exc}")
+                raise ValueError(
+                    "Unable to decode audio from media file "
+                    f"{ctx.input_path}. Tried backends: {', '.join(decoder_errors)}"
+                ) from ffmpeg_exc
 
-        waveform, sample_rate = torchaudio.load(str(output_path))
         if waveform.size(0) > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
 
@@ -49,7 +103,6 @@ class ExtractAudioStep:
         ctx.set_artifact("audio_waveform", audio_waveform)
         ctx.set_artifact("audio_num_samples", int(audio_waveform.numel()))
         ctx.set_artifact("audio_sample_rate", int(sample_rate))
-        output_path.unlink(missing_ok=True)
         return ctx
 
 

@@ -39,7 +39,7 @@ class AudioFeatureExtractor:
         model_config.context_length = define_context_length(int(win_max_length))
 
         if "hubert" in hf_model_name:
-            self.model = AGenderAudioHuBERTModel.from_pretrained(hf_model_name, config=model_config)
+            self.model = AGenderAudioHuBERTModel(model_config)
 
             self.preprocessor = HuBERTDataPreprocessor(
                 preprocessor_name=hf_model_name,
@@ -47,7 +47,7 @@ class AudioFeatureExtractor:
                 win_max_length=win_max_length,
             )
         else:
-            self.model = AGenderAudioW2V2Model.from_pretrained(hf_model_name, config=model_config)
+            self.model = AGenderAudioW2V2Model(model_config)
 
             self.preprocessor = Wav2Vec2DataPreprocessor(
                 preprocessor_name=hf_model_name,
