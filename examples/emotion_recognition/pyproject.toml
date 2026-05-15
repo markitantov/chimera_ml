@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chimera-ml-emotion_recognition"
+version = "0.1.0"
+description = "Emotion recognition example plugin for chimera_ml"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "chimera-ml>=0.2.1",
+  "torch==2.10.0",
+  "torchaudio==2.10.0",
+  "torchvision==0.25.0",
+  "torchcodec==0.10.0",
+  "transformers",
+  "soundfile",
+  "pandas",
+  "mlflow",
+  "requests",
+  "Pillow",
+  "opencv-python",
+  "ultralytics",
+]
+
+[project.urls]
+Paper = "https://doi.org/10.1016/j.inffus.2026.104207"
+
+[project.entry-points."chimera_ml.plugins"]
+emotion_recognition = "chimera_plugin:register"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["chimera_plugin", "train", "utils"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

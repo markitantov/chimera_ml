@@ -187,11 +187,6 @@ def waveform_cache_name(filename: str, window_index: int) -> str:
     return normalize_audio_filename(filename).replace(".wav", f"_{window_index}.dat")
 
 
-def ensure_existing_file(path: str | Path, *, hint: str) -> None:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"{hint}: {path}")
-
-
 def define_context_length(win_max_length: int = 4) -> int:
     return {1: 49, 2: 99, 3: 149, 4: 199}[win_max_length]
 
