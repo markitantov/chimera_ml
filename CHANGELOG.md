@@ -6,9 +6,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
-### Planned
+## [0.2.4] - 2026-05-21
 
-- Fix parallel inference artifact merging so DAG branches do not falsely conflict on unchanged shared artifacts like `torch.Tensor` values from upstream steps. The intended core change is to track artifact keys written via `InferenceContext.set_artifact(...)` instead of inferring updates by deep-comparing copied artifact dictionaries.
+### Added
+
+- New `examples/affective_states_recognition` plugin package with multimodal emotion and sentiment recognition pipelines over audio, video, and text. It includes training/evaluation configs, an inference config, plugin source code, and usage docs for CMU-MOSEI, MELD, and RAMAS-oriented workflows.
+
+### Changed
+
+- Parallel inference artifact merging now tracks artifact keys written through `InferenceContext.set_artifact(...)` instead of inferring updates by deep-comparing full artifact snapshots. This makes DAG execution more robust around shared upstream artifacts while preserving explicit overwrite checks between unrelated branches.
+
+### Fixed
+
+- CLI `inference` now rejects `--output/-o` auto-creation of `write_json_predictions_step` when `pipeline.parallel: true` is enabled; the output step must be declared explicitly in the config together with its `after` dependencies.
 
 ## [0.2.3] - 2026-05-04
 

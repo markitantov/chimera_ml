@@ -112,6 +112,8 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - runs sequentially by default in plain config order,
 - enables DAG/parallel scheduling only when `pipeline.parallel: true` is set,
 - uses `after` for explicit dependencies between steps in parallel mode,
+- lets `--output/-o` create or override `write_json_predictions_step` only for sequential configs,
+- requires `write_json_predictions_step` to be declared explicitly in the config when `pipeline.parallel: true`, together with its `after` dependencies,
 - keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
 - supports a built-in `resolve_checkpoints_step` that resolves local paths or downloads remote checkpoints into the inference work directory cache and stores resolved local files in `artifacts["checkpoints"]`,
 
@@ -139,6 +141,7 @@ For DAG inference configs:
 - if parallel mode is enabled but no step has `after`, the builder emits a warning
 - by default, dependency names refer to the step `name`
 - use `id` only for the steps that need it, for example when the same step `name` is reused multiple times
+- shared upstream artifacts may be read by multiple branches; overwrite conflicts are checked only for keys explicitly written via `InferenceContext.set_artifact(...)`
 - if two DAG steps write the same artifact key, the pipeline raises an error
 
 Sequential example:
@@ -526,6 +529,10 @@ Highlights:
 ## Repository Example
 
 `examples/va_estimation` is a full plugin package using entry points and task-specific components. Use it as a template for new projects.
+
+`examples/oragen` is a plugin package for audio-visual gender recognition and age estimation.
+
+`examples/affective_states_recognition` is a multimodal plugin package for multimodal and multi-task emotion and sentiment recognition over audio, video, and text, with train/eval/inference configs and accompanying docs.
 
 ## Development
 

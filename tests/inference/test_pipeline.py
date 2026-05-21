@@ -14,7 +14,9 @@ class _OrderStep:
         self.label = label
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
-        ctx.artifacts.setdefault("order", []).append(self.label)
+        order = list(ctx.get_artifact("order", []))
+        order.append(self.label)
+        ctx.set_artifact("order", order)
         return ctx
 
 
@@ -97,7 +99,7 @@ def test_build_inference_step_resolves_registry_step_params(tmp_path):
             self.value = value
 
         def run(self, ctx: InferenceContext) -> InferenceContext:
-            ctx.artifacts["value"] = self.value
+            ctx.set_artifact("value", self.value)
             return ctx
 
     @INFERENCE_STEPS.register(step_name)
@@ -454,16 +456,21 @@ def test_inference_pipeline_allows_overwriting_artifact_from_dependency_chain(tm
     assert ctx.get_artifact("shared") == [10, 20, 30]
 
 
-def test_inference_pipeline_rejects_parallel_in_place_aliasing_updates(tmp_path):
-    first_name = f"test_inference_alias_first_{uuid4().hex}"
-    second_name = f"test_inference_alias_second_{uuid4().hex}"
-    join_name = f"test_inference_alias_join_{uuid4().hex}"
+def test_inference_pipeline_ignores_read_only_shared_tensor_like_artifacts(tmp_path):
+    first_name = f"test_inference_shared_tensor_first_{uuid4().hex}"
+    second_name = f"test_inference_shared_tensor_second_{uuid4().hex}"
+    join_name = f"test_inference_shared_tensor_join_{uuid4().hex}"
+
+    class _TensorLike:
+        def __ne__(self, other):
+            return self
 
     @INFERENCE_STEPS.register(first_name)
     def _first():
         class _FirstStep:
             def run(self, ctx: InferenceContext) -> InferenceContext:
-                ctx.get_artifact("shared").append("first")
+                assert ctx.get_artifact("shared_tensor") is not None
+                ctx.set_artifact("audio_feature", "first")
                 return ctx
 
         return _FirstStep()
@@ -472,7 +479,8 @@ def test_inference_pipeline_rejects_parallel_in_place_aliasing_updates(tmp_path)
     def _second():
         class _SecondStep:
             def run(self, ctx: InferenceContext) -> InferenceContext:
-                ctx.get_artifact("shared").append("second")
+                assert ctx.get_artifact("shared_tensor") is not None
+                ctx.set_artifact("video_feature", "second")
                 return ctx
 
         return _SecondStep()
@@ -494,13 +502,10 @@ def test_inference_pipeline_rejects_parallel_in_place_aliasing_updates(tmp_path)
         )
     )
 
-    shared: list[str] = []
-    ctx = _make_ctx(tmp_path, artifacts={"shared": shared})
+    ctx = pipeline.run(_make_ctx(tmp_path, artifacts={"shared_tensor": _TensorLike()}))
 
-    with pytest.raises(ValueError, match="already written"):
-        pipeline.run(ctx)
-
-    assert shared == []
+    assert ctx.get_artifact("audio_feature") == "first"
+    assert ctx.get_artifact("video_feature") == "second"
 
 
 def test_build_inference_pipeline_uses_step_name_as_default_node_id(tmp_path):
