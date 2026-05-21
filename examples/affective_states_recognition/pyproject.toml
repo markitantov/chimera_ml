@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chimera-ml-emotion_recognition"
+name = "chimera-ml-affective_states_recognition"
 version = "0.1.0"
-description = "Emotion recognition example plugin for chimera_ml"
+description = "Affective states recognition example plugin for chimera_ml"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -28,7 +28,7 @@ dependencies = [
 Paper = "https://doi.org/10.1016/j.inffus.2026.104207"
 
 [project.entry-points."chimera_ml.plugins"]
-emotion_recognition = "chimera_plugin:register"
+affective_states_recognition = "chimera_plugin:register"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

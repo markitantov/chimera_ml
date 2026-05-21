@@ -1,5 +1,5 @@
 pipeline:
-  name: "emotion_recognition_inference"
+  name: "affective_states_recognition_inference"
   parallel: true
 
 steps:

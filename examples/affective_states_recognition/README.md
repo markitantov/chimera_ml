@@ -18,7 +18,7 @@ Main files:
 ## 1) Install
 
 ```bash
-pip install -e examples/emotion_recognition
+pip install -e examples/affective_states_recognition
 ```
 
 ## 2) Verify Plugin Registration
@@ -46,18 +46,18 @@ Check:
 ## 4) Validate Config
 
 ```bash
-chimera-ml validate-config --config-path examples/emotion_recognition/configs/multimodal_train.yaml
+chimera-ml validate-config --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
 ```
 
 ## 5) Run Experiments
 
 ```bash
-chimera-ml train --config-path examples/emotion_recognition/configs/multimodal_train.yaml
+chimera-ml train --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
 ```
 
 ```bash
 chimera-ml eval \
-  --config-path examples/emotion_recognition/configs/multimodal_test.yaml \
+  --config-path examples/affective_states_recognition/configs/multimodal_test.yaml \
   --checkpoint-path path/to/checkpoint.pt
 ```
 
@@ -67,8 +67,8 @@ chimera-ml eval \
 chimera-ml inference \
   --input video.mp4 \
   --output out.json \
-  --config-path examples/emotion_recognition/configs/inference.yaml \
-  --work-dir examples/emotion_recognition/123
+  --config-path examples/affective_states_recognition/configs/inference.yaml \
+  --work-dir examples/affective_states_recognition/123
 ```
 
 The inference config resolves checkpoints into `model_cache/` and runs:
