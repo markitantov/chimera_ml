@@ -3,9 +3,18 @@ from transformers import AutoModel, AutoTokenizer
 
 
 class TextFeatureExtractor:
-    def __init__(self, max_length: int = 48, model_name: str = "jinaai/jina-embeddings-v3") -> None:
+    def __init__(
+        self,
+        max_length: int = 48,
+        model_name: str = "jinaai/jina-embeddings-v3",
+        device: str | torch.device | None = None,
+    ) -> None:
         self.max_length = max_length
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device(device)
+            if device is not None
+            else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
         self.model_name = str(model_name)
 
         if "jinaai" in self.model_name.lower():  # jinaai/jina-embeddings-v3

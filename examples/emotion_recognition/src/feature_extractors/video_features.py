@@ -27,10 +27,16 @@ class VideoFeatureExtractor:
         target_fps: int = 10,
         model_name: str = "emoaffectnet",
         face_model_name: str = "models/yolov8n-face.pt",
+        checkpoint_path: str | Path | None = None,
+        device: str | torch.device | None = None,
     ) -> None:
         self.win_max_length = int(win_max_length)
         self.target_fps = int(target_fps)
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device(device)
+            if device is not None
+            else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
         self.model_name = model_name
 
         if "emoaffectnet" in self.model_name.lower():
@@ -43,7 +49,8 @@ class VideoFeatureExtractor:
             )
 
             self.model = ResNet50(num_classes=7, channels=3)
-            checkpoint = torch.load("models/emoaffectnet.pt", map_location="cpu", weights_only=False)
+            checkpoint_source = Path(checkpoint_path) if checkpoint_path is not None else Path("models/emoaffectnet.pt")
+            checkpoint = torch.load(checkpoint_source, map_location="cpu", weights_only=False)
             self.model.load_state_dict(checkpoint)
             self._input_shape = (3, 224, 224)
 
@@ -65,7 +72,8 @@ class VideoFeatureExtractor:
             )
 
             self.model = ResEmoteNet()
-            checkpoint = torch.load("models/resemotenet.pt", map_location="cpu", weights_only=False)
+            checkpoint_source = Path(checkpoint_path) if checkpoint_path is not None else Path("models/resemotenet.pt")
+            checkpoint = torch.load(checkpoint_source, map_location="cpu", weights_only=False)
             self.model.load_state_dict(checkpoint["model_state_dict"])
             self._input_shape = (3, 64, 64)
 
@@ -79,7 +87,7 @@ class VideoFeatureExtractor:
         self.model = self.model.to(self.device).eval()
 
         self.face_model_name = str(face_model_name)
-        self.face_model = YOLO(self.face_model_name)
+        self.face_model: YOLO | None = None
 
         self._current_video_path: str | None = None
         self._video_fps: float = 0.0
@@ -98,6 +106,9 @@ class VideoFeatureExtractor:
     def _prepare_video(self, file_path: str) -> None:
         if self._current_video_path == file_path:
             return
+
+        if self.face_model is None:
+            self.face_model = YOLO(self.face_model_name)
 
         self._current_video_path = file_path
         self._frame_features = {}

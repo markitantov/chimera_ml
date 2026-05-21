@@ -207,6 +207,6 @@ class PredictionsUpsampler(nn.Module):
 
         x_emo_sen = torch.cat(list(x_predicts), dim=-1).unsqueeze(-1)  # bs, 10, 1
         if self.return_predictions:
-            return self.upsampler(x_emo_sen), x_emo_sen.squeeze()
+            return self.upsampler(x_emo_sen), x_emo_sen.squeeze(-1)
 
         return self.upsampler(x_emo_sen)

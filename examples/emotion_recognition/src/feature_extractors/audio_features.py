@@ -9,10 +9,15 @@ class AudioFeatureExtractor:
         sr: int = 16000,
         win_max_length: int = 3,
         model_name: str = "audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim",
+        device: str | torch.device | None = None,
     ) -> None:
         self.sr = sr
         self.win_max_length = win_max_length
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device(device)
+            if device is not None
+            else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
         self.model_name = str(model_name)
 
         if "wav2vec2" in self.model_name.lower():  # audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim

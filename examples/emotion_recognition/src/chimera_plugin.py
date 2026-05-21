@@ -7,6 +7,10 @@ _MODULES_TO_REGISTER: tuple[str, ...] = (
     "common.metrics",
     "fusion.data.emotion_multimodal_datamodule",
     "fusion.models.fusion_models",
+    "inference.preprocessing",
+    "inference.face_detection",
+    "inference.extract_features",
+    "inference.fusion",
 )
 
 
