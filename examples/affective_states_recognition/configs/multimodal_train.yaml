@@ -1,0 +1,130 @@
+seed: 0
+experiment_info:
+  params:
+    experiment_name: "affective_states_recognition"
+    run_name: "fusion"
+    datetime_format: "%Y-%m-%d_%H-%M"
+
+data:
+  name: "emotion_multimodal_datamodule"
+  params:
+    batch_size: 64
+    num_workers: 8
+
+    sr: 16000
+    win_max_length: 3
+    win_shift: 2
+    win_min_length: 2
+    text_max_length: 48
+    video_target_fps: 10
+
+    augmentation: false
+    emotion_class_names: ["neutral", "happy", "sad", "anger", "surprise", "disgust", "fear"]
+    sentiment_class_names: ["negative", "neutral", "positive"]
+
+    feature_types:
+      a: "wav2vec2"
+      v: "emoaffectnet"
+      t: "jinaai"
+    features_file_name: "SAMPLES"
+    features_root: "features"
+    load_in_ram: false
+
+    train_subsets: ["train"]
+    val_subsets: ["test", "dev"]
+    corpora:
+      CMUMOSEI:
+        audio_root: "data/CMUMOSEI/vocals"
+        video_root: "data/CMUMOSEI/Video_chunk/{subset}"
+        labels_file_path: "data/labels/cmumosei_labels_{subset}+ASR.csv"
+        vad_path: "data/CMUMOSEI/vad.pickle"
+      MELD:
+        audio_root: "data/MELD/vocals/{subset}"
+        video_root: "data/MELD/videos/{subset}"
+        labels_file_path: "data/labels/meld_labels_{subset}+ASR.csv"
+        vad_path: "data/vad_{subset}.pickle"
+      RAMAS:
+        audio_root: "data/RAMAS/vocals"
+        video_root: "data/RAMAS/videos"
+        labels_file_path: "data/labels/ramas_labels_{subset}+ASR.csv"
+        vad_path: "data/RAMAS/vad.pickle"
+
+model:
+  name: "lefsa_model"
+  params:
+
+train:
+  params:
+    epochs: 75
+    mixed_precision: true
+    device: "cuda"
+    log_every_steps: 50
+    grad_clip_norm: 1.0
+    use_scheduler: true
+    scheduler_step_per_epoch: true
+    collect_cache: true
+
+optimizer:
+  name: "adamw_optimizer"
+  params:
+    lr: 1.0e-5
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+
+scheduler:
+  name: "cosineannealinglr_scheduler"
+  params:
+    T_max: 75
+    eta_min: 1.0e-7
+
+loss:
+  name: "emotion_sentiment_loss"
+  params:
+    emotion_alpha: 1.0
+    sentiment_alpha: 1.0
+
+metrics:
+  - name: "emotion_sentiment_combined_metric"
+    params: {}
+  - name: "emotion_metric"
+    params: {}
+  - name: "sentiment_metric"
+    params: {}
+
+logging:
+  - name: "console_file_logger"
+    params:
+      log_path: "logs"
+      log_file: "train.log"
+      console_level: "INFO"
+      file_level: "INFO"
+  - name: "mlflow_logger"
+    params:
+      tracking_uri: "sqlite:///logs/mlflow.db"
+
+
+callbacks:
+  - name: "emotion_metrics_callback"
+    params:
+      splits: ["val"]
+      log_confusion_matrix: true
+  - name: "early_stopping_callback"
+    params:
+      monitor: "devel_all_agg/emo_sen_combined"
+      mode: "max"
+      patience: 10
+  - name: "checkpoint_callback"
+    params:
+      log_path: "logs"
+      filename_template: "epoch={epoch}_{monitor}={value:.4f}.pt"
+      monitor: "devel_all_agg/emo_sen_combined"
+      mode: "max"
+      save_top_k: 3
+      save_last: true
+  - name: "snapshot_callback"
+    params:
+      log_path: "logs"
+      include:
+        - "src"
+      save_code_zip: true
+      save_config: true

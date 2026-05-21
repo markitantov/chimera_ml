@@ -1,0 +1,68 @@
+pipeline:
+  name: "affective_states_recognition_inference"
+  parallel: true
+
+steps:
+  - name: "extract_audio_step"
+    params:
+      sample_rate: 16000
+
+  - name: "vad_step"
+    after: ["extract_audio_step"]
+    params:
+      threshold: 0.4
+      neg_threshold: 0.25
+      min_speech_duration_ms: 150
+      min_silence_duration_ms: 300
+      speech_pad_ms: 120
+      max_speech_duration_s: 12.0
+
+  - name: "resolve_checkpoints_step"
+    params:
+      cache_dir: "model_cache"
+      checkpoints:
+        emoaffectnet: "https://huggingface.co/markitantov/lefsa/resolve/main/emoaffectnet.pt"
+        lefsa: "https://huggingface.co/markitantov/lefsa/resolve/main/lefsa.pt"
+
+  - name: "build_segments_step"
+    after: ["vad_step"]
+    params:
+      use_vad_boundaries: false
+      max_segment_length: 12.0
+      max_pause_length: 1.5
+      min_segment_length: 1.0
+
+  - name: "transcribe_segments_step"
+    after: ["build_segments_step"]
+    params:
+      model_name: "openai/whisper-large-v3-turbo"
+      respect_vad: false
+
+  - name: "face_detection_step"
+    after: ["resolve_checkpoints_step", "transcribe_segments_step"]
+    params:
+      model: "yolo26n.pt"
+      fps: 10.0
+
+  - name: "extract_features_step"
+    after: ["face_detection_step"]
+    params:
+      win_max_length: 3
+      win_shift: 2
+      win_min_length: 2
+      video_target_fps: 10
+      text_max_length: 48
+
+  - name: "fusion_step"
+    after: ["extract_features_step"]
+    params:
+      emotion_class_names: ["neutral", "happy", "sad", "anger", "surprise", "disgust", "fear"]
+      sentiment_class_names: ["negative", "neutral", "positive"]
+
+  - name: "write_json_predictions_step"
+    after: ["fusion_step"]
+    params:
+      output_path: "prediction.json"
+
+  - name: "print_json_predictions_step"
+    after: ["write_json_predictions_step"]

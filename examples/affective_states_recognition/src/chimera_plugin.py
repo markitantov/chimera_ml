@@ -1,0 +1,28 @@
+import importlib
+import warnings
+
+_MODULES_TO_REGISTER: tuple[str, ...] = (
+    "common.emotion_metrics_callback",
+    "common.losses",
+    "common.metrics",
+    "fusion.data.emotion_multimodal_datamodule",
+    "fusion.models.fusion_models",
+    "inference.preprocessing",
+    "inference.face_detection",
+    "inference.extract_features",
+    "inference.fusion",
+)
+
+
+def register() -> None:
+    for module_name in _MODULES_TO_REGISTER:
+        try:
+            importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            # Optional runtime dependency is missing (e.g. torchaudio for audio datamodules).
+            # Keep plugin registration usable for available components (e.g. fusion pipeline).
+            if exc.name in {"torchaudio", "torchvision", "transformers", "pandas"}:
+                continue
+            warnings.warn(f"Failed to import '{module_name}': {exc}", stacklevel=2)
+        except Exception as exc:
+            warnings.warn(f"Failed to import '{module_name}': {exc}", stacklevel=2)
