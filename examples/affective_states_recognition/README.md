@@ -1,4 +1,4 @@
-# Emotion Recognition Example Plugin
+# Affective States Recognition Example Plugin
 
 Example plugin for `chimera-ml` for multi-modal emotion and sentiment
 recognition from audio, video, and text.
