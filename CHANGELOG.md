@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Planned
+
+- Fix parallel inference artifact merging so DAG branches do not falsely conflict on unchanged shared artifacts like `torch.Tensor` values from upstream steps. The intended core change is to track artifact keys written via `InferenceContext.set_artifact(...)` instead of inferring updates by deep-comparing copied artifact dictionaries.
+
 ## [0.2.3] - 2026-05-04
 
 ### Added

@@ -638,6 +638,39 @@ def test_cli_inference_creates_steps_section_when_missing(monkeypatch, tmp_path,
     assert "Step 'write_json_predictions_step' not found; creating one" in capsys.readouterr().out
 
 
+def test_cli_inference_rejects_output_autocreate_in_parallel_mode(monkeypatch, tmp_path, capsys):
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"")
+    build_called = False
+
+    def _build_inference_pipeline(_cfg):
+        nonlocal build_called
+        build_called = True
+        raise AssertionError("build_inference_pipeline should not be called")
+
+    monkeypatch.setattr(
+        cli.InferenceConfig,
+        "from_yaml",
+        classmethod(lambda cls, _: cls({"pipeline": {"name": "demo_inference", "parallel": True}, "steps": []})),
+    )
+    monkeypatch.setattr(cli, "build_inference_pipeline", _build_inference_pipeline)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        cli.inference(
+            input_path=str(input_path),
+            output_path=str(tmp_path / "out.json"),
+            config_path="inference.yaml",
+            device="auto",
+            work_dir=str(tmp_path / "work"),
+        )
+
+    assert exc_info.value.exit_code == 1
+    assert build_called is False
+    out = capsys.readouterr().out
+    assert "--output/-o cannot auto-create 'write_json_predictions_step'" in out
+    assert "'pipeline.parallel: true' is enabled" in out
+
+
 def test_cli_inference_creates_temp_work_dir_when_missing(monkeypatch, tmp_path, capsys):
     seen: dict[str, object] = {}
     input_path = tmp_path / "video.mp4"
