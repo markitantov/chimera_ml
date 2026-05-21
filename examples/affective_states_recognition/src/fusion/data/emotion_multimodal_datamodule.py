@@ -196,7 +196,6 @@ class EmotionMultimodalDataModule(DataModule):
         text_max_length: int = 48,
         video_target_fps: int = 10,
     ) -> dict[str, Any]:
-
         res = {}
         self.feature_sizes = {}
         for modality, feature_type in feature_types.items():

@@ -42,7 +42,6 @@ class EmotionMultimodalDataset(Dataset):
         load_in_ram: bool = False,
         transform: Any = None,
     ) -> None:
-
         self.audio_root = Path(audio_root)
         self.video_root = Path(video_root)
 

@@ -17,11 +17,11 @@ data:
     win_min_length: 2
     text_max_length: 48
     video_target_fps: 10
-    
+
     augmentation: false
     emotion_class_names: ["neutral", "happy", "sad", "anger", "surprise", "disgust", "fear"]
     sentiment_class_names: ["negative", "neutral", "positive"]
-    
+
     feature_types:
       a: "wav2vec2"
       v: "emoaffectnet"
@@ -29,7 +29,7 @@ data:
     features_file_name: "SAMPLES"
     features_root: "features"
     load_in_ram: false
-    
+
     train_subsets: ["train"]
     val_subsets: ["test", "dev"]
     corpora:
