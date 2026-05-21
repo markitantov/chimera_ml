@@ -311,6 +311,15 @@ def inference(
     resolved_output = Path(output_path) if output_path is not None else None
     if resolved_output is not None:
         write_json_predictions_cfg = cfg.section("steps", name="write_json_predictions_step")
+        if cfg.parallel and not write_json_predictions_cfg:
+            typer.echo(
+                "[inference] --output/-o cannot auto-create 'write_json_predictions_step' "
+                "when 'pipeline.parallel: true' is enabled. Add "
+                "'write_json_predictions_step' explicitly to the config and define its "
+                "'after' dependencies there."
+            )
+            raise typer.Exit(code=1)
+
         existing_output_path = (
             (write_json_predictions_cfg.get("params") or {}).get("output_path") if write_json_predictions_cfg else None
         )

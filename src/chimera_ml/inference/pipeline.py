@@ -1,8 +1,6 @@
-from collections.abc import Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
 
 from chimera_ml.inference.context import InferenceContext
 from chimera_ml.inference.steps.base import BaseInferenceStep
@@ -88,7 +86,7 @@ class InferencePipeline:
         )
         pending = {node.node_id: node for node in self.nodes}
         completed: set[str] = set()
-        running: dict[Future[InferenceContext], tuple[InferenceGraphNode, dict[str, Any]]] = {}
+        running: dict[Future[InferenceContext], InferenceGraphNode] = {}
         artifact_owners: dict[str, str] = {}
 
         with ThreadPoolExecutor(max_workers=max(len(self.nodes), 1)) as executor:
@@ -108,11 +106,10 @@ class InferencePipeline:
                         config=working_ctx.config,
                         artifacts=deepcopy(working_ctx.artifacts),
                     )
-                    baseline = deepcopy(step_ctx.artifacts)
                     print(f"[inference] Starting step '{node.node_id}' ({node.step.__class__.__name__})")
 
                     future = executor.submit(self._run_step, node.step, step_ctx)
-                    running[future] = (node, baseline)
+                    running[future] = node
 
                 if not running:
                     unresolved = {node.node_id: list(node.after) for node in pending.values()}
@@ -122,12 +119,11 @@ class InferencePipeline:
 
                 completed_futures, _ = wait(running, return_when=FIRST_COMPLETED)
                 for future in completed_futures:
-                    node, baseline = running.pop(future)
+                    node = running.pop(future)
                     step_ctx = future.result()
                     self._merge_step_result(
                         target=working_ctx,
                         source=step_ctx,
-                        baseline=baseline,
                         node=node,
                         artifact_owners=artifact_owners,
                     )
@@ -146,11 +142,10 @@ class InferencePipeline:
         *,
         target: InferenceContext,
         source: InferenceContext,
-        baseline: dict[str, Any],
         node: InferenceGraphNode,
         artifact_owners: dict[str, str],
     ) -> None:
-        for key in self._detect_artifact_updates(baseline, source.artifacts):
+        for key in source.written_artifact_keys:
             owner = artifact_owners.get(key)
             if (
                 self.parallel_mode
@@ -179,26 +174,3 @@ class InferencePipeline:
         result = any(self._depends_on_node(parent_id, dependency_id) for parent_id in node.after)
         self._dependency_cache[key] = result
         return result
-
-    def _detect_artifact_updates(
-        self,
-        baseline: dict[str, Any],
-        current: dict[str, Any],
-    ) -> Iterable[str]:
-        for key, value in current.items():
-            if key not in baseline:
-                yield key
-                continue
-
-            previous = baseline[key]
-            if self._values_differ(previous, value):
-                yield key
-
-    @staticmethod
-    def _values_differ(previous: Any, current: Any) -> bool:
-        try:
-            result = previous != current
-        except Exception:
-            return True
-
-        return result if isinstance(result, bool) else True
