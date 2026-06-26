@@ -8,7 +8,9 @@ import torch
 
 from chimera_ml.callbacks.plot_confusion_matrix_callback import (
     PlotConfusionMatrixCallback,
+    _fig_to_pdf_bytes,
     _fig_to_png_bytes,
+    _format_pdf_filename,
     _plot_confusion_matrix,
 )
 from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
@@ -78,13 +80,13 @@ def test_plot_confusion_matrix_callback_logs_artifact(monkeypatch):
 
     monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
-    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+    monkeypatch.setattr(cm_plot_module, "_fig_to_pdf_bytes", lambda fig: b"pdf-bytes")
 
     cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_epoch_end(trainer, epoch=3, logs={})
 
     assert trainer.mlflow_logger is not None
-    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_3.png")]
+    assert trainer.mlflow_logger.calls == [(b"pdf-bytes", "figures/val", "confusion_matrix_epoch_3.pdf")]
     assert closed == [{"fig": "ok"}]
 
 
@@ -102,14 +104,14 @@ def test_plot_confusion_matrix_callback_uses_concat_chunks_for_cached_lists(monk
     )
 
     monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: SimpleNamespace(close=lambda _: None))
-    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+    monkeypatch.setattr(cm_plot_module, "_fig_to_pdf_bytes", lambda fig: b"pdf-bytes")
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", lambda **kwargs: {"fig": "ok"})
 
     cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_epoch_end(trainer, epoch=2, logs={})
 
     assert trainer.mlflow_logger is not None
-    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_2.png")]
+    assert trainer.mlflow_logger.calls == [(b"pdf-bytes", "figures/val", "confusion_matrix_epoch_2.pdf")]
 
 
 def test_plot_confusion_matrix_callback_handles_ragged_sequence_chunks(monkeypatch):
@@ -140,13 +142,13 @@ def test_plot_confusion_matrix_callback_handles_ragged_sequence_chunks(monkeypat
 
     monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
-    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+    monkeypatch.setattr(cm_plot_module, "_fig_to_pdf_bytes", lambda fig: b"pdf-bytes")
 
     cb = PlotConfusionMatrixCallback(class_names=["neg", "pos"])
     cb.on_epoch_end(trainer, epoch=5, logs={})
 
     assert trainer.mlflow_logger is not None
-    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_5.png")]
+    assert trainer.mlflow_logger.calls == [(b"pdf-bytes", "figures/val", "confusion_matrix_epoch_5.pdf")]
     assert np.array_equal(captured["cm"], np.array([[1, 1], [1, 2]], dtype=np.int64))
     assert captured["labels"] == ["neg", "pos"]
     assert captured["title"] == "val Confusion Matrix (epoch 5)"
@@ -183,13 +185,13 @@ def test_plot_confusion_matrix_callback_supports_five_classes(monkeypatch):
 
     monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
-    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+    monkeypatch.setattr(cm_plot_module, "_fig_to_pdf_bytes", lambda fig: b"pdf-bytes")
 
     cb = PlotConfusionMatrixCallback(class_names=["c0", "c1", "c2", "c3", "c4"])
     cb.on_epoch_end(trainer, epoch=6, logs={})
 
     assert trainer.mlflow_logger is not None
-    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_6.png")]
+    assert trainer.mlflow_logger.calls == [(b"pdf-bytes", "figures/val", "confusion_matrix_epoch_6.pdf")]
     assert np.array_equal(captured["cm"], np.eye(5, dtype=np.int64))
     assert captured["labels"] == ["c0", "c1", "c2", "c3", "c4"]
     assert captured["title"] == "val Confusion Matrix (epoch 6)"
@@ -230,13 +232,13 @@ def test_plot_confusion_matrix_callback_supports_seven_classes_with_ragged_chunk
 
     monkeypatch.setattr(cm_plot_module, "_import_pyplot", lambda: _PlotLib)
     monkeypatch.setattr(cm_plot_module, "_plot_confusion_matrix", _plot)
-    monkeypatch.setattr(cm_plot_module, "_fig_to_png_bytes", lambda fig: b"png-bytes")
+    monkeypatch.setattr(cm_plot_module, "_fig_to_pdf_bytes", lambda fig: b"pdf-bytes")
 
     cb = PlotConfusionMatrixCallback(class_names=[f"c{i}" for i in range(7)])
     cb.on_epoch_end(trainer, epoch=7, logs={})
 
     assert trainer.mlflow_logger is not None
-    assert trainer.mlflow_logger.calls == [(b"png-bytes", "figures/val", "confusion_matrix_epoch_7.png")]
+    assert trainer.mlflow_logger.calls == [(b"pdf-bytes", "figures/val", "confusion_matrix_epoch_7.pdf")]
     assert np.array_equal(captured["cm"], np.eye(7, dtype=np.int64))
     assert captured["labels"] == [f"c{i}" for i in range(7)]
     assert captured["title"] == "val Confusion Matrix (epoch 7)"
@@ -316,3 +318,25 @@ def test_fig_to_png_bytes_returns_png_signature():
     assert isinstance(data, bytes)
     assert data.startswith(b"\x89PNG\r\n\x1a\n")
     cm_plot_module._import_pyplot().close(fig)
+
+
+def test_fig_to_pdf_bytes_returns_pdf_signature():
+    pytest.importorskip("matplotlib")
+    cm = np.array([[2, 0], [1, 3]], dtype=np.int64)
+    fig = _plot_confusion_matrix(cm)
+    data = _fig_to_pdf_bytes(fig)
+
+    assert isinstance(data, bytes)
+    assert data.startswith(b"%PDF")
+    cm_plot_module._import_pyplot().close(fig)
+
+
+def test_format_pdf_filename_replaces_or_appends_extension():
+    assert (
+        _format_pdf_filename("confusion_matrix_epoch_{epoch}.png", split="val", epoch=3)
+        == "confusion_matrix_epoch_3.pdf"
+    )
+    assert (
+        _format_pdf_filename("confusion_matrix_{split}_{epoch}", split="val", epoch=3)
+        == "confusion_matrix_val_3.pdf"
+    )

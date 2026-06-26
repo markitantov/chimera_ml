@@ -67,7 +67,7 @@ Main commands:
 chimera-ml validate-config --config-path <config.yaml>
 chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
-chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--max-trials N]
+chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--sweep-name NAME] [--max-trials N]
 chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
 chimera-ml inference -i <input.mp4> [-o <out.json>] --config-path <inference.yaml> [--device cpu|cuda|auto] [--work-dir <dir>]
 chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules|inference_steps]
@@ -91,11 +91,13 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 
 `sweep`:
 
-- materializes one YAML config per trial under `sweep_runs/` by default,
 - supports Cartesian grids via `parameters` (grid search) and explicit trial lists via `trials`,
 - applies overrides using dotted paths such as `optimizer.params.lr` or
   `callbacks.checkpoint_callback.params.monitor`,
-- runs the normal `train` flow once per trial and appends `sweep_001`, `sweep_002`, ... to run names,
+- stores sweep metadata under `logs/<experiment_name>/_sweeps/<sweep_id>/`,
+- saves `base_config.yaml`, `sweep_config.yaml`, `manifest.yaml`, and per-trial configs for each sweep series,
+- runs the normal `train` flow once per trial and appends trial ids such as
+  `lr-search-a1b2-001` to run names,
 - supports `--max-trials` for CI smoke tuning and `--dry-run` to inspect generated trials.
 
 `eval`:
@@ -501,7 +503,7 @@ Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty 
 `plot_confusion_matrix_callback`:
 
 - builds confusion matrix figures from cached predictions,
-- logs PNG artifacts to MLflow per split (`figures/<split>/...`).
+- logs PDF artifacts to MLflow per split (`figures/<split>/...`).
 
 `telegram_notifier_callback`:
 
@@ -523,7 +525,7 @@ Highlights:
 - `early_stopping_callback`: monitor, mode, patience, min_delta.
 - `snapshot_callback`: code/config snapshots (`code.zip`, config copy).
 - `collect_predictions_callback`: CSV prediction artifacts to MLflow.
-- `plot_confusion_matrix_callback`: confusion matrix PNG artifacts to MLflow.
+- `plot_confusion_matrix_callback`: confusion matrix PDF artifacts to MLflow.
 - `telegram_notifier_callback`: final Telegram notification via env vars.
 
 ## Repository Example

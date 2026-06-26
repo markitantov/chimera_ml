@@ -1,8 +1,10 @@
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 import torch
 import typer
+import yaml
 
 from chimera_ml import cli
 
@@ -342,26 +344,48 @@ def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
         calls.append((config_path, config, run_name_suffix))
+        return f"run-{run_name_suffix}"
 
+    monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
     monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
 
     cli.sweep(
         base_config="base.yaml",
         sweep_config="sweep.yaml",
-        output_dir=str(tmp_path / "sweeps"),
+        sweep_name="lr-search",
         max_trials=None,
         dry_run=False,
     )
 
     assert len(calls) == 4
-    assert calls[0][2] == "sweep_001"
+    assert calls[0][2].startswith("lr-search-")
+    assert calls[0][2].endswith("-001")
     assert calls[0][1].raw["optimizer"]["params"]["lr"] == 0.001
     assert calls[0][1].raw["train"]["params"]["epochs"] == 1
     assert calls[-1][1].raw["optimizer"]["params"]["lr"] == 0.0001
     assert calls[-1][1].raw["train"]["params"]["epochs"] == 2
-    assert (tmp_path / "sweeps" / "base_sweep_001.yaml").exists()
-    assert (tmp_path / "sweeps" / "base_sweep_004.yaml").exists()
+    assert not (tmp_path / "sweep_runs").exists()
+
+    sweep_dirs = list((tmp_path / "logs" / "exp" / "_sweeps").glob("lr-search-*"))
+    assert len(sweep_dirs) == 1
+    sweep_dir = sweep_dirs[0]
+    assert (sweep_dir / "base_config.yaml").exists()
+    assert (sweep_dir / "sweep_config.yaml").exists()
+    assert (sweep_dir / "trial_configs" / f"{calls[0][2]}.yaml").exists()
+    assert Path(calls[0][0]).resolve() == (sweep_dir / "trial_configs" / f"{calls[0][2]}.yaml").resolve()
+
+    manifest = yaml.safe_load((sweep_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["sweep_id"] == sweep_dir.name
+    assert manifest["sweep_name"] == "lr-search"
+    assert manifest["status"] == "completed"
+    assert manifest["base_config"] == "base_config.yaml"
+    assert manifest["sweep_config"] == "sweep_config.yaml"
+    assert "experiment_name" not in manifest
+    assert len(manifest["runs"]) == 4
+    assert manifest["runs"][0] == {"trial_id": calls[0][2], "run_name": f"run-{calls[0][2]}"}
+    assert "trial" not in manifest["runs"][0]
+    assert "overrides" not in manifest["runs"][0]
 
 
 def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
@@ -371,14 +395,16 @@ def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
         calls.append((config_path, config, run_name_suffix))
+        return f"run-{run_name_suffix}"
 
+    monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
     monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
 
     cli.sweep(
         base_config="base.yaml",
         sweep_config="sweep.yaml",
-        output_dir=str(tmp_path / "sweeps"),
+        sweep_name=None,
         max_trials=None,
         dry_run=False,
     )
@@ -386,6 +412,62 @@ def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
     callbacks = calls[0][1].raw["callbacks"]
     checkpoint_cfg = next(item for item in callbacks if item["name"] == "checkpoint_callback")
     assert checkpoint_cfg["params"]["monitor"] == "val/ccc"
+
+
+def test_cli_sweep_creates_distinct_sweep_dirs_for_repeated_runs(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {"trials": [{"train.params.epochs": 1}]}
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        return f"run-{run_name_suffix}"
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    cli.sweep(base_config="base.yaml", sweep_config="sweep.yaml", sweep_name="same", max_trials=None, dry_run=False)
+    cli.sweep(base_config="base.yaml", sweep_config="sweep.yaml", sweep_name="same", max_trials=None, dry_run=False)
+
+    sweep_dirs = list((tmp_path / "logs" / "exp" / "_sweeps").glob("same-*"))
+    assert len(sweep_dirs) == 2
+    assert sweep_dirs[0].name != sweep_dirs[1].name
+
+
+def test_cli_sweep_dry_run_does_not_create_artifacts(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {"trials": [{"train.params.epochs": 1}]}
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+
+    cli.sweep(base_config="base.yaml", sweep_config="sweep.yaml", sweep_name="dry", max_trials=None, dry_run=True)
+
+    assert not (tmp_path / "logs" / "exp" / "_sweeps").exists()
+
+
+def test_cli_sweep_marks_manifest_failed_when_trial_fails(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {"trials": [{"train.params.epochs": 1}, {"train.params.epochs": 2}]}
+    calls = []
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        calls.append(run_name_suffix)
+        if len(calls) == 2:
+            raise RuntimeError("boom")
+        return f"run-{run_name_suffix}"
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        cli.sweep(base_config="base.yaml", sweep_config="sweep.yaml", sweep_name="fail", max_trials=None, dry_run=False)
+
+    [sweep_dir] = list((tmp_path / "logs" / "exp" / "_sweeps").glob("fail-*"))
+    manifest = yaml.safe_load((sweep_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    assert manifest["finished_at"]
+    assert manifest["runs"] == [{"trial_id": calls[0], "run_name": f"run-{calls[0]}"}]
 
 
 def test_cli_eval_loads_checkpoint_and_calls_evaluate(monkeypatch):

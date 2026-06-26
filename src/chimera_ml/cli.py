@@ -18,7 +18,7 @@ from chimera_ml.inference import (
     build_inference_pipeline,
     resolve_inference_device,
 )
-from chimera_ml.logging.utils import generate_run_name
+from chimera_ml.logging.utils import generate_run_name, local_datetime_tag
 from chimera_ml.training.builders import (
     BuildContext,
     build_callbacks,
@@ -33,6 +33,7 @@ from chimera_ml.training.builders import (
 )
 from chimera_ml.training.trainer import Trainer
 from chimera_ml.utils.seed import define_seed
+from chimera_ml.utils.utils import build_sweep_identifiers, resolve_sweep_log_root
 
 app = typer.Typer(add_completion=False)
 registry_app = typer.Typer(help="Inspect registered components.")
@@ -161,7 +162,7 @@ def _run_train_from_config(
     *,
     config: ExperimentConfig | None = None,
     run_name_suffix: str | None = None,
-) -> None:
+) -> str:
     """Run training from a config path or an already loaded config dict."""
     typer.echo(f"[train] Loading config: {config_path}")
     cfg = config.copy() if config is not None else ExperimentConfig.from_yaml(config_path)
@@ -268,6 +269,7 @@ def _run_train_from_config(
     typer.echo("[train] Starting fit...")
     trainer.fit(train_loader, val_loaders=val_loaders)
     typer.echo("[train] Done.")
+    return run_name
 
 
 @app.command("validate-config")
@@ -475,12 +477,7 @@ def train(
 def sweep(
     base_config: str = typer.Option(..., "--base-config", "-b", help="Path to base experiment YAML config."),
     sweep_config: str = typer.Option(..., "--sweep-config", "-s", help="Path to sweep YAML config."),
-    output_dir: str = typer.Option(
-        "sweep_runs",
-        "--output-dir",
-        "-o",
-        help="Directory for materialized trial YAML files.",
-    ),
+    sweep_name: str | None = typer.Option(None, "--sweep-name", "-n", help="Optional human-readable sweep name."),
     max_trials: int | None = typer.Option(None, "--max-trials", help="Optional CI limit for the number of trials."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print generated trials without running training."),
 ):
@@ -498,24 +495,70 @@ def sweep(
     if not overrides_list:
         raise ValueError("Sweep config produced no trials.")
 
-    out_path = Path(output_dir)
+    experiment_info = base_cfg.section("experiment_info").get("params", {})
+    if "experiment_name" not in experiment_info:
+        raise ValueError("`experiment_info.params.experiment_name` is required.")
+
+    experiment_name = experiment_info["experiment_name"]
+    timezone = experiment_info.get("timezone", None)
+    label, short_id, sweep_id, started_at = build_sweep_identifiers(
+        sweep_name=sweep_name,
+        sweep_config_text=sweep_cfg.to_yaml_text(),
+        timezone=timezone,
+    )
+    
+    sweep_dir = resolve_sweep_log_root(base_cfg) / experiment_name / "_sweeps" / sweep_id
+    manifest_path = sweep_dir / "manifest.yaml"
+    manifest: dict[str, Any] = {
+        "sweep_id": sweep_id,
+        "sweep_name": label,
+        "base_config": "base_config.yaml",
+        "sweep_config": "sweep_config.yaml",
+        "started_at": started_at,
+        "finished_at": None,
+        "status": "running",
+        "runs": [],
+    }
+
     if not dry_run:
-        out_path.mkdir(parents=True, exist_ok=True)
+        sweep_dir.mkdir(parents=True, exist_ok=False)
+        base_cfg.to_yaml(sweep_dir / "base_config.yaml")
+        sweep_cfg.to_yaml(sweep_dir / "sweep_config.yaml")
+        (sweep_dir / "trial_configs").mkdir()
+        ExperimentConfig(manifest).to_yaml(manifest_path)
 
     typer.echo(f"[sweep] Loaded {len(overrides_list)} trial(s).")
     for i, overrides in enumerate(overrides_list, start=1):
-        trial_id = f"sweep_{i:03d}"
+        trial_id = f"{label}-{short_id}-{i:03d}"
         trial_cfg = base_cfg.copy()
         trial_cfg.apply_overrides(overrides)
 
-        trial_config_path = out_path / f"{Path(base_config).stem}_{trial_id}.yaml"
         typer.echo(f"[sweep] Trial {i}/{len(overrides_list)} {trial_id}: {_format_overrides(overrides)}")
 
         if dry_run:
             continue
 
-        trial_cfg.to_yaml(trial_config_path)
-        _run_train_from_config(str(trial_config_path), config=trial_cfg, run_name_suffix=trial_id)
+        try:
+            trial_config_path = sweep_dir / "trial_configs" / f"{trial_id}.yaml"
+            trial_cfg.to_yaml(trial_config_path)
+            run_name = _run_train_from_config(
+                str(trial_config_path),
+                config=trial_cfg,
+                run_name_suffix=trial_id,
+            )
+
+            manifest["runs"].append({"trial_id": trial_id, "run_name": run_name})
+            ExperimentConfig(manifest).to_yaml(manifest_path)
+        except Exception:
+            manifest["finished_at"] = local_datetime_tag(fmt="%Y-%m-%d_%H-%M-%S", timezone=timezone)
+            manifest["status"] = "failed"
+            ExperimentConfig(manifest).to_yaml(manifest_path)
+            raise
+
+    if not dry_run:
+        manifest["finished_at"] = local_datetime_tag(fmt="%Y-%m-%d_%H-%M-%S", timezone=timezone)
+        manifest["status"] = "completed"
+        ExperimentConfig(manifest).to_yaml(manifest_path)
 
 
 @app.command()

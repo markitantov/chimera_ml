@@ -166,7 +166,7 @@ def test_trainer_fit_integrates_all_builtin_callbacks_and_accuracy_metrics(tmp_p
         return {"fig": "ok"}
 
     monkeypatch.setattr(plot_module, "_plot_confusion_matrix", _fake_plot)
-    monkeypatch.setattr(plot_module, "_fig_to_png_bytes", lambda _fig: b"png-bytes")
+    monkeypatch.setattr(plot_module, "_fig_to_pdf_bytes", lambda _fig: b"pdf-bytes")
 
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text("seed: 0\n", encoding="utf-8")

@@ -32,7 +32,7 @@ class PlotConfusionMatrixCallback(BaseCallback):
     splits: list[str] = field(default_factory=lambda: ["val"])
     class_names: list[str] | None = None
     artifact_path: str = "figures"
-    filename_template: str = "confusion_matrix_epoch_{epoch}.png"
+    filename_template: str = "confusion_matrix_epoch_{epoch}.pdf"
     title_template: str = "{split} Confusion Matrix (epoch {epoch})"
 
     def on_fit_start(self, trainer: Any) -> None:
@@ -67,8 +67,9 @@ class PlotConfusionMatrixCallback(BaseCallback):
                     labels=self.class_names,
                     title=self.title_template.format(split=split_name, epoch=epoch),
                 )
+
                 logger.log_artifact_bytes(
-                    _fig_to_png_bytes(fig),
+                    _fig_to_pdf_bytes(fig),
                     artifact_path=f"{self.artifact_path}/{split_name}",
                     filename=self.filename_template.format(split=split_name, epoch=epoch),
                 )
@@ -248,6 +249,13 @@ def _plot_confusion_matrix(
 def _fig_to_png_bytes(fig: Any, dpi: int = 200) -> bytes:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    buf.seek(0)
+    return buf.read()
+
+
+def _fig_to_pdf_bytes(fig: Any, dpi: int = 200) -> bytes:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="pdf", dpi=dpi, bbox_inches="tight")
     buf.seek(0)
     return buf.read()
 
