@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-26
+
+### Added
+
+- Sweep runs now keep per-series metadata under `logs/<experiment_name>/_sweeps/<sweep_id>/`, including `base_config.yaml`, `sweep_config.yaml`, `manifest.yaml`, and materialized per-trial configs.
+- `chimera-ml sweep` now accepts `--sweep-name`/`-n` to add a human-readable name to sweep series and trial ids.
+
+### Changed
+
+- Sweep trial ids are now scoped to a unique sweep series and recorded in the manifest together with the generated run name.
+- `plot_confusion_matrix_callback` now logs confusion matrix artifacts as vector PDF files instead of PNG files.
+
 ## [0.2.4] - 2026-05-21
 
 ### Added
