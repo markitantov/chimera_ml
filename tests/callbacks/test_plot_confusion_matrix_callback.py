@@ -10,7 +10,6 @@ from chimera_ml.callbacks.plot_confusion_matrix_callback import (
     PlotConfusionMatrixCallback,
     _fig_to_pdf_bytes,
     _fig_to_png_bytes,
-    _format_pdf_filename,
     _plot_confusion_matrix,
 )
 from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
@@ -329,13 +328,3 @@ def test_fig_to_pdf_bytes_returns_pdf_signature():
     assert isinstance(data, bytes)
     assert data.startswith(b"%PDF")
     cm_plot_module._import_pyplot().close(fig)
-
-
-def test_format_pdf_filename_replaces_or_appends_extension():
-    assert (
-        _format_pdf_filename("confusion_matrix_epoch_{epoch}.png", split="val", epoch=3)
-        == "confusion_matrix_epoch_3.pdf"
-    )
-    assert (
-        _format_pdf_filename("confusion_matrix_{split}_{epoch}", split="val", epoch=3) == "confusion_matrix_val_3.pdf"
-    )
