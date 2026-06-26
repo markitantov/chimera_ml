@@ -17,7 +17,7 @@ def local_datetime_tag(
     dt = datetime.now(tz=ZoneInfo(timezone)) if timezone else datetime.now().astimezone()
     if fmt:
         return dt.strftime(fmt)
-    
+
     return dt.strftime("%Y-%m-%d_%H-%M") if include_time else dt.strftime("%Y-%m-%d")
 
 

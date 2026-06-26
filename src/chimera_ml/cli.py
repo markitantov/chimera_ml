@@ -506,7 +506,7 @@ def sweep(
         sweep_config_text=sweep_cfg.to_yaml_text(),
         timezone=timezone,
     )
-    
+
     sweep_dir = resolve_sweep_log_root(base_cfg) / experiment_name / "_sweeps" / sweep_id
     manifest_path = sweep_dir / "manifest.yaml"
     manifest: dict[str, Any] = {

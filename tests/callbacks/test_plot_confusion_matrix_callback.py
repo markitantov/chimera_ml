@@ -337,6 +337,5 @@ def test_format_pdf_filename_replaces_or_appends_extension():
         == "confusion_matrix_epoch_3.pdf"
     )
     assert (
-        _format_pdf_filename("confusion_matrix_{split}_{epoch}", split="val", epoch=3)
-        == "confusion_matrix_val_3.pdf"
+        _format_pdf_filename("confusion_matrix_{split}_{epoch}", split="val", epoch=3) == "confusion_matrix_val_3.pdf"
     )
