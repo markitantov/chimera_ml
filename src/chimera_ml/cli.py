@@ -178,6 +178,7 @@ def _run_train_from_config(
     experiment_name = experiment_info["experiment_name"]
     run_name = generate_run_name(
         config_path=config_path,
+        base_name=experiment_info.get("run_name"),
         model_name=cfg.section("model").get("name"),
         suffix=run_name_suffix,
         include_time=experiment_info.get("include_time", True),
@@ -507,7 +508,9 @@ def sweep(
         timezone=timezone,
     )
 
-    sweep_dir = resolve_sweep_log_root(base_cfg) / experiment_name / "_sweeps" / sweep_id
+    first_trial_cfg = base_cfg.copy()
+    first_trial_cfg.apply_overrides(overrides_list[0])
+    sweep_dir = resolve_sweep_log_root(first_trial_cfg) / experiment_name / "_sweeps" / sweep_id
     manifest_path = sweep_dir / "manifest.yaml"
     manifest: dict[str, Any] = {
         "sweep_id": sweep_id,

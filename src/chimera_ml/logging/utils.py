@@ -27,6 +27,7 @@ def short_hash(text: str, n: int = 8) -> str:
 
 def generate_run_name(
     config_path: str | None = None,
+    base_name: str | None = None,
     model_name: str | None = None,
     suffix: str | None = None,
     include_time: bool = True,
@@ -36,7 +37,9 @@ def generate_run_name(
     """Create a human-readable, unique MLflow run name."""
     parts = []
 
-    if config_path:
+    if base_name:
+        parts.append(str(base_name))
+    elif config_path:
         parts.append(Path(config_path).stem)
 
     parts.append(local_datetime_tag(include_time=include_time, fmt=datetime_format, timezone=timezone))
