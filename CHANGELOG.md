@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.5.post1] - 2026-06-29
+
+### Fixed
+
+- `sweep` run names now honor `experiment_info.params.run_name` as the generated run-name base, avoiding duplicated trial identifiers such as `sweep-4713-001_..._sweep-4713-001`.
+- `sweep` metadata directories now resolve from `console_file_logger.params.log_path` after applying the first trial overrides, so sweep manifests follow the configured log root when it is changed by the sweep config.
+
 ## [0.2.5] - 2026-06-26
 
 ### Added

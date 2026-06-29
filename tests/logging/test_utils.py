@@ -32,3 +32,20 @@ def test_generate_run_name_includes_config_stem_model_and_hash(tmp_path: Path):
     assert "demo_cfg" in name
     assert "m1" in name
     assert "x" in name
+
+
+def test_generate_run_name_prefers_base_name_over_config_stem(tmp_path: Path):
+    cfg = tmp_path / "sweep-4713-001.yaml"
+    cfg.write_text("seed: 1\n", encoding="utf-8")
+    name = generate_run_name(
+        config_path=str(cfg),
+        base_name="astats_mlp_ce",
+        model_name="bah_astats_model",
+        suffix="sweep-4713-001",
+        include_time=False,
+        datetime_format="%Y%m%d",
+    )
+
+    assert name.startswith("astats_mlp_ce_")
+    assert "bah_astats_model" in name
+    assert "sweep-4713-001" in name

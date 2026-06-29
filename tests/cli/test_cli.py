@@ -176,6 +176,37 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
 
 
+def test_cli_train_uses_config_run_name_as_generated_base_name(monkeypatch):
+    model = _ModelStub()
+    cfg = _config_for_train()
+    cfg["experiment_info"]["params"]["run_name"] = "astats_mlp_ce"
+    captured = {}
+
+    def _generate_run_name(**kwargs):
+        captured.update(kwargs)
+        return "run_name"
+
+    _patch_config(monkeypatch, cfg)
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", _generate_run_name)
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: ["cb"])
+    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None, context=None: None)
+    monkeypatch.setattr(cli, "Trainer", _TrainerStub)
+
+    cli.train(config_path="sweep-4713-001.yaml")
+
+    assert captured["config_path"] == "sweep-4713-001.yaml"
+    assert captured["base_name"] == "astats_mlp_ce"
+    assert captured["model_name"] == "m"
+
+
 def test_cli_train_works_without_snapshot_callback(monkeypatch):
     model = _ModelStub()
 
@@ -412,6 +443,36 @@ def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
     callbacks = calls[0][1].raw["callbacks"]
     checkpoint_cfg = next(item for item in callbacks if item["name"] == "checkpoint_callback")
     assert checkpoint_cfg["params"]["monitor"] == "val/ccc"
+
+
+def test_cli_sweep_resolves_log_root_after_first_trial_overrides(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    base_cfg["logging"] = [
+        {"name": "console_file_logger", "params": {"log_path": "logs"}},
+        {"name": "mlflow_logger", "params": {}},
+    ]
+    sweep_cfg = {"trials": [{"logging.console_file_logger.params.log_path": "lo"}]}
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        return f"run-{run_name_suffix}"
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    cli.sweep(
+        base_config="base.yaml",
+        sweep_config="sweep.yaml",
+        sweep_name="root-check",
+        max_trials=None,
+        dry_run=False,
+    )
+
+    assert not (tmp_path / "logs" / "exp" / "_sweeps").exists()
+    [sweep_dir] = list((tmp_path / "lo" / "exp" / "_sweeps").glob("root-check-*"))
+    trial_cfg = yaml.safe_load(next((sweep_dir / "trial_configs").glob("*.yaml")).read_text(encoding="utf-8"))
+    console_logger = next(item for item in trial_cfg["logging"] if item["name"] == "console_file_logger")
+    assert console_logger["params"]["log_path"] == "lo"
 
 
 def test_cli_sweep_creates_distinct_sweep_dirs_for_repeated_runs(monkeypatch, tmp_path):
