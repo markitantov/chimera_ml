@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-10
+
+### Added
+
+- `chimera-ml sweep` now supports Optuna sweeps via `method: optuna`, typed search spaces, and a config-built `sweep_target_callback` that reports the objective value after each normal training run.
+- Sweep documentation now describes grid and Optuna execution, dry-run behavior, and the generated sweep artifact directory structure.
+
+### Changed
+
+- Simplified the CLI sweep flow into explicit `grid` and `optuna` branches while keeping trial config generation and manifest persistence in the sweep classes.
+
 ## [0.2.5.post1] - 2026-06-29
 
 ### Fixed

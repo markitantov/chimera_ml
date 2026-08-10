@@ -6,6 +6,7 @@ from chimera_ml.callbacks.plot_confusion_matrix_callback import (
     plot_confusion_matrix_callback,
 )
 from chimera_ml.callbacks.snapshot_callback import snapshot_callback
+from chimera_ml.callbacks.sweep_target_callback import sweep_target_callback
 from chimera_ml.callbacks.telegram_notifier_callback import telegram_notifier_callback
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "early_stopping_callback",
     "plot_confusion_matrix_callback",
     "snapshot_callback",
+    "sweep_target_callback",
     "telegram_notifier_callback",
 ]

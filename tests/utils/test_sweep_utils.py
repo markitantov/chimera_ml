@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from chimera_ml.core.config import ExperimentConfig
-from chimera_ml.utils.utils import resolve_sweep_log_root
+from chimera_ml.utils.sweep import SweepTarget, resolve_sweep_log_root
 
 
 def test_resolve_sweep_log_root_uses_console_file_logger_only():
@@ -16,3 +16,10 @@ def test_resolve_sweep_log_root_uses_console_file_logger_only():
     )
 
     assert resolve_sweep_log_root(cfg) == Path("main_logs")
+
+
+def test_sweep_target_accepts_objective_alias():
+    target = SweepTarget.from_config({"objective": {"monitor": "val/score", "mode": "maximize"}})
+
+    assert target.monitor == "val/score"
+    assert target.mode == "max"
