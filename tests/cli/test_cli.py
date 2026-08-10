@@ -7,6 +7,8 @@ import typer
 import yaml
 
 from chimera_ml import cli
+from chimera_ml.callbacks.sweep_target_callback import SweepTargetCallback
+from chimera_ml.training import sweep as sweep_utils
 
 
 class _DMStub:
@@ -76,6 +78,7 @@ class _TrainerStub:
 
     def __init__(self, **kwargs):
         _TrainerStub.last_init = kwargs
+        self.callbacks = kwargs.get("callbacks", ())
         self.model = kwargs["model"]
 
     def fit(self, train_loader, val_loaders=None):
@@ -84,6 +87,68 @@ class _TrainerStub:
     def evaluate(self, loaders, with_features=False, feature_extractor=None):
         _TrainerStub.last_eval = (loaders, with_features, feature_extractor)
         return {"ok": 1.0}
+
+
+class _CallbackTrainerStub(_TrainerStub):
+    def fit(self, train_loader, val_loaders=None):
+        super().fit(train_loader, val_loaders=val_loaders)
+        for callback in self.callbacks:
+            callback.on_fit_start(self)
+            callback.on_epoch_end(self, 1, {"val/score": 0.3})
+            callback.on_epoch_end(self, 2, {"val/score": 0.8})
+            callback.on_fit_end(self)
+
+
+class _FakeOptunaTrial:
+    def __init__(self, number: int):
+        self.number = number
+        self.params = {}
+        self.user_attrs = {}
+        self.value = None
+
+    def suggest_float(self, name, low, high, step=None, log=False):
+        value = low if self.number == 0 else high
+        self.params[name] = value
+        return value
+
+    def suggest_int(self, name, low, high, step=1, log=False):
+        value = min(high, low + self.number * step)
+        self.params[name] = value
+        return value
+
+    def suggest_categorical(self, name, choices):
+        value = choices[self.number % len(choices)]
+        self.params[name] = value
+        return value
+
+    def set_user_attr(self, name, value):
+        self.user_attrs[name] = value
+
+
+class _FakeOptunaStudy:
+    def __init__(self, direction: str):
+        self.direction = direction
+        self.trials = []
+
+    def optimize(self, objective_fn, n_trials):
+        for number in range(n_trials):
+            trial = _FakeOptunaTrial(number)
+            trial.value = objective_fn(trial)
+            self.trials.append(trial)
+
+    @property
+    def best_trial(self):
+        reverse = self.direction == "maximize"
+        return sorted(self.trials, key=lambda trial: trial.value, reverse=reverse)[0]
+
+
+class _FakeOptuna:
+    def __init__(self):
+        self.created = None
+
+    def create_study(self, **kwargs):
+        self.created = kwargs
+        return _FakeOptunaStudy(direction=kwargs["direction"])
 
 
 def _config_for_train():
@@ -363,6 +428,34 @@ def test_cli_train_build_context_flows_across_build_chain(monkeypatch):
     assert seen["callback_build"] == ("train/score", 23)
 
 
+def test_run_train_from_config_returns_sweep_target_result(monkeypatch):
+    model = _ModelStub()
+    callback = SweepTargetCallback(monitor="val/score", mode="max")
+    cfg = _config_for_train()
+    cfg["callbacks"] = [{"name": "sweep_target_callback", "params": {"monitor": "val/score", "mode": "max"}}]
+
+    _patch_config(monkeypatch, cfg)
+    monkeypatch.setattr(cli, "define_seed", lambda _: None)
+    monkeypatch.setattr(cli, "generate_run_name", lambda **_: "run_name")
+    monkeypatch.setattr(cli, "build_datamodule", lambda *args, **kwargs: _DMStub())
+    monkeypatch.setattr(cli, "build_model", lambda *args, **kwargs: model)
+    monkeypatch.setattr(cli, "build_train_config", lambda _: _TrainCfg())
+    monkeypatch.setattr(cli, "build_loss", lambda *args, **kwargs: "loss")
+    monkeypatch.setattr(cli, "build_metrics", lambda *args, **kwargs: ["metric"])
+    monkeypatch.setattr(cli, "build_optimizer", lambda *args, **kwargs: "opt")
+    monkeypatch.setattr(cli, "build_scheduler", lambda *args, **kwargs: "sch")
+    monkeypatch.setattr(cli, "build_callbacks", lambda *args, **kwargs: [callback])
+    monkeypatch.setattr(cli, "build_logger", lambda cfg, inject=None, context=None: None)
+    monkeypatch.setattr(cli, "Trainer", _CallbackTrainerStub)
+
+    result = cli._run_train_from_config("cfg.yaml")
+
+    assert isinstance(result, cli.TrainRunResult)
+    assert result.run_name == "run_name"
+    assert result.target_value == 0.8
+    assert result.target_epoch == 2
+
+
 def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
     base_cfg = _config_for_train()
     sweep_cfg = {
@@ -375,7 +468,7 @@ def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
         calls.append((config_path, config, run_name_suffix))
-        return f"run-{run_name_suffix}"
+        return cli.TrainRunResult(run_name=f"run-{run_name_suffix}")
 
     monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
@@ -419,6 +512,88 @@ def test_cli_sweep_runs_train_for_parameter_grid(monkeypatch, tmp_path):
     assert "overrides" not in manifest["runs"][0]
 
 
+def test_cli_sweep_runs_optuna_trials(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {
+        "method": "optuna",
+        "n_trials": 3,
+        "objective": {"monitor": "val/score", "mode": "max"},
+        "parameters": {
+            "optimizer.params.lr": {"type": "float", "low": 1e-5, "high": 1e-2, "log": True},
+            "train.params.epochs": {"type": "int", "low": 1, "high": 3},
+            "model.params.activation": {"type": "categorical", "choices": ["relu", "gelu"]},
+        },
+    }
+    fake_optuna = _FakeOptuna()
+    calls = []
+
+    def _run_train(config_path, *, config=None, run_name_suffix=None):
+        calls.append((config_path, config, run_name_suffix))
+        value = float(len(calls))
+        return cli.TrainRunResult(
+            run_name=f"run-{run_name_suffix}",
+            target_value=value,
+            target_epoch=len(calls),
+        )
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(sweep_utils.OptunaSweep, "_import_optuna", lambda self: fake_optuna)
+    monkeypatch.setattr(cli, "_run_train_from_config", _run_train)
+
+    cli.sweep(
+        base_config="base.yaml",
+        sweep_config="sweep.yaml",
+        sweep_name="opt",
+        max_trials=2,
+        dry_run=False,
+    )
+
+    assert fake_optuna.created["direction"] == "maximize"
+    assert fake_optuna.created["study_name"].startswith("opt-")
+    assert len(calls) == 2
+    assert calls[0][1].raw["optimizer"]["params"]["lr"] == 1e-5
+    assert calls[0][1].raw["callbacks"][-1]["name"] == "sweep_target_callback"
+    assert calls[1][1].raw["optimizer"]["params"]["lr"] == 1e-2
+    assert calls[1][1].raw["train"]["params"]["epochs"] == 2
+    assert calls[1][1].raw["model"]["params"]["activation"] == "gelu"
+
+    [sweep_dir] = list((tmp_path / "logs" / "exp" / "_sweeps").glob("opt-*"))
+    manifest = yaml.safe_load((sweep_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["method"] == "optuna"
+    assert manifest["objective"] == {"monitor": "val/score", "mode": "max"}
+    assert manifest["n_trials"] == 2
+    assert manifest["status"] == "completed"
+    assert len(manifest["runs"]) == 2
+    assert manifest["runs"][0]["value"] == 1.0
+    assert manifest["runs"][0]["overrides"]["optimizer.params.lr"] == 1e-5
+    assert manifest["best_trial"]["trial_number"] == 1
+    assert manifest["best_trial"]["value"] == 2.0
+    assert manifest["best_trial"]["run_name"] == f"run-{calls[1][2]}"
+
+
+def test_cli_sweep_optuna_dry_run_does_not_import_or_create_artifacts(monkeypatch, tmp_path):
+    base_cfg = _config_for_train()
+    sweep_cfg = {
+        "method": "optuna",
+        "parameters": {
+            "optimizer.params.lr": {"type": "float", "low": 1e-5, "high": 1e-2, "log": True},
+        },
+    }
+
+    monkeypatch.chdir(tmp_path)
+    _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
+    monkeypatch.setattr(
+        sweep_utils.OptunaSweep,
+        "_import_optuna",
+        lambda self: pytest.fail("dry-run should not import optuna"),
+    )
+
+    cli.sweep(base_config="base.yaml", sweep_config="sweep.yaml", sweep_name="dry-opt", max_trials=2, dry_run=True)
+
+    assert not (tmp_path / "logs" / "exp" / "_sweeps").exists()
+
+
 def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
     base_cfg = _config_for_train()
     sweep_cfg = {"trials": [{"callbacks.checkpoint_callback.params.monitor": "val/ccc"}]}
@@ -426,7 +601,7 @@ def test_cli_sweep_patches_named_list_sections(monkeypatch, tmp_path):
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
         calls.append((config_path, config, run_name_suffix))
-        return f"run-{run_name_suffix}"
+        return cli.TrainRunResult(run_name=f"run-{run_name_suffix}")
 
     monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
@@ -454,7 +629,7 @@ def test_cli_sweep_resolves_log_root_after_first_trial_overrides(monkeypatch, tm
     sweep_cfg = {"trials": [{"logging.console_file_logger.params.log_path": "lo"}]}
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
-        return f"run-{run_name_suffix}"
+        return cli.TrainRunResult(run_name=f"run-{run_name_suffix}")
 
     monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
@@ -480,7 +655,7 @@ def test_cli_sweep_creates_distinct_sweep_dirs_for_repeated_runs(monkeypatch, tm
     sweep_cfg = {"trials": [{"train.params.epochs": 1}]}
 
     def _run_train(config_path, *, config=None, run_name_suffix=None):
-        return f"run-{run_name_suffix}"
+        return cli.TrainRunResult(run_name=f"run-{run_name_suffix}")
 
     monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})
@@ -515,7 +690,7 @@ def test_cli_sweep_marks_manifest_failed_when_trial_fails(monkeypatch, tmp_path)
         calls.append(run_name_suffix)
         if len(calls) == 2:
             raise RuntimeError("boom")
-        return f"run-{run_name_suffix}"
+        return cli.TrainRunResult(run_name=f"run-{run_name_suffix}")
 
     monkeypatch.chdir(tmp_path)
     _patch_configs(monkeypatch, {"base.yaml": base_cfg, "sweep.yaml": sweep_cfg})

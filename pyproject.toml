@@ -1,6 +1,6 @@
 [project]
 name = "chimera-ml"
-version = "0.2.5.post1"
+version = "0.3.0"
 description = "Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations) - a lightweight training framework for configurable uni-modal and multi-modal experiments."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -23,6 +23,7 @@ dependencies = [
     "typer>=0.12,<1.0",
     "matplotlib>=3.8,<4.0",
     "mlflow>=2.12,<3.0",
+    "optuna>=4.0,<5.0",
     "requests>=2.31,<3.0",
 ]
 

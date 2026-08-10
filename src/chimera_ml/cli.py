@@ -1,8 +1,6 @@
 import platform
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping, Sequence
-from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +16,7 @@ from chimera_ml.inference import (
     build_inference_pipeline,
     resolve_inference_device,
 )
-from chimera_ml.logging.utils import generate_run_name, local_datetime_tag
+from chimera_ml.logging.utils import generate_run_name
 from chimera_ml.training.builders import (
     BuildContext,
     build_callbacks,
@@ -31,9 +29,10 @@ from chimera_ml.training.builders import (
     build_scheduler,
     build_train_config,
 )
+from chimera_ml.training.sweep import GridSweep, OptunaSweep
 from chimera_ml.training.trainer import Trainer
 from chimera_ml.utils.seed import define_seed
-from chimera_ml.utils.utils import build_sweep_identifiers, resolve_sweep_log_root
+from chimera_ml.utils.sweep import TrainRunResult, format_sweep_overrides
 
 app = typer.Typer(add_completion=False)
 registry_app = typer.Typer(help="Inspect registered components.")
@@ -114,55 +113,12 @@ def _resolve_entrypoint_plugins(group: str = "chimera_ml.plugins") -> list[Any]:
         return []
 
 
-def _iter_sweep_overrides(sweep_cfg: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
-    """Yield trial override dictionaries from explicit trials or a grid parameter spec."""
-    trials = sweep_cfg.get("trials")
-    parameters = sweep_cfg.get("parameters")
-
-    if trials is not None and parameters is not None:
-        raise ValueError("Sweep config must define either 'trials' or 'parameters', not both.")
-
-    if trials is not None:
-        if not isinstance(trials, Sequence) or isinstance(trials, (str, bytes)):
-            raise TypeError("Sweep config 'trials' must be a list of mappings.")
-
-        for i, trial in enumerate(trials, start=1):
-            if not isinstance(trial, Mapping):
-                raise TypeError(f"Sweep trial #{i} must be a mapping.")
-
-            yield dict(trial)
-
-        return
-
-    if not isinstance(parameters, Mapping):
-        raise TypeError("Sweep config must contain a 'parameters' mapping or a 'trials' list.")
-
-    paths = list(parameters.keys())
-    value_lists: list[list[Any]] = []
-    for path in paths:
-        values = parameters[path]
-        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
-            raise TypeError(f"Sweep parameter '{path}' must be a non-empty list.")
-
-        if not values:
-            raise ValueError(f"Sweep parameter '{path}' must contain at least one value.")
-
-        value_lists.append(list(values))
-
-    for values in product(*value_lists):
-        yield dict(zip(paths, values, strict=True))
-
-
-def _format_overrides(overrides: Mapping[str, Any]) -> str:
-    return ", ".join(f"{key}={value!r}" for key, value in overrides.items())
-
-
 def _run_train_from_config(
     config_path: str,
     *,
     config: ExperimentConfig | None = None,
     run_name_suffix: str | None = None,
-) -> str:
+) -> TrainRunResult:
     """Run training from a config path or an already loaded config dict."""
     typer.echo(f"[train] Loading config: {config_path}")
     cfg = config.copy() if config is not None else ExperimentConfig.from_yaml(config_path)
@@ -270,7 +226,18 @@ def _run_train_from_config(
     typer.echo("[train] Starting fit...")
     trainer.fit(train_loader, val_loaders=val_loaders)
     typer.echo("[train] Done.")
-    return run_name
+
+    callbacks_cfg = cfg.get("callbacks")
+    if isinstance(callbacks_cfg, list):
+        for callback_cfg, callback in zip(callbacks_cfg, callbacks, strict=False):
+            if callback_cfg.get("name") == "sweep_target_callback":
+                return TrainRunResult(
+                    run_name=run_name,
+                    target_value=getattr(callback, "best_value", None),
+                    target_epoch=getattr(callback, "best_epoch", None),
+                )
+
+    return TrainRunResult(run_name=run_name)
 
 
 @app.command("validate-config")
@@ -482,19 +449,12 @@ def sweep(
     max_trials: int | None = typer.Option(None, "--max-trials", help="Optional CI limit for the number of trials."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print generated trials without running training."),
 ):
-    """Run a grid/explicit hyperparameter sweep by repeatedly calling train."""
+    """Run a grid or Optuna hyperparameter sweep by repeatedly calling train."""
     base_cfg = ExperimentConfig.from_yaml(base_config)
     sweep_cfg = ExperimentConfig.from_yaml(sweep_config)
 
     if max_trials is not None and max_trials < 1:
         raise ValueError("--max-trials must be >= 1 when provided.")
-
-    overrides_list = list(_iter_sweep_overrides(sweep_cfg.raw))
-    if max_trials is not None:
-        overrides_list = overrides_list[:max_trials]
-
-    if not overrides_list:
-        raise ValueError("Sweep config produced no trials.")
 
     experiment_info = base_cfg.section("experiment_info").get("params", {})
     if "experiment_name" not in experiment_info:
@@ -502,66 +462,134 @@ def sweep(
 
     experiment_name = experiment_info["experiment_name"]
     timezone = experiment_info.get("timezone", None)
-    label, short_id, sweep_id, started_at = build_sweep_identifiers(
-        sweep_name=sweep_name,
-        sweep_config_text=sweep_cfg.to_yaml_text(),
-        timezone=timezone,
-    )
+    method = str(sweep_cfg.raw.get("method", "grid")).strip().lower()
+    method = "grid" if method in ("", "cartesian") else method
 
-    first_trial_cfg = base_cfg.copy()
-    first_trial_cfg.apply_overrides(overrides_list[0])
-    sweep_dir = resolve_sweep_log_root(first_trial_cfg) / experiment_name / "_sweeps" / sweep_id
-    manifest_path = sweep_dir / "manifest.yaml"
-    manifest: dict[str, Any] = {
-        "sweep_id": sweep_id,
-        "sweep_name": label,
-        "base_config": "base_config.yaml",
-        "sweep_config": "sweep_config.yaml",
-        "started_at": started_at,
-        "finished_at": None,
-        "status": "running",
-        "runs": [],
-    }
-
-    if not dry_run:
-        sweep_dir.mkdir(parents=True, exist_ok=False)
-        base_cfg.to_yaml(sweep_dir / "base_config.yaml")
-        sweep_cfg.to_yaml(sweep_dir / "sweep_config.yaml")
-        (sweep_dir / "trial_configs").mkdir()
-        ExperimentConfig(manifest).to_yaml(manifest_path)
-
-    typer.echo(f"[sweep] Loaded {len(overrides_list)} trial(s).")
-    for i, overrides in enumerate(overrides_list, start=1):
-        trial_id = f"{label}-{short_id}-{i:03d}"
-        trial_cfg = base_cfg.copy()
-        trial_cfg.apply_overrides(overrides)
-
-        typer.echo(f"[sweep] Trial {i}/{len(overrides_list)} {trial_id}: {_format_overrides(overrides)}")
+    if method == "grid":
+        sweep_run = GridSweep(
+            base_cfg=base_cfg,
+            sweep_cfg=sweep_cfg,
+            experiment_name=experiment_name,
+            sweep_name=sweep_name,
+            timezone=timezone,
+            max_trials=max_trials,
+        )
+        total_trials = len(sweep_run.overrides)
+        typer.echo(f"[sweep] Loaded {total_trials} trial(s).")
 
         if dry_run:
-            continue
+            for trial_index, overrides in enumerate(sweep_run.overrides, start=1):
+                trial_id = f"{sweep_run.label}-{sweep_run.short_id}-{trial_index:03d}"
+                typer.echo(
+                    f"[sweep] Trial {trial_index}/{total_trials} {trial_id}: {format_sweep_overrides(overrides)}"
+                )
 
+            return
+
+        sweep_run.start()
         try:
-            trial_config_path = sweep_dir / "trial_configs" / f"{trial_id}.yaml"
+            for trial_index, overrides in enumerate(sweep_run.overrides, start=1):
+                trial_id, trial_config_path, trial_cfg = sweep_run.write_trial_config(trial_index, overrides)
+                typer.echo(
+                    f"[sweep] Trial {trial_index}/{total_trials} {trial_id}: {format_sweep_overrides(overrides)}"
+                )
+
+                result = _run_train_from_config(
+                    str(trial_config_path),
+                    config=trial_cfg,
+                    run_name_suffix=trial_id,
+                )
+
+                sweep_run.save_trial_record({"trial_id": trial_id, "run_name": result.run_name})
+        except Exception:
+            sweep_run.finish("failed")
+            raise
+
+        sweep_run.finish("completed")
+        return
+
+    if method == "optuna":
+        sweep_run = OptunaSweep(
+            base_cfg=base_cfg,
+            sweep_cfg=sweep_cfg,
+            experiment_name=experiment_name,
+            sweep_name=sweep_name,
+            timezone=timezone,
+            max_trials=max_trials,
+        )
+
+        if dry_run:
+            typer.echo(
+                f"[sweep] Optuna dry run: {sweep_run.n_trials} trial(s), "
+                f"target={sweep_run.target.monitor!r}, mode={sweep_run.target.mode!r}."
+            )
+            for path, spec in sweep_run.search_space.items():
+                typer.echo(f"[sweep] {path}: {spec!r}")
+
+            return
+
+        sweep_run.start()
+        study = sweep_run.create_study()
+        typer.echo(f"[sweep] Running Optuna study '{sweep_run.study_name}' for {sweep_run.n_trials} trial(s).")
+
+        def run_trial(trial: Any) -> float:
+            trial_index = int(trial.number) + 1
+            overrides = sweep_run.suggest_overrides(trial)
+
+            trial_id, trial_config_path, trial_cfg = sweep_run.write_trial_config(trial_index, overrides)
+            typer.echo(
+                f"[sweep] Trial {trial_index}/{sweep_run.n_trials} {trial_id}: {format_sweep_overrides(overrides)}"
+            )
+            callbacks_cfg = trial_cfg.raw.setdefault("callbacks", [])
+            if not isinstance(callbacks_cfg, list):
+                raise TypeError("Config section 'callbacks' must be a list to run an Optuna sweep.")
+
+            callbacks_cfg.append(
+                {
+                    "name": "sweep_target_callback",
+                    "params": {"monitor": sweep_run.target.monitor, "mode": sweep_run.target.mode},
+                }
+            )
             trial_cfg.to_yaml(trial_config_path)
-            run_name = _run_train_from_config(
+
+            result = _run_train_from_config(
                 str(trial_config_path),
                 config=trial_cfg,
                 run_name_suffix=trial_id,
             )
+            if result.target_value is None:
+                raise ValueError(f"Sweep target '{sweep_run.target.monitor}' was not found in training logs.")
 
-            manifest["runs"].append({"trial_id": trial_id, "run_name": run_name})
-            ExperimentConfig(manifest).to_yaml(manifest_path)
+            record: dict[str, Any] = {
+                "trial_id": trial_id,
+                "run_name": result.run_name,
+                "trial_number": int(trial.number),
+                "value": result.target_value,
+                "overrides": dict(overrides),
+            }
+            if result.target_epoch is not None:
+                record["target_epoch"] = result.target_epoch
+
+            sweep_run.save_trial_record(record)
+
+            if hasattr(trial, "set_user_attr"):
+                trial.set_user_attr("trial_id", trial_id)
+                trial.set_user_attr("run_name", result.run_name)
+                trial.set_user_attr("target_epoch", result.target_epoch)
+
+            return result.target_value
+
+        try:
+            study.optimize(run_trial, n_trials=sweep_run.n_trials)
         except Exception:
-            manifest["finished_at"] = local_datetime_tag(fmt="%Y-%m-%d_%H-%M-%S", timezone=timezone)
-            manifest["status"] = "failed"
-            ExperimentConfig(manifest).to_yaml(manifest_path)
+            sweep_run.finish("failed")
             raise
 
-    if not dry_run:
-        manifest["finished_at"] = local_datetime_tag(fmt="%Y-%m-%d_%H-%M-%S", timezone=timezone)
-        manifest["status"] = "completed"
-        ExperimentConfig(manifest).to_yaml(manifest_path)
+        sweep_run.save_best_trial(study.best_trial)
+        sweep_run.finish("completed")
+        return
+
+    raise ValueError(f"Unsupported sweep method '{method}'. Supported methods: grid, optuna.")
 
 
 @app.command()

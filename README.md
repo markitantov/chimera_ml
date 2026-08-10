@@ -67,7 +67,7 @@ Main commands:
 chimera-ml validate-config --config-path <config.yaml>
 chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
-chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--sweep-name NAME] [--max-trials N]
+chimera-ml sweep --base-config <config.yaml> --sweep-config <sweep.yaml> [--sweep-name NAME] [--max-trials N] [--dry-run]
 chimera-ml eval --config-path <config.yaml> --checkpoint-path <ckpt.pt> [--with-features]
 chimera-ml inference -i <input.mp4> [-o <out.json>] --config-path <inference.yaml> [--device cpu|cuda|auto] [--work-dir <dir>]
 chimera-ml registry list [--type models|losses|metrics|optimizers|schedulers|callbacks|collates|loggers|datamodules|inference_steps]
@@ -92,9 +92,11 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 `sweep`:
 
 - supports Cartesian grids via `parameters` (grid search) and explicit trial lists via `trials`,
+- supports Optuna sweeps via `method: optuna` and typed search spaces,
+- keeps the existing grid/trial behavior when `method` is omitted,
 - applies overrides using dotted paths such as `optimizer.params.lr` or
   `callbacks.checkpoint_callback.params.monitor`,
-- stores sweep metadata under `logs/<experiment_name>/_sweeps/<sweep_id>/`,
+- stores sweep metadata under `<log_path>/<experiment_name>/_sweeps/<sweep_id>/`,
 - saves `base_config.yaml`, `sweep_config.yaml`, `manifest.yaml`, and per-trial configs for each sweep series,
 - runs the normal `train` flow once per trial and appends trial ids such as
   `lr-search-a1b2-001` to run names,
@@ -310,6 +312,58 @@ trials:
   - optimizer.params.lr: 0.0001
     callbacks.checkpoint_callback.params.monitor: "val/ccc"
 ```
+
+Optuna example:
+
+```yaml
+method: optuna
+n_trials: 30
+objective:
+  monitor: val/loss
+  mode: min
+parameters:
+  optimizer.params.lr:
+    type: float
+    low: 1.0e-5
+    high: 1.0e-2
+    log: true
+  optimizer.params.weight_decay:
+    type: float
+    low: 0.0
+    high: 0.1
+  train.params.epochs:
+    type: int
+    low: 3
+    high: 10
+  model.params.hidden_dim:
+    type: categorical
+    choices: [128, 256, 512]
+```
+
+Sweep execution:
+
+- When `method` is omitted, empty, or `cartesian`, `chimera-ml sweep` uses `GridSweep`.
+- Grid sweeps read either `parameters` as a Cartesian product or `trials` as explicit override mappings.
+- `method: optuna` uses `OptunaSweep`; `parameters` becomes an Optuna search space with `float`, `int`, and `categorical` values.
+- Optuna target config can be written as `objective`, `target`, or `metric`; it defaults to `monitor: val/loss`, `mode: min`.
+- For Optuna trials, the CLI materializes the trial YAML, appends `sweep_target_callback` to `callbacks`, runs the normal train flow, and returns the callback's best value to `study.optimize(...)`.
+- `--dry-run` prints generated grid trials or the Optuna search space without creating sweep artifacts or starting training.
+
+Sweep artifacts:
+
+```text
+<log_path>/<experiment_name>/_sweeps/<sweep_id>/
+  base_config.yaml
+  sweep_config.yaml
+  manifest.yaml
+  trial_configs/
+    <sweep_name>-<short_id>-001.yaml
+    <sweep_name>-<short_id>-002.yaml
+```
+
+`<log_path>` comes from `logging.console_file_logger.params.log_path` and defaults to `logs`. Grid sweeps resolve it after applying the first trial override, so a grid override of the console logger path moves the whole sweep folder.
+
+For grid sweeps, `manifest.yaml` records the sweep identity, status, timestamps, and `runs` entries with `trial_id` and generated `run_name`. For Optuna sweeps it also records `method`, `study_name`, `objective`, `n_trials`, per-trial objective `value`, optional `target_epoch`, sampled `overrides`, and `best_trial`.
 
 ## TrainConfig Parameters
 
