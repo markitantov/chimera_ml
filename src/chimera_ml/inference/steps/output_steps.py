@@ -9,6 +9,13 @@ from chimera_ml.inference.context import InferenceContext
 
 @dataclass
 class WriteJsonPredictionsStep:
+    """Write the predictions artifact and input path as JSON.
+
+    Attributes:
+        output_path: Optional explicit output file. When omitted, the input
+            suffix is replaced with .json.
+    """
+
     output_path: str | None = None
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
@@ -30,6 +37,8 @@ class WriteJsonPredictionsStep:
 
 @dataclass
 class PrintJsonPredictionsStep:
+    """Print the predictions artifact and input path as JSON."""
+
     def run(self, ctx: InferenceContext) -> InferenceContext:
         if ctx.predictions is None:
             raise ValueError("No inference output available. Expected 'predictions' artifact.")
@@ -45,9 +54,17 @@ class PrintJsonPredictionsStep:
 
 @INFERENCE_STEPS.register("write_json_predictions_step")
 def write_json_predictions_step(**params: Any) -> WriteJsonPredictionsStep:
+    """Create WriteJsonPredictionsStep from registry parameters.
+
+    Registry key: write_json_predictions_step.
+    """
     return WriteJsonPredictionsStep(**params)
 
 
 @INFERENCE_STEPS.register("print_json_predictions_step")
 def print_json_predictions_step(**params: Any) -> PrintJsonPredictionsStep:
+    """Create PrintJsonPredictionsStep from registry parameters.
+
+    Registry key: print_json_predictions_step.
+    """
     return PrintJsonPredictionsStep(**params)

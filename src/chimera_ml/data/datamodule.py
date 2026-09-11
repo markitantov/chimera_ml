@@ -10,7 +10,23 @@ from chimera_ml.data.masking_collate import MaskingCollate
 
 @dataclass
 class DataModule:
-    """Lightning-like helper that builds train/val/test dataloaders."""
+    """Build train, validation, and test DataLoaders from datasets.
+
+    A dataset may be a single object, a named mapping, or a sequence. The
+    container shape is preserved so Trainer can address multiple splits.
+
+    Attributes:
+        train_dataset: Optional dataset or collection for training.
+        val_dataset: Optional validation dataset or collection.
+        test_dataset: Optional test dataset or collection.
+        batch_size: Batch size passed to each DataLoader.
+        num_workers: Worker count passed to each DataLoader.
+        pin_memory: Whether loaders pin host memory.
+        persistent_workers: Whether workers persist between epochs.
+        shuffle_train: Shuffle training datasets.
+        drop_last_train: Drop incomplete training batches.
+        collate_fn: Callable converting samples into a Batch.
+    """
 
     train_dataset: Dataset | Mapping[str, Dataset] | Sequence[Dataset] | None = None
     val_dataset: Dataset | Mapping[str, Dataset] | Sequence[Dataset] | None = None

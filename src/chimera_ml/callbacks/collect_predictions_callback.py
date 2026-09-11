@@ -15,6 +15,14 @@ from chimera_ml.core.registry import CALLBACKS
 class CollectPredictionsCallback(BaseCallback):
     """Log per-sample predictions as CSV artifacts to MLflow.
 
+    Attributes:
+        splits: Selectors such as val, test, train, or an exact split name.
+        artifact_path: MLflow artifact directory.
+        filename_template: Per-epoch CSV filename format.
+        include_probs: Include per-class probabilities for classification.
+        task: regression or classification row format.
+
+
     `splits` supports:
       - "val"  -> all validation splits (val_loaders dict, else "val")
       - "test" -> all test splits (test_loaders dict, else "test")

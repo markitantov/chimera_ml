@@ -8,7 +8,15 @@ from chimera_ml.losses.base import BaseLoss
 
 
 class FocalLoss(BaseLoss):
-    """Multi-class focal loss for logits + class indices."""
+    """Multi-class focal loss for logits and integer class targets.
+
+    Args:
+        gamma: Focusing exponent; larger values down-weight easy examples.
+        alpha: Optional scalar or per-class weighting factor.
+        reduction: mean, sum, or none.
+        label_smoothing: Optional smoothing applied to the selected class
+            probability.
+    """
 
     def __init__(
         self,

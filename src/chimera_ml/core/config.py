@@ -8,14 +8,28 @@ import yaml
 
 
 def load_yaml(path: str) -> dict[str, Any]:
-    """Load a YAML file into a Python dictionary."""
+    """Load a YAML file and return its top-level mapping.
+
+    Args:
+        path: YAML file path.
+    Returns:
+        Parsed YAML mapping. Schema validation is performed separately by
+        ExperimentConfig.validate.
+    """
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 @dataclass
 class ExperimentConfig:
-    """Convenient wrapper around raw YAML dictionary."""
+    """Mutable wrapper around an experiment YAML mapping.
+
+    The wrapper provides loading, serialization, validation, named-section
+    access, and dotted-path overrides used by training and sweep flows.
+
+    Attributes:
+        raw: Top-level experiment configuration mapping.
+    """
 
     raw: dict[str, Any]
 

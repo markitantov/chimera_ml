@@ -86,6 +86,8 @@ class RegressionBaseMetric(BaseMetric):
 
 @dataclass
 class MAEMetric(RegressionBaseMetric):
+    """Mean absolute error with raw or uniform multi-output aggregation."""
+
     def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
@@ -101,6 +103,8 @@ class MAEMetric(RegressionBaseMetric):
 
 @dataclass
 class RMSEMetric(RegressionBaseMetric):
+    """Root mean squared error with raw or uniform aggregation."""
+
     def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
@@ -117,6 +121,8 @@ class RMSEMetric(RegressionBaseMetric):
 
 @dataclass
 class MSEMetric(RegressionBaseMetric):
+    """Mean squared error with raw or uniform multi-output aggregation."""
+
     def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:
@@ -132,6 +138,8 @@ class MSEMetric(RegressionBaseMetric):
 
 @dataclass
 class R2Metric(RegressionBaseMetric):
+    """Coefficient of determination with optional variance weighting."""
+
     def compute(self) -> dict[str, float]:
         y_true, y_pred = self._stack()
         if y_true.shape[0] == 0:

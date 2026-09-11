@@ -5,14 +5,23 @@ T = TypeVar("T")
 
 
 class Registry:
-    """Simple name -> factory registry for plug-and-play components."""
+    """Name-to-factory registry used by configuration builders.
+
+    A registry owns unique string keys and returns the registered callable.
+    Framework registries such as MODELS, LOSSES, CALLBACKS, and INFERENCE_STEPS
+    share this contract.
+    """
 
     def __init__(self, name: str):
         self.name = name
         self._items: dict[str, Callable[..., Any]] = {}
 
     def register(self, key: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
-        """Decorator to register a factory/class under a key."""
+        """Return a decorator that registers a callable under key.
+
+        Raises:
+            KeyError: If key is already registered.
+        """
 
         def deco(obj: Callable[..., T]) -> Callable[..., T]:
             if key in self._items:
@@ -23,19 +32,30 @@ class Registry:
         return deco
 
     def get(self, key: str) -> Callable[..., Any]:
-        """Return a registered factory by key."""
+        """Return the callable registered under key.
+
+        Raises:
+            KeyError: If key is unknown; the error lists known keys.
+        """
         if key not in self._items:
             known = ", ".join(sorted(self._items.keys()))
             raise KeyError(f"{self.name}: unknown key '{key}'. Known: {known}")
         return self._items[key]
 
     def create(self, key: str, **kwargs: Any) -> Any:
-        """Create an object from a registered factory."""
+        """Call the factory registered under key with keyword arguments.
+
+        Args:
+            key: Registry key.
+            kwargs: Factory arguments.
+        Returns:
+            Factory result.
+        """
         factory = self.get(key)
         return factory(**kwargs)
 
     def keys(self) -> list[str]:
-        """Return sorted registry keys."""
+        """Return registered keys in deterministic sorted order."""
         return sorted(self._items.keys())
 
 

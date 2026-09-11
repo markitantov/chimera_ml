@@ -53,7 +53,13 @@ def _prepare_nodes(nodes: list["InferenceGraphNode"]) -> dict[str, "InferenceGra
 
 @dataclass(frozen=True)
 class InferenceGraphNode:
-    """Single inference step plus its DAG dependencies."""
+    """One inference step and the node identifiers it depends on.
+
+    Attributes:
+        node_id: Unique identifier used by after references.
+        step: Object implementing run(ctx) -> ctx.
+        after: Dependencies that must complete before this node runs.
+    """
 
     node_id: str
     step: BaseInferenceStep
@@ -61,7 +67,18 @@ class InferenceGraphNode:
 
 
 class InferencePipeline:
-    """Inference pipeline represented as a small DAG of step dependencies."""
+    """Execute inference steps as a validated sequential or parallel DAG.
+
+    The constructor rejects duplicate IDs, self-dependencies, unknown
+    dependencies, and cycles. run copies the initial artifact mapping into
+    step contexts and merges only artifacts explicitly written by each step.
+    In parallel mode, unordered writes to the same artifact are rejected.
+
+    Attributes:
+        nodes: Original graph nodes in configuration order.
+        name: Human-readable pipeline name.
+        parallel_mode: Whether explicit after dependencies control concurrency.
+    """
 
     def __init__(
         self,
@@ -70,6 +87,16 @@ class InferencePipeline:
         name: str = "inference_pipeline",
         parallel_mode: bool = False,
     ) -> None:
+        """Validate and initialize a pipeline.
+
+        Args:
+            nodes: Graph nodes with unique IDs and valid dependencies.
+            name: Human-readable pipeline name.
+            parallel_mode: Allow independent nodes to run concurrently and
+                enforce artifact ownership rules.
+        Raises:
+            ValueError: If node IDs or dependencies are invalid.
+        """
         self._node_map = _prepare_nodes(nodes)
         self.nodes = nodes
         self.name = name
@@ -77,6 +104,17 @@ class InferencePipeline:
         self._dependency_cache: dict[tuple[str, str], bool] = {}
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
+        """Run all nodes and update the supplied context's artifacts.
+
+        Args:
+            ctx: Initial context containing input, runtime, config, and seed
+                artifacts.
+        Returns:
+            The same context object with merged artifacts.
+        Raises:
+            ValueError: If dependencies cannot be resolved or parallel
+                artifact writes conflict.
+        """
         working_ctx = InferenceContext(
             input_path=ctx.input_path,
             work_dir=ctx.work_dir,

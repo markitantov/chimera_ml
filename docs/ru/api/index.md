@@ -1,16 +1,27 @@
-# API
+# API reference
 
-Справочник ниже автоматически генерируется из установленного пакета
-`chimera_ml` с помощью `mkdocstrings`. Сейчас он намеренно небольшой и
-начинается с публичных контейнеров и абстракции реестра, используемых во всём
-фреймворке.
+Этот справочник объясняет контракты, которые используют подсистемы framework.
+Документация объектов генерируется из установленного пакета через mkdocstrings,
+а каждая страница дополнительно содержит contextual описание, связи между
+configuration и objects и ссылки на task-oriented инструкции.
 
-## Основные контейнеры данных
+Начните с [Core](core.md), где описаны Batch, ModelOutput, ExperimentConfig и
+Registry. Затем выберите страницу подсистемы, компонент которой вы создаёте
+или настраиваете.
 
-::: chimera_ml.core.batch.Batch
+## Подсистемы
 
-::: chimera_ml.core.types.ModelOutput
+- [Core](core.md): общие containers, configuration и registry primitives.
+- [Data](data.md): DataModule, collation, masks и loader normalization.
+- [Models](models.md): model contract и multimodal fusion implementations.
+- [Training](training.md): Trainer, builders, BuildContext и sweeps.
+- [Inference](inference.md): contexts, DAG pipelines, steps и builders.
+- [Callbacks](callbacks.md): lifecycle extensions и artifact callbacks.
+- [Losses](losses.md): optimization objectives и registry factories.
+- [Metrics](metrics.md): stateful epoch metrics и aggregation.
+- [Logging](logging.md): console/file и MLflow logger contracts.
+- [Plugins](plugins.md): built-in и entry-point registration.
 
-## Реестры
-
-::: chimera_ml.core.registry.Registry
+Используйте [User Guide](../user-guide/index.md), когда нужно выполнить
+задачу; этот раздел нужен для точных signatures, полей, return values и
+extension contracts.

@@ -10,7 +10,17 @@ from chimera_ml.utils.utils import zip_sources
 
 @dataclass
 class SnapshotCallback(BaseCallback):
-    """Save source/config snapshots and optionally log them as artifacts."""
+    """Save source and configuration snapshots for a run.
+
+    Attributes:
+        log_path: Root output directory.
+        experiment_name: Experiment directory component.
+        run_name: Run directory component.
+        include: Source paths passed to the archive helper.
+        save_code_zip: Create code.zip when true.
+        save_config: Copy config_path when true and a path is provided.
+        config_path: Optional configuration file to copy.
+    """
 
     log_path: str = "logs"
     experiment_name: str = "chimera"

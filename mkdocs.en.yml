@@ -10,8 +10,62 @@ theme:
 nav:
   - Home: index.md
   - Getting started:
+      - Overview: getting-started/index.md
       - Installation: getting-started/installation.md
       - Quick start: getting-started/quickstart.md
-  - Guides: guides/index.md
-  - API reference: api/index.md
-  - Contributing: contributing.md
+      - First experiment: getting-started/first-experiment.md
+  - Concepts:
+      - Overview: concepts/index.md
+      - Architecture: concepts/architecture.md
+      - Configuration: concepts/configuration.md
+      - Registries: concepts/registries.md
+      - BuildContext: concepts/build-context.md
+      - Plugins: concepts/plugins.md
+  - User guide:
+      - Overview: user-guide/index.md
+      - Configuration reference: user-guide/configuration.md
+      - Data: user-guide/data.md
+      - Models: user-guide/models.md
+      - Training: user-guide/training.md
+      - Evaluation: user-guide/evaluation.md
+      - Losses: user-guide/losses.md
+      - Metrics: user-guide/metrics.md
+      - Optimizers and schedulers: user-guide/optimizers-schedulers.md
+      - Callbacks: user-guide/callbacks.md
+      - Logging: user-guide/logging.md
+      - MLflow: user-guide/mlflow.md
+      - Inference: user-guide/inference.md
+      - Sweeps: user-guide/sweeps.md
+      - Plugins: user-guide/plugins.md
+      - CLI workflows: user-guide/cli.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - VA estimation: tutorials/va-estimation.md
+      - ORAGEN: tutorials/oragen.md
+      - Affective states recognition: tutorials/affective-states-recognition.md
+  - API reference:
+      - Overview: api/index.md
+      - Core: api/core.md
+      - Data: api/data.md
+      - Models: api/models.md
+      - Training: api/training.md
+      - Inference: api/inference.md
+      - Callbacks: api/callbacks.md
+      - Losses: api/losses.md
+      - Metrics: api/metrics.md
+      - Logging: api/logging.md
+      - Plugins: api/plugins.md
+  - CLI reference: cli/reference.md
+  - Development:
+      - Overview: development/index.md
+      - Setup: development/setup.md
+      - Architecture: development/architecture.md
+      - Testing: development/testing.md
+      - Documentation: development/documentation.md
+      - Plugin authoring: development/plugins.md
+      - Releasing: development/releasing.md
+  - Releases:
+      - Overview: releases/index.md
+      - Changelog: releases/changelog.md
+      - Migration guide: releases/migration.md

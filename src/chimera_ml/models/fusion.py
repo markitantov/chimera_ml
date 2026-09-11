@@ -8,7 +8,17 @@ from chimera_ml.models.base import BaseModel
 
 
 class FeatureFusionModel(BaseModel):
-    """Feature-level fusion with optional masking."""
+    """Fuse modality embeddings, then apply a prediction head.
+
+    Each available modality is encoded, optionally zeroed by its presence mask,
+    concatenated along the feature dimension, and passed to head.
+
+    Args:
+        encoders: Modality name to encoder module.
+        head: Module receiving the concatenated embedding.
+        dropout: Dropout probability applied after concatenation.
+        use_mask: Whether modality masks suppress missing branches.
+    """
 
     def __init__(
         self,
@@ -63,7 +73,16 @@ def feature_fusion_model(
 
 
 class PredictionFusionModel(BaseModel):
-    """Prediction-level fusion: per-modality models -> combine logits."""
+    """Fuse predictions from independent per-modality submodels.
+
+    The fusion strategy is mean, sum, or weighted averaging. Missing modality
+    inputs are skipped.
+
+    Args:
+        submodels: Modality name to BaseModel mapping.
+        fusion: Combination strategy: mean, sum, or weighted.
+        weights: Optional modality weights used by weighted fusion.
+    """
 
     def __init__(
         self,

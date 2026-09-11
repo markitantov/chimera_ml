@@ -12,9 +12,15 @@ from chimera_ml.metrics.base import BaseMetric
 
 @dataclass
 class ConfusionMatrixMetric(BaseMetric):
-    """Confusion matrix metric.
+    """Accumulate class predictions and expose a confusion matrix.
 
-    Accumulates y_true/y_pred; compute() builds the matrix and returns cm_acc.
+    Attributes:
+        normalize: None for counts, or true, pred, or all for normalized
+            matrix values.
+        value: Latest matrix after compute; None before any data is computed.
+
+    The compute method returns a cm_acc scalar; use value to retrieve the
+    matrix.
     """
 
     normalize: str | None = None  # None | 'true' | 'pred' | 'all'

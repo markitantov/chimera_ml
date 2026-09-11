@@ -28,10 +28,14 @@ def _safe_f1(precision: np.ndarray, recall: np.ndarray, zero_division: float) ->
 
 @dataclass
 class PRFMetric(BaseMetric):
-    """Precision / Recall / F1.
+    """Compute precision, recall, and F1 from accumulated class predictions.
 
-    Accumulates y_true and y_pred during epoch.
-    Computes metrics at epoch end.
+    Attributes:
+        average: micro, macro, or weighted aggregation.
+        zero_division: Value used when a class has no positive denominator.
+
+    The compute method returns keys prefixed with the selected average, for
+    example macro_precision, macro_recall, and macro_f1.
     """
 
     average: Literal["micro", "macro", "weighted"]

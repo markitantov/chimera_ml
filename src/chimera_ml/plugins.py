@@ -31,7 +31,12 @@ _BUILTIN_MODULES: tuple[str, ...] = (
 
 
 def register_all() -> None:
-    """Register all built-in components and entrypoint plugins."""
+    """Import built-ins and load external entry-point plugins.
+
+    Built-in modules register factories through decorators. External failures
+    are converted to warnings so optional project plugins do not prevent the
+    core application from starting.
+    """
     for mod in _BUILTIN_MODULES:
         importlib.import_module(mod)
 

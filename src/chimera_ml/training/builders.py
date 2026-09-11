@@ -27,7 +27,13 @@ class ContextDescribable(Protocol):
 
 @dataclass
 class BuildContext:
-    """Per-run build context shared across datamodule/model/loss/etc construction."""
+    """Shared state for constructing one configured experiment.
+
+    Attributes:
+        config: Optional raw or typed experiment configuration.
+        stage: Optional construction stage label.
+        values: Nested key/value store shared by builders.
+    """
 
     config: Any | None = None
     stage: str | None = None
@@ -63,7 +69,13 @@ class BuildContext:
         node[parts[-1]] = value
 
     def register(self, component: Any) -> Any:
-        """Let a built component enrich the shared context."""
+        """Let a built component publish derived values into the context.
+
+        Args:
+            component: Object that may implement describe_context(context).
+        Returns:
+            The same component, allowing use in builder expressions.
+        """
         if hasattr(component, "describe_context"):
             describable = cast(ContextDescribable, component)
             describable.describe_context(self)
@@ -71,7 +83,13 @@ class BuildContext:
         return component
 
     def register_many(self, components: list[Any]) -> list[Any]:
-        """Let a list of built components enrich the shared context."""
+        """Register each component and return the original list.
+
+        Args:
+            components: Built objects to inspect for describe_context.
+        Returns:
+            The input list after context enrichment.
+        """
         for component in components:
             self.register(component)
 
@@ -110,8 +128,10 @@ def build_from_registry(
             If True, returns None when cfg is None (and default_name is None) or cfg has empty name.
         normalize_name:
             If True, uses lower() on name.
-        params_key/name_key:
-            Keys used in cfg.
+        params_key:
+            Config key containing factory parameters.
+        name_key:
+            Config key containing the registry name.
         inject:
             Runtime dependencies (e.g. model_params, optimizer) merged into params.
         inject_overrides:
@@ -176,25 +196,25 @@ def build_from_registry(
 
 
 def build_loss(cfg: dict[str, Any], *, context: BuildContext | None = None) -> Any:
-    """Build loss function from the losses registry."""
+    """Build a loss from the LOSSES registry and optional context injection."""
     inject = {"context": context} if context is not None else None
     return build_from_registry(LOSSES, cfg, inject=inject, smart_inject=True)
 
 
 def build_metrics(cfg_list: list[dict[str, Any]], *, context: BuildContext | None = None) -> list[Any]:
-    """Build all metrics from metric configs."""
+    """Build metric instances from a list of registry configurations."""
     inject = {"context": context} if context is not None else None
     return [build_from_registry(METRICS, mcfg, inject=inject, smart_inject=True) for mcfg in cfg_list]
 
 
 def build_datamodule(cfg: dict[str, Any], *, context: BuildContext | None = None) -> object:
-    """Build a datamodule from registry config."""
+    """Build a data module from DATAMODULES configuration."""
     inject = {"context": context} if context is not None else None
     return build_from_registry(DATAMODULES, cfg, inject=inject, smart_inject=True)
 
 
 def build_model(cfg: dict[str, Any], *, context: BuildContext | None = None) -> Any:
-    """Build model from the models registry."""
+    """Build a model from MODELS configuration."""
     inject = {"context": context} if context is not None else None
     return build_from_registry(MODELS, cfg, inject=inject, smart_inject=True)
 
@@ -205,7 +225,10 @@ def build_optimizer(
     *,
     context: BuildContext | None = None,
 ) -> torch.optim.Optimizer:
-    """Build optimizer, defaulting to AdamW when config is not provided."""
+    """Build an optimizer and inject the model into its factory.
+
+    When cfg is None, the registered adamw_optimizer factory is selected.
+    """
     inject = {"model": model}
     if context is not None:
         inject["context"] = context
@@ -226,7 +249,7 @@ def build_scheduler(
     *,
     context: BuildContext | None = None,
 ) -> torch.optim.lr_scheduler.LRScheduler | torch.optim.lr_scheduler.ReduceLROnPlateau | None:
-    """Build scheduler from config or return `None`."""
+    """Build a scheduler, or return None when no scheduler is configured."""
     inject = {"optimizer": optimizer}
     if context is not None:
         inject["context"] = context
@@ -242,7 +265,7 @@ def build_scheduler(
 
 
 def build_callbacks(cfg_list: list[dict[str, Any]] | None, *, context: BuildContext | None = None) -> list[Any]:
-    """Build callbacks from callback configs."""
+    """Build callback instances from CALLBACKS configurations."""
     if not cfg_list:
         return []
 
@@ -251,7 +274,7 @@ def build_callbacks(cfg_list: list[dict[str, Any]] | None, *, context: BuildCont
 
 
 def build_collate(cfg: dict[str, Any] | None, *, context: BuildContext | None = None) -> Any:
-    """Build collate callable, defaulting to `masking_collate`."""
+    """Build a collate callable, defaulting to masking_collate."""
     inject = {"context": context} if context is not None else None
     return build_from_registry(
         COLLATES,

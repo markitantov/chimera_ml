@@ -4,13 +4,15 @@ _LOADED: set[str] = set()
 
 
 def load_entrypoint_plugins(group: str = "chimera_ml.plugins") -> None:
-    """Load external plugins declared via Python entry points.
+    """Load external plugins declared through Python entry points.
 
-    Any entry point in the given *group* may point to:
-      - a callable (function) that performs registrations, or
-      - a module-level object; if it's callable we call it, otherwise we just load it.
-
-    This enables "project plugins" without listing them in YAML/CLI.
+    Args:
+        group: Entry-point group to select, defaulting to
+            chimera_ml.plugins.
+    Notes:
+        Each entry point may expose a callable registration function or a
+        module-level object. Callable objects are invoked once; failures emit
+        warnings instead of aborting the whole startup.
     """
     try:
         from importlib.metadata import entry_points  # py3.10+

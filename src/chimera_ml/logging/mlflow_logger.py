@@ -18,6 +18,18 @@ def _import_mlflow() -> Any:
 
 @dataclass
 class MLflowLogger(BaseLogger):
+    """MLflow-backed logger for metrics, configs, and artifacts.
+
+    Attributes:
+        tracking_uri: Optional MLflow tracking server or local URI.
+        experiment_name: Experiment selected before starting a run.
+        run_name: Optional human-readable MLflow run name.
+        config_path: Optional config file logged once under configs.
+
+    start is idempotent for the active run; end closes it when active. The
+    MLflow dependency is imported lazily during initialization.
+    """
+
     tracking_uri: str | None = None
     experiment_name: str | None = "chimera"
     run_name: str | None = "train"

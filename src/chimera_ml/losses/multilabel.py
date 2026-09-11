@@ -8,7 +8,12 @@ from chimera_ml.losses.base import BaseLoss
 
 
 class BCEWithLogitsLoss(BaseLoss):
-    """Multi-label classification loss for logits + multi-hot targets."""
+    """Binary cross-entropy loss for multi-label logits and targets.
+
+    Args:
+        pos_weight: Optional positive-class weighting tensor.
+        reduction: PyTorch reduction mode, typically mean, sum, or none.
+    """
 
     def __init__(self, pos_weight: torch.Tensor | None = None, reduction: str = "mean"):
         self._loss = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction=reduction)

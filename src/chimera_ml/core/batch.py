@@ -6,7 +6,18 @@ import torch
 
 @dataclass
 class Batch:
-    """Typed container for model inputs, targets, masks, and metadata."""
+    """Typed batch exchanged between data pipelines and models.
+
+    Attributes:
+        inputs: Modality name to tensor mapping. A modality may be absent when
+            a sample or model branch is unavailable.
+        targets: Task targets, or None for unlabeled inference/test data.
+        masks: Flat mask mapping such as sequence_mask or audio_mask.
+        meta: Optional sample IDs, lengths, and auxiliary metadata.
+
+    Use get_masks to read canonical masks; it also understands legacy nested
+    mask mappings stored in meta.
+    """
 
     # inputs[modality] -> tensor for that modality (may be missing in dict)
     inputs: dict[str, torch.Tensor]

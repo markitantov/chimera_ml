@@ -1,67 +1,45 @@
 # Chimera ML
 
-Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations)
-— лёгкий фреймворк для обучения и оценки настраиваемых одномодальных и
-мультимодальных моделей.
+Chimera ML — configuration-driven Python framework для построения, обучения,
+оценки и запуска одномодальных и мультимодальных PyTorch experiments. Runtime
+предоставляет trainer, registries, callbacks, loggers и inference pipeline;
+task-specific components могут находиться в установленном plugin package.
 
-Пакет предоставляет инфраструктуру времени выполнения — обучение, логирование,
-колбэки, реестры и конвейеры инференса, — а компоненты, специфичные для задачи,
-могут находиться во внешних plugin packages. Эксперименты задаются YAML-файлами
-конфигурации и CLI `chimera-ml`.
+## С чего начать
 
-## Установка
+1. [Начало работы](getting-started/index.md) — установите Chimera ML и
+   проверьте первую configuration.
+2. [Основные концепции](concepts/index.md) — configuration, registries,
+   BuildContext и plugins.
+3. [Руководство пользователя](user-guide/index.md) — training, evaluation,
+   logging, inference, sweeps и CLI workflows.
+4. [Практические примеры](tutorials/index.md) — реальные VA, ORAGEN и
+   affective states projects.
+5. [API Reference](api/index.md) и [CLI Reference](cli/reference.md) — точные
+   interfaces и command options.
+6. [Разработка](development/index.md) — contribution, tests, docs и release.
+7. [Релизы](releases/index.md) — changelog и migration notes.
 
-Chimera ML поддерживает Python `>=3.12,<3.13`:
+## Граница core API
 
-```bash
-pip install chimera-ml
-```
+Dataloader выдаёт Batch, model принимает Batch и возвращает ModelOutput, а
+losses и metrics используют эти objects. Experiments описываются в YAML, а
+components выбираются по registry key.
 
-## Быстрый старт
+## Примеры репозитория
 
-Проверьте установленное окружение и доступные компоненты времени выполнения:
+Это реальные plugin packages; для них нужны собственные data или model
+artifacts:
 
-```bash
-chimera-ml doctor
-chimera-ml registry list --type models
-```
+- [VA estimation](https://github.com/markitantov/chimera_ml/tree/main/examples/va_estimation)
+- [ORAGEN](https://github.com/markitantov/chimera_ml/tree/main/examples/oragen)
+- [Affective states recognition](https://github.com/markitantov/chimera_ml/tree/main/examples/affective_states_recognition)
 
-Пакет также предоставляет основные контейнеры данных, используемые моделями,
-функциями потерь и метриками:
+Установка published package:
 
-```python
-import torch
+~~~bash
+python -m pip install chimera-ml
+~~~
 
-from chimera_ml import Batch, ModelOutput
-
-batch = Batch(inputs={"features": torch.zeros(2, 4)}, targets=None)
-output = ModelOutput(preds=torch.zeros(2, 1))
-
-print(batch.inputs["features"].shape)
-print(output.preds.shape)
-```
-
-Для полноценного эксперимента установите plugin package, специфичный для задачи,
-и проверьте один из YAML-файлов конфигурации репозитория. На странице [Быстрый
-старт](getting-started/quickstart.md) описан этот процесс; наличие датасета или
-чекпойнта заранее не предполагается.
-
-## Карта документации
-
-- [Установка](getting-started/installation.md) — поддерживаемая версия Python,
-  установка пакета и настройка разработки.
-- [Быстрый старт](getting-started/quickstart.md) — первые проверки CLI и рабочий
-  процесс с plugin packages.
-- [Руководства](guides/index.md) — взаимосвязь CLI, реестров, плагинов и YAML-конфигураций.
-- [API](api/index.md) — автоматически сгенерированный reference для основной
-  публичной части API.
-- [Участие в разработке](contributing.md) — локальные проверки и рекомендации
-  для pull request.
-
-Более подробные запускаемые примеры находятся в репозитории:
-[оценка VA](https://github.com/markitantov/chimera_ml/tree/main/examples/va_estimation),
-[ORAGEN](https://github.com/markitantov/chimera_ml/tree/main/examples/oragen) и
-[распознавание аффективных состояний](https://github.com/markitantov/chimera_ml/tree/main/examples/affective_states_recognition).
-
-Исходный код и задачи доступны на
-[GitHub](https://github.com/markitantov/chimera_ml).
+Текущий package поддерживает Python >=3.12,<3.13. Начните со страницы
+[Установка](getting-started/installation.md).
