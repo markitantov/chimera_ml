@@ -121,3 +121,6 @@ temp/
 .env
 .env.*
 **/configs_local/
+
+# Documentation build output
+site/

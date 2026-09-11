@@ -41,6 +41,12 @@ ruff = ">=0.5.0,<1.0"
 pre-commit = ">=3.7,<4.0"
 scikit-learn = ">=1.4,<2.0"
 
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.6,<2.0"
+mkdocs-material = ">=9.5,<10.0"
+mkdocstrings = ">=0.25,<1.0"
+mkdocstrings-python = ">=1.10,<2.0"
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
