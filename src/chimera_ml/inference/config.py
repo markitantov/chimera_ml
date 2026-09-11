@@ -6,7 +6,12 @@ from chimera_ml.core.config import ExperimentConfig
 
 @dataclass
 class InferenceConfig(ExperimentConfig):
-    """Small wrapper around inference YAML config."""
+    """Typed accessors for the inference YAML schema.
+
+    The wrapper keeps the raw mapping inherited from ExperimentConfig and
+    exposes pipeline name, parallel flag, step list, and requested runtime
+    device. It does not build steps; use build_inference_pipeline for that.
+    """
 
     @property
     def pipeline_name(self) -> str:

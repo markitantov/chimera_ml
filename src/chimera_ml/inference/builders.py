@@ -10,7 +10,16 @@ from chimera_ml.training.builders import build_from_registry
 
 
 def build_inference_step(cfg: dict[str, Any], *, inject: Mapping[str, Any] | None = None) -> BaseInferenceStep:
-    """Build a single inference step from the inference-steps registry."""
+    """Build and validate one step from INFERENCE_STEPS.
+
+    Args:
+        cfg: Mapping with registry name and optional params.
+        inject: Runtime values selectively passed to factories.
+    Returns:
+        A step implementing run(ctx) -> ctx.
+    Raises:
+        TypeError: If the factory result has no callable run contract.
+    """
     step = build_from_registry(
         INFERENCE_STEPS,
         cfg,
@@ -29,7 +38,17 @@ def build_inference_pipeline(
     *,
     inject: Mapping[str, Any] | None = None,
 ) -> InferencePipeline:
-    """Build an inference pipeline from an already loaded inference config."""
+    """Build a sequential or parallel pipeline from InferenceConfig.
+
+    Args:
+        config: Loaded inference configuration.
+        inject: Optional runtime dependencies for step factories.
+    Returns:
+        A validated InferencePipeline.
+    Raises:
+        TypeError: If a step configuration is not a mapping.
+        ValueError: If a step has no usable name/id.
+    """
     nodes: list[InferenceGraphNode] = []
     previous_node_id: str | None = None
     parallel_mode = config.parallel

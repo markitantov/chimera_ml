@@ -15,7 +15,13 @@ class TrainRunResult:
 
 @dataclass(frozen=True)
 class SweepTarget:
-    """Log key and direction optimized by an Optuna sweep."""
+    """Monitored log key and direction for sweep optimization.
+
+    Attributes:
+        monitor: Scalar log key, commonly val/loss.
+        mode: Normalized direction, either min or max. minimize and maximize
+            aliases are accepted in configuration.
+    """
 
     monitor: str = "val/loss"
     mode: str = "min"
@@ -36,6 +42,7 @@ class SweepTarget:
 
     @classmethod
     def from_config(cls, sweep_cfg: Mapping[str, Any]) -> Self:
+        """Create a target from target, objective, or metric config."""
         raw = sweep_cfg.get("target", sweep_cfg.get("objective", sweep_cfg.get("metric", {}))) or {}
         if not isinstance(raw, Mapping):
             raise TypeError("Sweep config target/objective/metric must be a mapping when provided.")

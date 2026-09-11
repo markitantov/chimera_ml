@@ -8,7 +8,18 @@ from chimera_ml.models.base import BaseModel
 
 
 class GatedPredictionFusionModel(BaseModel):
-    """Gated fusion over per-modality logits."""
+    """Learn gates over logits produced by per-modality submodels.
+
+    Each submodel must return a two-dimensional logits tensor with num_classes
+    columns. The gates are normalized across available modalities.
+
+    Args:
+        submodels: Modality name to BaseModel mapping.
+        num_classes: Number of logits expected from every submodel.
+        gate_hidden: Hidden width of the gate network.
+        dropout: Dropout applied to submodel logits.
+        use_mask: Whether modality masks suppress missing branches.
+    """
 
     def __init__(
         self,

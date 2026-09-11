@@ -5,7 +5,20 @@ from typing import Any
 
 @dataclass
 class InferenceContext:
-    """Shared state passed through inference steps."""
+    """Mutable state and artifact store shared by inference steps.
+
+    Attributes:
+        input_path: Input file or sample path for the current run.
+        work_dir: Directory for caches and intermediate artifacts.
+        device: Resolved runtime device string.
+        config: Raw inference configuration mapping.
+        artifacts: Named values produced by steps; predictions is conventional.
+        written_artifact_keys: Keys written by the current step context and
+            used by the pipeline when merging results.
+
+    Steps should use get_artifact and set_artifact rather than mutating the
+    artifact ownership bookkeeping directly.
+    """
 
     input_path: Path
     work_dir: Path
@@ -15,9 +28,21 @@ class InferenceContext:
     _written_artifact_keys: set[str] = field(default_factory=set, init=False, repr=False)
 
     def get_artifact(self, name: str, default: Any = None) -> Any:
+        """Return a named artifact or a default when it is absent.
+
+        Args:
+            name: Artifact key.
+            default: Value returned when the key is missing.
+        """
         return self.artifacts.get(name, default)
 
     def set_artifact(self, name: str, value: Any) -> None:
+        """Store an artifact and mark it as written by this step.
+
+        Args:
+            name: Artifact key.
+            value: Value to store.
+        """
         self.artifacts[name] = value
         self._written_artifact_keys.add(name)
 

@@ -8,7 +8,17 @@ from chimera_ml.utils.sweep import SweepTarget
 
 @dataclass
 class SweepTargetCallback(BaseCallback):
-    """Track the best scalar value for a sweep target."""
+    """Track the best scalar log value for sweep objective reporting.
+
+    Attributes:
+        monitor: Log key to track.
+        mode: min or max optimization direction.
+        best_value: Best value observed after fit starts.
+        best_epoch: Epoch containing best_value.
+        last_value: Most recent monitored value.
+        last_epoch: Epoch containing last_value.
+        available_keys: Sorted log keys from the latest epoch.
+    """
 
     monitor: str = "val/loss"
     mode: str = "min"

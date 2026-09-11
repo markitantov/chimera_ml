@@ -8,7 +8,11 @@ from chimera_ml.losses.base import BaseLoss
 
 
 class CrossEntropyLoss(BaseLoss):
-    """Standard classification loss for logits + class indices."""
+    """Cross-entropy loss for class logits and integer class targets.
+
+    Args:
+        label_smoothing: Amount of uniform label smoothing passed to PyTorch.
+    """
 
     def __init__(self, label_smoothing: float = 0.0):
         self._loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing)

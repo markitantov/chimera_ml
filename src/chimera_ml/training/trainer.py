@@ -30,7 +30,31 @@ FeatureExtractor = Callable[[BaseModel, Batch, ModelOutput], torch.Tensor]
 
 @dataclass
 class Trainer:
-    """High-level training and evaluation loop with callback and logger integration."""
+    """High-level fit/evaluate loop coordinating all training components.
+
+    The Trainer owns device placement, forward/loss execution, optimizer and
+    scheduler stepping, metric accumulation, split normalization, logger
+    integration, callback lifecycle, and optional prediction caching.
+
+    Attributes:
+        model: Module receiving a Batch.
+        loss_fn: Callable converting model output and batch into a loss tensor.
+        optimizer: Optimizer updated during fit.
+        metrics: Stateful metrics reset and computed around each epoch.
+        config: Runtime TrainConfig.
+        mlflow_logger: Optional logger with MLflow-style metrics/artifacts.
+        logger: Optional standard logger for console/file messages.
+        callbacks: Lifecycle extensions invoked by fit and evaluate.
+        scheduler: Optional learning-rate scheduler.
+        stop_training: Flag checked between epochs; callbacks may set it.
+        global_step: Number of optimizer updates in the current fit.
+        cached_outputs: Latest cached split outputs when enabled.
+
+    Note:
+        fit resets global_step to zero. evaluate performs no optimizer updates
+        but still runs callback hooks so evaluation callbacks can consume
+        cached predictions.
+    """
 
     model: BaseModel
     loss_fn: BaseLoss
@@ -51,7 +75,20 @@ class Trainer:
         train_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...],
         val_loaders: DataLoader | Mapping[str, DataLoader] | list[DataLoader] | tuple[DataLoader, ...] | None = None,
     ) -> None:
-        """Run full training loop across epochs with optional validation splits."""
+        """Run training for configured epochs and optional validation splits.
+
+        Args:
+            train_loaders: One loader, a named mapping, or a sequence of
+                training loaders.
+            val_loaders: Optional loader container evaluated after each train
+                epoch.
+        Raises:
+            ValueError: If no training loader is provided or a training batch
+                has no targets.
+        Side Effects:
+            Updates model parameters, optimizer/scheduler state, metrics,
+            logger runs, callback state, and cached split outputs.
+        """
         device = torch.device(self.config.device if torch.cuda.is_available() else "cpu")
         self.model.to(device)
 
@@ -182,10 +219,21 @@ class Trainer:
         with_features: bool | None = False,
         feature_extractor: FeatureExtractor | None = None,
     ) -> dict[str, float]:
-        """Run evaluation only (no optimization), return computed metrics, predictions, features (optional).
+        """Evaluate loaders without optimization and return split metrics.
 
-        Note: callbacks are executed (on_fit_start/on_epoch_end/on_fit_end) so that
-        validation-only callbacks work in eval mode too.
+        Args:
+            loaders: One loader, a named mapping, or a sequence of loaders.
+            with_features: Request feature extraction and include features in
+                cached split outputs.
+            feature_extractor: Optional callable used when with_features is
+                true; otherwise model output aux features are used.
+        Returns:
+            A mapping whose keys are prefixed with normalized split names.
+        Raises:
+            ValueError: If requested features are unavailable.
+        Note:
+            Callback hooks run in evaluation mode so validation-only callbacks
+            can consume cached outputs.
         """
         device = torch.device(self.config.device if torch.cuda.is_available() else "cpu")
         self.model.to(device)
@@ -225,7 +273,14 @@ class Trainer:
         return results
 
     def get_cached_split_outputs(self, split: str) -> CachedSplitOutputs | None:
-        """Return cached predictions for a split from the latest evaluation epoch."""
+        """Return the latest cached outputs for a normalized split name.
+
+        Args:
+            split: Split key used by the Trainer.
+        Returns:
+            Cached predictions, targets, features, and metadata, or None when
+            caching was disabled or the split has not run.
+        """
         return self.cached_outputs.get(split)
 
     def _extract_features(

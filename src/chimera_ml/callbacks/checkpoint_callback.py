@@ -10,7 +10,37 @@ from chimera_ml.core.registry import CALLBACKS
 
 @dataclass
 class CheckpointCallback(BaseCallback):
-    """Save model checkpoints based on a monitored metric."""
+    """Save the last and best model states during a training run.
+
+    The callback writes checkpoints during on_epoch_end. It always saves
+    last.pt when save_last is true, then evaluates monitor from the epoch log
+    mapping and keeps the best checkpoint history according to mode. Missing
+    monitor keys produce a warning and do not create a monitored checkpoint.
+
+    Attributes:
+        log_path: Root directory for experiment outputs.
+        experiment_name: Experiment directory name below log_path.
+        run_name: Run directory name below the experiment directory.
+        monitor: Scalar log key to optimize, commonly val/loss.
+        mode: min keeps lower values; max keeps higher values.
+        save_top_k: Maximum number of monitored checkpoints to retain. A
+            non-positive value disables pruning but the first best checkpoint
+            is still written.
+        save_last: Whether to write the rolling last.pt checkpoint.
+        filename_template: Format string receiving epoch, step, monitor, and
+            value for monitored checkpoint names.
+
+    Checkpoint layout:
+        Files are written to
+        <log_path>/<experiment_name>/<run_name>/checkpoints.
+        Payloads contain epoch, global_step, model_state_dict,
+        optimizer_state_dict, and scheduler_state_dict when a scheduler is
+        present.
+
+    Note:
+        The callback does not resume training or load checkpoints; it only
+        serializes the current trainer state.
+    """
 
     log_path: str = "logs"
     experiment_name: str = "chimera"
@@ -30,7 +60,11 @@ class CheckpointCallback(BaseCallback):
             raise ValueError("mode must be 'min' or 'max'")
 
     def on_fit_start(self, trainer: Any) -> None:
-        """Prepare checkpoint directory before the run starts."""
+        """Create the run checkpoint directory.
+
+        Args:
+            trainer: Active Trainer. Its state is not modified.
+        """
         dirpath = Path(self.log_path) / self.experiment_name / self.run_name / "checkpoints"
         dirpath.mkdir(parents=True, exist_ok=True)
         self._resolved_dirpath = dirpath
@@ -73,7 +107,15 @@ class CheckpointCallback(BaseCallback):
         return path
 
     def on_epoch_end(self, trainer: Any, epoch: int, logs: dict[str, float]) -> None:
-        """Optionally save last checkpoint and maintain top-k best checkpoints."""
+        """Save last.pt and update the monitored checkpoint set.
+
+        Args:
+            trainer: Active Trainer providing model, optimizer, and optional
+                scheduler state.
+            epoch: One-based epoch number stored in the payload.
+            logs: Aggregated scalar logs. monitor must be present to save a
+                monitored checkpoint.
+        """
         step = trainer.global_step
 
         if self.save_last:

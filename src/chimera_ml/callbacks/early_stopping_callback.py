@@ -7,7 +7,18 @@ from chimera_ml.core.registry import CALLBACKS
 
 @dataclass
 class EarlyStoppingCallback(BaseCallback):
-    """Stop training when monitored metric stops improving."""
+    """Request training stop after patience epochs without improvement.
+
+    Attributes:
+        monitor: Scalar log key to watch.
+        mode: min treats lower values as better; max treats higher values as
+            better.
+        patience: Number of consecutive non-improving epochs allowed.
+        min_delta: Minimum change required to count as an improvement.
+
+    When patience is exhausted, on_epoch_end sets trainer.stop_training to
+    true. A missing monitor key emits a warning and leaves state unchanged.
+    """
 
     monitor: str = "val/loss"
     mode: str = "min"  # "min" or "max"

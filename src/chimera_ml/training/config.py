@@ -3,7 +3,25 @@ from dataclasses import dataclass
 
 @dataclass
 class TrainConfig:
-    """Runtime training configuration used by `Trainer`."""
+    """Runtime configuration consumed by Trainer.
+
+    Attributes:
+        epochs: Number of one-based training epochs.
+        grad_clip_norm: Optional maximum gradient norm; None disables clipping.
+        mixed_precision: Enable autocast and gradient scaling on CUDA.
+        log_every_steps: Intended interval for progress logging.
+        device: Requested device string, typically cuda or cpu.
+        train_loader_mode: Multi-loader strategy: single, round_robin, or
+            weighted.
+        train_stop_on: Whether a multi-loader epoch ends at first (min) or
+            last (max) exhausted loader.
+        train_loader_weights: Optional per-loader weights for weighted mode.
+        use_scheduler: Whether Trainer steps the configured scheduler.
+        scheduler_step_per_epoch: Step once per epoch instead of after each
+            optimizer update.
+        scheduler_monitor: Optional metric for metric-aware schedulers.
+        collect_cache: Cache split predictions and metadata for callbacks.
+    """
 
     epochs: int = 10
     grad_clip_norm: float | None = None

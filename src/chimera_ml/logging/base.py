@@ -3,8 +3,11 @@ from typing import Any
 
 
 class BaseLogger(ABC):
-    """
-    Abstract base class for loggers used by Trainer.
+    """Logger lifecycle and optional artifact capabilities.
+
+    Required methods are start, log_metrics, and end. Artifact methods are
+    no-ops by default so a logger can support metrics without implementing
+    artifact storage.
     """
 
     @abstractmethod

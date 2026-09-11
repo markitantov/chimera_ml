@@ -12,14 +12,34 @@ _TARGET_KEYS: tuple[str, ...] = ("targets", "target")
 
 @dataclass
 class MaskingCollate:
-    """Collate multimodal samples with variable sequence lengths and modality masks."""
+    """Collate multimodal samples into Batch with padding and masks.
+
+    Attributes:
+        pad_sequences: Pad the first tensor dimension to the batch maximum.
+        include_legacy_meta_masks: Also copy canonical masks into meta["masks"]
+            for older consumers.
+        pad_value: Fill value for missing or padded tensor positions.
+
+    The collator accepts sample mappings with inputs, target/targets, and
+    optional meta masks. It emits sequence_mask and one presence mask per
+    modality.
+    """
 
     pad_sequences: bool = True
     include_legacy_meta_masks: bool = False
     pad_value: float = 0.0
 
     def __call__(self, batch: list[dict[str, Any]]) -> Batch:
-        """Build a `Batch` with padded tensors, `sequence_mask`, and `{modality}_mask` flags."""
+        """Build a Batch with padded tensors and canonical masks.
+
+        Args:
+            batch: Non-empty list of sample mappings.
+        Returns:
+            Batch containing collated inputs, optional targets, masks, and
+            sample metadata.
+        Raises:
+            ValueError: If batch is empty or tensors have incompatible shapes.
+        """
         if not batch:
             raise ValueError("MaskingCollate received an empty batch.")
 

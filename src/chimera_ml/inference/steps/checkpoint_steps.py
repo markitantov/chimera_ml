@@ -54,12 +54,35 @@ def _require_existing_file(path: Path, *, description: str) -> str:
 
 @dataclass
 class ResolveCheckpointsStep:
+    """Resolve local or HTTP(S) checkpoint references into a work-dir cache.
+
+    Attributes:
+        checkpoints: Named checkpoint reference mapping.
+        cache_dir: Relative-to-work-dir or absolute cache directory.
+        force_download: Redownload remote files even when cached.
+        chunk_size: Streaming HTTP chunk size in bytes.
+
+    run stores the resolved mapping under the checkpoints artifact and the
+    cache directory under cache_dir. Local paths must point to files; remote
+    downloads use a temporary .part file before replacement.
+    """
+
     checkpoints: dict[str, str]
     cache_dir: str = "checkpoints"
     force_download: bool = False
     chunk_size: int = 8192
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
+        """Resolve configured references and publish checkpoint artifacts.
+
+        Args:
+            ctx: Inference context whose work_dir and artifacts are used.
+        Returns:
+            The context with checkpoints and cache_dir artifacts.
+        Raises:
+            FileNotFoundError: If a local or downloaded checkpoint is missing.
+            TypeError: If an existing checkpoints artifact is not a mapping.
+        """
         existing = ctx.get_artifact("checkpoints", {})
         if not isinstance(existing, dict):
             raise TypeError("Inference artifact 'checkpoints' must be a dict when present.")

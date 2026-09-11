@@ -47,6 +47,7 @@ class _SweepBase:
         }
 
     def start(self) -> None:
+        """Create the sweep directory, configs, trial directory, and manifest."""
         self.sweep_dir.mkdir(parents=True, exist_ok=False)
         self.base_cfg.to_yaml(self.sweep_dir / "base_config.yaml")
         self.sweep_cfg.to_yaml(self.sweep_dir / "sweep_config.yaml")
@@ -54,11 +55,13 @@ class _SweepBase:
         ExperimentConfig(self.manifest).to_yaml(self.manifest_path)
 
     def finish(self, status: str) -> None:
+        """Persist completion time and terminal sweep status."""
         self.manifest["finished_at"] = local_datetime_tag(fmt="%Y-%m-%d_%H-%M-%S", timezone=self.timezone)
         self.manifest["status"] = status
         ExperimentConfig(self.manifest).to_yaml(self.manifest_path)
 
     def write_trial_config(self, index: int, overrides: Mapping[str, Any]) -> tuple[str, Path, ExperimentConfig]:
+        """Apply overrides, write a trial YAML, and return its identity."""
         trial_id = f"{self.label}-{self.short_id}-{index:03d}"
         trial_cfg = self.base_cfg.copy()
         trial_cfg.apply_overrides(overrides)
@@ -67,6 +70,7 @@ class _SweepBase:
         return trial_id, trial_path, trial_cfg
 
     def save_trial_record(self, record: Mapping[str, Any]) -> dict[str, Any]:
+        """Append a trial record and update the manifest on disk."""
         record = dict(record)
         self.manifest["runs"].append(record)
         ExperimentConfig(self.manifest).to_yaml(self.manifest_path)
@@ -74,6 +78,14 @@ class _SweepBase:
 
 
 class GridSweep(_SweepBase):
+    """Execute a finite grid sweep over explicit trials or parameter values.
+
+    The sweep accepts either a trials list or a parameters mapping. A
+    parameters mapping expands to the Cartesian product, optionally truncated
+    by max_trials. Each trial receives a copied base configuration and a
+    persisted manifest record.
+    """
+
     def __init__(
         self,
         *,
@@ -140,6 +152,13 @@ class GridSweep(_SweepBase):
 
 
 class OptunaSweep(_SweepBase):
+    """Execute an Optuna-backed sweep with typed parameter suggestions.
+
+    The parameters mapping describes Optuna search spaces, while SweepTarget
+    defines the monitored log key and optimization direction. Study metadata,
+    trial configs, and the best trial are persisted in the sweep manifest.
+    """
+
     DEFAULT_TRIALS = 10
 
     def __init__(

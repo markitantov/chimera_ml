@@ -8,7 +8,19 @@ from chimera_ml.models.base import BaseModel
 
 
 class GatedFusionModel(BaseModel):
-    """Gated (attention-like) fusion over modality embeddings."""
+    """Learn per-modality gates over shared encoder embeddings.
+
+    Encoded modalities are projected to shared_dim, scored by gate_net, and
+    combined with a softmax. Presence masks suppress unavailable modalities.
+
+    Args:
+        encoders: Modality name to encoder module.
+        head: Module receiving the gated shared embedding.
+        shared_dim: Required embedding width after projection.
+        gate_hidden: Hidden width of the gate network.
+        dropout: Dropout applied before scoring and in the head.
+        use_mask: Whether modality masks suppress missing branches.
+    """
 
     def __init__(
         self,

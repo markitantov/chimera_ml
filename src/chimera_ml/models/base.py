@@ -7,7 +7,12 @@ from chimera_ml.core.types import ModelOutput
 
 
 class BaseModel(nn.Module, ABC):
-    """Base interface for uni- or multi-modal models."""
+    """Abstract model contract for uni- and multimodal components.
+
+    Implementations receive a Batch and return a ModelOutput. They may consume
+    any subset of the modality keys present in Batch.inputs, but should raise a
+    clear error when no usable input is available.
+    """
 
     @abstractmethod
     def forward(self, batch: Batch) -> ModelOutput:

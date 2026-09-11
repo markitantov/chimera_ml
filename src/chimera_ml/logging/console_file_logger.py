@@ -15,10 +15,23 @@ def _level(x: int | str) -> int:
 
 @dataclass
 class ConsoleFileLogger:
-    """Create console + file logger with timestamps.
-    - Creates parent dirs for log_path
-    - Clears previous handlers (no duplicates)
-    - Disables propagation (avoids double printing)
+    """Create a console and file logger for one experiment run.
+
+    Attributes:
+        log_path: Root path combined with experiment_name, run_name, and
+            log_file.
+        experiment_name: Experiment directory component.
+        run_name: Run directory component.
+        log_file: File name under the run directory.
+        name: Standard-library logger name.
+        format: logging.Formatter format string.
+        console_level: Console threshold as a level name or integer.
+        file_level: File threshold as a level name or integer.
+        file_mode: File open mode, commonly a or w.
+        encoding: File encoding.
+
+    Initialization creates parent directories, replaces old handlers, and
+    disables propagation to avoid duplicate output.
     """
 
     log_path: str | Path
