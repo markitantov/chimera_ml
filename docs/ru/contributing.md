@@ -3,36 +3,28 @@
 Изменения должны быть сфокусированными и сопровождаться тестами для изменений
 поведения. Полная политика проекта приведена в [CONTRIBUTING.md](https://github.com/markitantov/chimera_ml/blob/main/CONTRIBUTING.md).
 
-## Локальные проверки
+## Документация
 
-Установите группы разработки и документации, затем запустите те же проверки, что
-и CI:
+Документация находится в каталогах:
 
-```bash
-poetry install --with dev,docs
-poetry run pre-commit run --all-files
-poetry run pytest -q
-poetry run mkdocs build --strict --config-file mkdocs.yml
-poetry run mkdocs build --strict --config-file mkdocs.ru.yml
-```
+- `docs/en/` — документация на английском языке
+- `docs/ru/` — документация на русском языке
 
-Для локального просмотра можно запустить любой язык:
+Для локального просмотра английской документации:
 
 ```bash
-poetry run mkdocs serve --config-file mkdocs.yml
-poetry run mkdocs serve --config-file mkdocs.ru.yml
+poetry run mkdocs serve -f mkdocs.en.yml
 ```
 
-Установите hooks один раз для локальных коммитов:
+Для локального просмотра русской документации:
 
 ```bash
-poetry run pre-commit install
+poetry run mkdocs serve -f mkdocs.ru.yml
 ```
 
-## Изменения документации
+Перед открытием pull request проверьте обе сборки:
 
-Английская версия в `docs/en/` является основной. Русская версия в `docs/ru/`
-должна сохранять ту же структуру относительных путей. Не переводите Python
-identifiers, имена классов и функций, CLI commands, configuration keys, package
-names, import paths и shell commands. API docstrings берутся непосредственно из
-исходников Python и могут оставаться на английском языке.
+```bash
+poetry run mkdocs build --strict -f mkdocs.en.yml
+poetry run mkdocs build --strict -f mkdocs.ru.yml
+```

@@ -13,5 +13,5 @@ build:
       - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only main,docs --no-interaction
 
 mkdocs:
-  configuration: mkdocs.yml
+  configuration: mkdocs.en.yml
   fail_on_warning: true

@@ -41,7 +41,7 @@ jobs:
         run: poetry run pytest -q
 
       - name: Build documentation
-        run: poetry run mkdocs build --strict --config-file mkdocs.yml
+        run: poetry run mkdocs build --strict --config-file mkdocs.en.yml
 
       - name: Build Russian documentation
         run: poetry run mkdocs build --strict --config-file mkdocs.ru.yml
