@@ -1,0 +1,17 @@
+INHERIT: mkdocs.base.yml
+
+site_url: https://chimera-ml.readthedocs.io/
+edit_uri: edit/main/docs/en/
+docs_dir: docs/en
+
+theme:
+  language: en
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quickstart.md
+  - Guides: guides/index.md
+  - API reference: api/index.md
+  - Contributing: contributing.md

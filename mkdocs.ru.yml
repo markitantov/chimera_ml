@@ -1,0 +1,18 @@
+INHERIT: mkdocs.base.yml
+
+site_name: Chimera ML — документация
+site_url: https://chimera-ml.readthedocs.io/
+edit_uri: edit/main/docs/ru/
+docs_dir: docs/ru
+
+theme:
+  language: ru
+
+nav:
+  - Главная: index.md
+  - Начало работы:
+      - Установка: getting-started/installation.md
+      - Быстрый старт: getting-started/quickstart.md
+  - Руководства: guides/index.md
+  - API: api/index.md
+  - Участие в разработке: contributing.md
