@@ -52,12 +52,10 @@ def _ccc_1d_rho(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-12) -> torch.T
 class CCCLoss(BaseLoss):
     """Concordance Correlation Coefficient loss for regression.
 
-    Returns:
-      loss = 1 - mean(CCC) across output dimensions.
+    The loss is 1 - mean(CCC) across output dimensions.
 
-    Expects:
-      output.preds and batch.targets to have the same shape:
-        (B,), (B, D) or (B, ...) which will be flattened to (B, Dflat).
+    output.preds and batch.targets must have the same shape: (B,), (B, D), or
+    (B, ...). Inputs are flattened to (B, Dflat).
     """
 
     def __init__(self, eps: float = 1e-12):

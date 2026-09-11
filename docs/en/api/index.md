@@ -13,3 +13,15 @@ public containers and registry abstraction used throughout the framework.
 ## Registries
 
 ::: chimera_ml.core.registry.Registry
+## Full reference
+
+- [Core](core.md)
+- [Data](data.md)
+- [Models](models.md)
+- [Training](training.md)
+- [Inference](inference.md)
+- [Callbacks](callbacks.md)
+- [Losses](losses.md)
+- [Metrics](metrics.md)
+- [Logging](logging.md)
+- [Plugins](plugins.md)

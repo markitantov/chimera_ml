@@ -110,8 +110,10 @@ def build_from_registry(
             If True, returns None when cfg is None (and default_name is None) or cfg has empty name.
         normalize_name:
             If True, uses lower() on name.
-        params_key/name_key:
-            Keys used in cfg.
+        params_key:
+            Config key containing factory parameters.
+        name_key:
+            Config key containing the registry name.
         inject:
             Runtime dependencies (e.g. model_params, optimizer) merged into params.
         inject_overrides:

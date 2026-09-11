@@ -610,3 +610,12 @@ PyPI publishing is automated via GitHub Actions workflow:
 Release checklist:
 
 - see `RELEASING.md`.
+
+## Documentation
+
+The full bilingual documentation is published on [Read the Docs](https://chimera-ml.readthedocs.io/):
+
+- [Getting started](https://chimera-ml.readthedocs.io/en/latest/getting-started/)
+- [User guide](https://chimera-ml.readthedocs.io/en/latest/user-guide/)
+- [Tutorials](https://chimera-ml.readthedocs.io/en/latest/tutorials/)
+- [API and CLI reference](https://chimera-ml.readthedocs.io/en/latest/api/)

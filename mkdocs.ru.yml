@@ -11,8 +11,62 @@ theme:
 nav:
   - Главная: index.md
   - Начало работы:
+      - Обзор: getting-started/index.md
       - Установка: getting-started/installation.md
       - Быстрый старт: getting-started/quickstart.md
-  - Руководства: guides/index.md
-  - API: api/index.md
-  - Участие в разработке: contributing.md
+      - Первый эксперимент: getting-started/first-experiment.md
+  - Основные концепции:
+      - Обзор: concepts/index.md
+      - Архитектура: concepts/architecture.md
+      - Конфигурация: concepts/configuration.md
+      - Registries: concepts/registries.md
+      - BuildContext: concepts/build-context.md
+      - Plugins: concepts/plugins.md
+  - Руководство пользователя:
+      - Обзор: user-guide/index.md
+      - Configuration reference: user-guide/configuration.md
+      - Data: user-guide/data.md
+      - Models: user-guide/models.md
+      - Training: user-guide/training.md
+      - Evaluation: user-guide/evaluation.md
+      - Losses: user-guide/losses.md
+      - Metrics: user-guide/metrics.md
+      - Optimizers and schedulers: user-guide/optimizers-schedulers.md
+      - Callbacks: user-guide/callbacks.md
+      - Logging: user-guide/logging.md
+      - MLflow: user-guide/mlflow.md
+      - Inference: user-guide/inference.md
+      - Sweeps: user-guide/sweeps.md
+      - Plugins: user-guide/plugins.md
+      - CLI workflows: user-guide/cli.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Практические примеры:
+      - Обзор: tutorials/index.md
+      - VA estimation: tutorials/va-estimation.md
+      - ORAGEN: tutorials/oragen.md
+      - Affective states recognition: tutorials/affective-states-recognition.md
+  - API Reference:
+      - Обзор: api/index.md
+      - Core: api/core.md
+      - Data: api/data.md
+      - Models: api/models.md
+      - Training: api/training.md
+      - Inference: api/inference.md
+      - Callbacks: api/callbacks.md
+      - Losses: api/losses.md
+      - Metrics: api/metrics.md
+      - Logging: api/logging.md
+      - Plugins: api/plugins.md
+  - CLI Reference: cli/reference.md
+  - Разработка:
+      - Обзор: development/index.md
+      - Setup: development/setup.md
+      - Архитектура: development/architecture.md
+      - Testing: development/testing.md
+      - Documentation: development/documentation.md
+      - Plugin authoring: development/plugins.md
+      - Releasing: development/releasing.md
+  - Релизы:
+      - Обзор: releases/index.md
+      - Changelog: releases/changelog.md
+      - Migration guide: releases/migration.md
