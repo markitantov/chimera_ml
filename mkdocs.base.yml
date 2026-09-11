@@ -1,0 +1,48 @@
+# Shared configuration for the English and Russian MkDocs sites.
+site_name: Chimera ML
+site_description: A lightweight framework for configurable uni-modal and multi-modal machine-learning experiments.
+repo_name: markitantov/chimera_ml
+repo_url: https://github.com/markitantov/chimera_ml
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  search: {}
+  mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: google
+          members_order: source
+          separate_signature: true
+          show_root_heading: true
+          show_source: false
+
+markdown_extensions:
+  admonition: {}
+  attr_list: {}
+  pymdownx.details: {}
+  pymdownx.highlight: {}
+  pymdownx.superfences: {}
+  pymdownx.tabbed:
+    alternate_style: true
+  toc:
+    permalink: true

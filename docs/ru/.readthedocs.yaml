@@ -1,5 +1,5 @@
-# Read the Docs configuration for the English documentation project.
-# See https://docs.readthedocs.com/platform/stable/config-file/v2.html
+# Read the Docs configuration for the Russian translation project.
+# Configure this file as the Build configuration file for chimera-ml-ru.
 
 version: 2
 
@@ -13,5 +13,5 @@ build:
       - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only main,docs --no-interaction
 
 mkdocs:
-  configuration: mkdocs.yml
+  configuration: mkdocs.ru.yml
   fail_on_warning: true
