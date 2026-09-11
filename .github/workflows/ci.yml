@@ -29,7 +29,7 @@ jobs:
         run: pip install poetry
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: poetry install --with dev,docs
 
       - name: Poetry Check
         run: poetry check
@@ -39,6 +39,9 @@ jobs:
 
       - name: Pytest
         run: poetry run pytest -q
+
+      - name: Build documentation
+        run: poetry run mkdocs build --strict
 
       - name: Build package
         run: poetry build
