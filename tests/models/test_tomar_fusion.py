@@ -1,6 +1,5 @@
 import pytest
 import torch
-import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
@@ -9,9 +8,9 @@ from chimera_ml.models.tomar_fusion import TOMARFusionModel, tomar_fusion_model
 
 def test_tomar_refines_anchor_with_available_modalities():
     model = TOMARFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 4, "audio": 4, "video": 4},
         shared_dim=4,
-        head=nn.Linear(4, 2),
+        output_dim=2,
         anchor_modality="text",
         gate_hidden=5,
     )
@@ -38,9 +37,9 @@ def test_tomar_refines_anchor_with_available_modalities():
 
 def test_tomar_skips_missing_extras_and_requires_anchor():
     model = TOMARFusionModel(
-        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4)},
+        input_dims={"text": 3, "audio": 3},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         anchor_modality="text",
     )
 
@@ -54,20 +53,18 @@ def test_tomar_skips_missing_extras_and_requires_anchor():
 
 def test_tomar_validates_anchor_and_registers_factory():
     with pytest.raises(ValueError, match="Unknown anchor modality"):
-        TOMARFusionModel(encoders={"text": nn.Linear(3, 4)}, shared_dim=4, head=nn.Identity(), anchor_modality="audio")
+        TOMARFusionModel(input_dims={"text": 3}, shared_dim=4, output_dim=4, anchor_modality="audio")
 
     assert MODELS.get("tomar_fusion_model") is tomar_fusion_model
-    model = tomar_fusion_model(
-        encoders={"text": nn.Linear(3, 4)}, shared_dim=4, head=nn.Identity(), anchor_modality="text"
-    )
+    model = tomar_fusion_model(input_dims={"text": 3}, shared_dim=4, output_dim=4, anchor_modality="text")
     assert isinstance(model, TOMARFusionModel)
 
 
 def _tomar_joint_model() -> TOMARFusionModel:
     return TOMARFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
         anchor_modality="text",
         gate_hidden=3,
     ).eval()
@@ -95,13 +92,16 @@ def test_tomar_gate_depends_on_anchor_and_additional_representation():
 
 def test_tomar_residual_matches_manual_reference_and_masks_coefficients():
     model = TOMARFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        input_dims={"text": 2, "audio": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
         anchor_modality="text",
         gate_hidden=2,
     ).eval()
     with torch.no_grad():
+        for projection in model.proj.values():
+            projection.weight.copy_(torch.eye(2))
+            projection.bias.zero_()
         model.delta["audio"].weight.copy_(torch.eye(2))
         model.delta["audio"].bias.zero_()
         model.rho["audio"][0].weight.zero_()
@@ -142,9 +142,9 @@ def test_tomar_rejects_per_sample_missing_anchor():
 
 def test_tomar_gates_and_delta_networks_receive_finite_gradients():
     model = TOMARFusionModel(
-        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4), "video": nn.Linear(3, 4)},
+        input_dims={"text": 3, "audio": 3, "video": 3},
         shared_dim=4,
-        head=nn.Linear(4, 2),
+        output_dim=2,
         anchor_modality="text",
         gate_hidden=5,
     )
@@ -157,20 +157,27 @@ def test_tomar_gates_and_delta_networks_receive_finite_gradients():
 
     residual_parameters = list(model.rho.parameters()) + list(model.delta.parameters())
     assert all(parameter.grad is not None and torch.isfinite(parameter.grad).all() for parameter in residual_parameters)
+    assert all(
+        parameter.grad is not None and torch.isfinite(parameter.grad).all() for parameter in model.proj.parameters()
+    )
+    assert all(
+        parameter.grad is not None and torch.isfinite(parameter.grad).all()
+        for parameter in model.prediction.parameters()
+    )
 
 
 def test_tomar_state_round_trip_preserves_predictions():
     torch.manual_seed(13)
     model = TOMARFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        input_dims={"text": 2, "audio": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
         anchor_modality="text",
     ).eval()
     restored = TOMARFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        input_dims={"text": 2, "audio": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
         anchor_modality="text",
     ).eval()
     restored.load_state_dict(model.state_dict())

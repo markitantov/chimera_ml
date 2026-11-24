@@ -6,7 +6,7 @@ import torch.nn as nn
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
-from chimera_ml.models._utils import _features, _mean, _projections
+from chimera_ml.models._utils import _features, _mean, _projections, _validate_input_dims
 from chimera_ml.models.base import BaseModel
 
 
@@ -15,20 +15,22 @@ class TOMARFusionModel(BaseModel):
 
     def __init__(
         self,
-        encoders: dict[str, nn.Module],
+        input_dims: dict[str, int],
         shared_dim: int,
-        head: nn.Module,
         anchor_modality: str,
-        input_dims: dict[str, int] | None = None,
+        output_dim: int,
         gate_hidden: int = 64,
     ):
         super().__init__()
-        self.names = tuple(encoders)
-        self.encoders = nn.ModuleDict(encoders)
+        self.input_dims = _validate_input_dims(input_dims)
+        if shared_dim <= 0:
+            raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+        if output_dim <= 0:
+            raise ValueError(f"output_dim must be positive, got {output_dim}.")
+        self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
-        input_dims = input_dims or {}
-        self.proj = _projections(self.names, input_dims, shared_dim)
-        self.head = head
+        self.proj = _projections(self.names, self.input_dims, shared_dim)
+        self.prediction = nn.Linear(shared_dim, output_dim)
         if anchor_modality not in self.names:
             raise ValueError(f"Unknown anchor modality: {anchor_modality}")
         self.anchor_modality = anchor_modality
@@ -68,7 +70,7 @@ class TOMARFusionModel(BaseModel):
 
         fused = self.norm(anchor + correction)
         aux["fused"] = fused
-        return ModelOutput(preds=self.head(fused), aux=aux)
+        return ModelOutput(preds=self.prediction(fused), aux=aux)
 
 
 @MODELS.register("tomar_fusion_model")
