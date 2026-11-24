@@ -1,6 +1,74 @@
 # Adaptive TFS-DCMMOE fusion
 
-`tfs_dcmmmoe_fusion_model` computes the directed TFS pair representations and
-uses an input-dependent gate to weight the available pairs. Pair masks are
-respected, and the normalized weights are returned in `ModelOutput.aux` as
-`pair_weights` for inspection.
+TFSDCMMOEFusionModel keeps the hierarchical TFS structure and adds
+input-dependent gates over directed pair experts. Each available pair receives
+a score from its pair representation; masked softmax removes unavailable pairs
+before the weights are applied. The model can therefore select relations for
+each sample instead of treating every available pair equally.
+
+For three modalities and default groups, the pair experts are the same six
+directed first-level Transformer blocks and two reciprocal second-level blocks
+used by TFS. Ordinary TFS uses binary availability at this stage; DCMMOE uses
+learned normalized pair weights while preserving zero weight for unavailable
+pairs.
+
+## Parameters
+
+~~~python
+TFSDCMMOEFusionModel(
+    input_dims: dict[str, int],
+    shared_dim: int,
+    output_dim: int,
+    groups: tuple[tuple[tuple[str, str], ...], ...] | None = None,
+    gate_hidden: int = 64,
+)
+~~~
+
+input_dims, shared_dim, output_dim, and groups have the same meaning as in TFS.
+gate_hidden is the hidden width of the pair-gating MLP. All dimensions must be
+positive.
+
+## Inputs, masks, and outputs
+
+Inputs are feature-only [B, D] or [B, T, D] tensors in Batch.inputs; the model
+projects them to shared_dim. Predictions have shape [B, output_dim]. Dedicated
+temporal masks are preferred over legacy presence masks, and fully masked pairs
+receive zero weight. A missing modality or per-sample false mask cannot
+influence a valid pair or second-level fusion. At least one available directed
+pair is required.
+
+ModelOutput.aux includes pair representations and validity keys, plus
+pair_weights, group_weights, and fused. pair_weights exposes mask-aware
+adaptive expert weights; use preds for the task output.
+
+## Python
+
+~~~python
+from chimera_ml.models import TFSDCMMOEFusionModel
+
+model = TFSDCMMOEFusionModel(
+    input_dims={"text": 1024, "audio": 768, "video": 512},
+    shared_dim=256,
+    output_dim=2,
+    gate_hidden=128,
+)
+~~~
+
+## YAML
+
+~~~yaml
+model:
+  name: tfs_dcmmmoe_fusion_model
+  params:
+    input_dims:
+      text: 1024
+      audio: 768
+      video: 512
+    shared_dim: 256
+    output_dim: 2
+    gate_hidden: 128
+~~~
+
+Use groups for an explicit grouped hierarchy. A non-default grouping or a
+configuration with fewer than three modality names uses the generalized TFS
+path while retaining adaptive masked pair weighting.
