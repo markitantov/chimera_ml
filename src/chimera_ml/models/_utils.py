@@ -98,7 +98,7 @@ def _masked_softmax(scores: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     masked_scores = work_scores.masked_fill(~expanded_valid, -torch.inf)
     maximum = masked_scores.amax(dim=-1, keepdim=True)
     safe_maximum = torch.where(torch.isfinite(maximum), maximum, torch.zeros_like(maximum))
-    exponent = torch.exp(work_scores - safe_maximum) * expanded_valid.to(work_dtype)
+    exponent = torch.exp(masked_scores - safe_maximum)
     denominator = exponent.sum(dim=-1, keepdim=True)
     weights = exponent / denominator.clamp_min(1)
     return weights.to(scores.dtype)

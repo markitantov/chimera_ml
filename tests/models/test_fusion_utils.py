@@ -3,7 +3,7 @@ import torch
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.data.masking_collate import MaskingCollate
-from chimera_ml.models._utils import _attention, _features, _mask, _mean, _sequence
+from chimera_ml.models._utils import _attention, _features, _mask, _masked_softmax, _mean, _sequence
 
 
 def test_masking_collate_masks_are_combined_for_temporal_features():
@@ -102,6 +102,19 @@ def test_attention_normalizes_only_over_available_keys():
     result = _attention(query, key, torch.tensor([[1, 0]]))
 
     assert torch.allclose(result, key[:, :1])
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_masked_softmax_does_not_exponentiate_extreme_invalid_scores(dtype: torch.dtype):
+    scores = torch.tensor([[0.0, 1000.0]], dtype=dtype, requires_grad=True)
+
+    weights = _masked_softmax(scores, torch.tensor([[True, False]]))
+
+    expected = torch.tensor([[1.0, 0.0]], dtype=dtype)
+    assert torch.isfinite(weights).all()
+    assert torch.allclose(weights, expected)
+    weights.float().sum().backward()
+    assert scores.grad is not None and torch.isfinite(scores.grad).all()
 
 
 def test_sequence_and_features_reject_unsupported_encoder_outputs():
