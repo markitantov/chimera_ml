@@ -4,7 +4,7 @@ import torch.nn as nn
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
-from chimera_ml.models._fusion_common import _attention, _features, _projections
+from chimera_ml.models._utils import _attention, _features, _projections
 from chimera_ml.models.base import BaseModel
 
 

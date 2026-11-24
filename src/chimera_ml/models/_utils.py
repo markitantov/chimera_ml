@@ -5,18 +5,33 @@ from chimera_ml.core.batch import Batch
 
 
 def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
+    """Return the valid positions for a modality's normalized sequence."""
     value = batch.get_masks(f"{name}_mask")
     if value is None:
-        return torch.ones(x.shape[:-1], dtype=torch.bool, device=x.device)
+        result = torch.ones(x.shape[:-1], dtype=torch.bool, device=x.device)
+    else:
+        result = torch.as_tensor(value, device=x.device).bool()
+        if result.ndim == 1:
+            result = result[:, None]
+        if result.ndim != 2:
+            raise ValueError(f"Mask for '{name}' must have shape (B,) or (B, T), got {tuple(result.shape)}.")
+        if result.shape[1] == 1 and x.shape[1] != 1:
+            result = result.expand(-1, x.shape[1])
+        if result.shape != x.shape[:-1]:
+            raise ValueError(f"Mask for '{name}' must have shape (B,) or (B, T), got {tuple(result.shape)}.")
 
-    value = torch.as_tensor(value, device=x.device).bool()
-    if value.ndim == 1:
-        value = value[:, None]
-    if value.shape[1] == 1 and x.shape[1] != 1:
-        value = value.expand(-1, x.shape[1])
-    if value.shape != x.shape[:-1]:
-        raise ValueError(f"Mask for '{name}' must have shape (B,) or (B, T), got {tuple(value.shape)}.")
-    return value
+    sequence_mask = batch.get_masks("sequence_mask")
+    if sequence_mask is not None:
+        sequence_mask = torch.as_tensor(sequence_mask, device=x.device).bool()
+        if sequence_mask.ndim == 1:
+            sequence_mask = sequence_mask[:, None]
+        # MaskingCollate emits a shared sequence mask. Apply it when this
+        # modality has the same temporal width; a 2-D modality normalized to
+        # T=1 must not be broadcast over another modality's longer sequence.
+        if sequence_mask.shape == result.shape:
+            result = result & sequence_mask
+
+    return result
 
 
 def _sequence(x: torch.Tensor) -> torch.Tensor:
