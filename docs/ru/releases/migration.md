@@ -59,6 +59,16 @@ input projections и prediction layer. Для RAAV также нужны frame_m
 context_modality; у TFS-DCMMOE можно задать gate_hidden, у TFS — groups, у
 TOMAR — gate_hidden.
 
+## Намеренное удаление legacy fusion-моделей
+
+В рамках рефакторинга намеренно удалены классы FeatureFusionModel,
+PredictionFusionModel, GatedFusionModel и GatedPredictionFusionModel, а также
+их registry keys feature_fusion_model, prediction_fusion_model,
+gated_fusion_model и gated_prediction_fusion_model. Прямого drop-in replacement
+для этих классов нет. Выберите одну из четырёх feature-only fusion-моделей,
+если её архитектура соответствует задаче, и явно перенесите контракт входов и
+выходов; старые параметры конструктора и композиция submodels несовместимы.
+
 Если каждой modality нужны независимые padding и temporal masks, используйте
 multimodal_sequence_collate. Для существующих pipelines, которым достаточно
 legacy sequence и presence-mask behavior, оставьте masking_collate. Известные

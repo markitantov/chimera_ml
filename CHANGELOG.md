@@ -26,6 +26,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Removed
 
 - External encoders and head constructor dependencies from the built-in fusion models.
+- Legacy FeatureFusionModel (feature_fusion_model), PredictionFusionModel (prediction_fusion_model), GatedFusionModel (gated_fusion_model), and GatedPredictionFusionModel (gated_prediction_fusion_model). These four legacy classes and registry keys have no direct drop-in replacement.
 
 ## [0.3.0] - 2026-08-10
 

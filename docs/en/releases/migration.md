@@ -62,6 +62,18 @@ projections and prediction layer internally. RAAV additionally keeps
 frame_modalities and context_modality; TFS-DCMMOE may set gate_hidden; TFS may
 set groups; TOMAR may set gate_hidden.
 
+## Intentional removal of legacy fusion models
+
+The refactor also intentionally removed the legacy classes
+FeatureFusionModel, PredictionFusionModel, GatedFusionModel, and
+GatedPredictionFusionModel, together with their registry keys
+feature_fusion_model, prediction_fusion_model, gated_fusion_model, and
+gated_prediction_fusion_model. There is no direct drop-in replacement for
+these classes. Choose one of the four feature-only fusion models when its
+architecture matches the task, and migrate the input and output contract
+explicitly; old constructor parameters and submodel composition are not
+compatible.
+
 If each modality needs independent temporal padding and masks, use
 multimodal_sequence_collate. Keep masking_collate for existing pipelines whose
 legacy sequence and presence-mask behavior is sufficient. The built-in registry
