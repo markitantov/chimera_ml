@@ -1,4 +1,9 @@
-# factories registered in MODELS registry
+"""MODELS package.
+
+Built-in models are exposed and registered by default.
+Importing this package ensures registry decorators are executed.
+"""
+
 from chimera_ml.models.base import BaseModel
 from chimera_ml.models.raav_fusion import raav_fusion_model
 from chimera_ml.models.tfs_fusion import tfs_dcmmmoe_fusion_model, tfs_fusion_model

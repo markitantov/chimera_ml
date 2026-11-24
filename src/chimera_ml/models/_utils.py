@@ -25,6 +25,7 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
         sequence_mask = torch.as_tensor(sequence_mask, device=x.device).bool()
         if sequence_mask.ndim == 1:
             sequence_mask = sequence_mask[:, None]
+
         # MaskingCollate emits a shared sequence mask. Apply it when this
         # modality has the same temporal width; a 2-D modality normalized to
         # T=1 must not be broadcast over another modality's longer sequence.
@@ -37,8 +38,10 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
 def _sequence(x: torch.Tensor) -> torch.Tensor:
     if x.ndim == 2:
         return x[:, None, :]
+
     if x.ndim == 3:
         return x
+
     raise ValueError(f"Expected [B, D] or [B, T, D], got {tuple(x.shape)}.")
 
 
@@ -60,13 +63,16 @@ def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[st
     for name in names:
         if name not in batch.inputs:
             continue
+
         x = _sequence(model.proj[name](model.encoders[name](batch.inputs[name])))
         if x.shape[-1] != model.shared_dim:
             raise ValueError(f"Feature '{name}' has width {x.shape[-1]}, expected {model.shared_dim}.")
+
         result[name] = (x, _mask(batch, name, x))
 
     if not result:
         raise ValueError("No configured modalities are present in batch.inputs.")
+
     return result
 
 
