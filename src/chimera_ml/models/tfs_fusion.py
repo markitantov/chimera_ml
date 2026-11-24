@@ -76,8 +76,9 @@ def _hierarchical_fusion(
         raise ValueError("Fusion requires at least one configured directed pair.")
 
     first_value = next(iter(values.values()))
-    pair_keys = tuple(_pair_name(pair) for group in groups for pair in group)
+    pair_keys = tuple(_pair_name(pair) for group in groups for pair in group if _pair_name(pair) in values)
     pair_weights = first_value.new_zeros(first_value.shape[0], len(pair_keys))
+    pair_available = torch.zeros_like(pair_weights, dtype=torch.bool)
     group_values: list[torch.Tensor] = []
     group_validities: list[torch.Tensor] = []
     pair_indices = {key: index for index, key in enumerate(pair_keys)}
@@ -95,12 +96,16 @@ def _hierarchical_fusion(
             scores = gate(stacked).squeeze(-1)
             weights = _masked_softmax(scores, available)
         for index, key in enumerate(keys):
+            pair_available[:, pair_indices[key]] = available[:, index]
             pair_weights[:, pair_indices[key]] = weights[:, index]
 
         group_valid = available.any(1)
         group_value = layer((stacked * weights.unsqueeze(-1)).sum(1))
         group_values.append(group_value * group_valid.to(group_value.dtype).unsqueeze(-1))
         group_validities.append(group_valid)
+
+    pair_weights = pair_weights * pair_available.to(pair_weights.dtype)
+    pair_weights = pair_weights / pair_weights.sum(1, keepdim=True).clamp_min(1)
 
     if not group_values:
         raise ValueError("Fusion has no directed pair available in batch.inputs.")
@@ -171,7 +176,7 @@ class TFSFusionModel(BaseModel):
 
 
 class TFSDCMMOEFusionModel(BaseModel):
-    """TFS with input-dependent DCMMOE weights over directed pairs."""
+    """Adaptive hierarchical TFS with input-dependent directed-pair experts."""
 
     def __init__(
         self,
@@ -189,7 +194,8 @@ class TFSDCMMOEFusionModel(BaseModel):
         input_dims = input_dims or {}
         self.proj = _projections(self.names, input_dims, shared_dim)
         self.head = head
-        self.groups = groups
+        self.groups = _normalize_groups(self.names, groups)
+        self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.gates = nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
         self.output = nn.Linear(shared_dim, shared_dim)
 
@@ -198,33 +204,23 @@ class TFSDCMMOEFusionModel(BaseModel):
         left: tuple[torch.Tensor, torch.Tensor],
         right: tuple[torch.Tensor, torch.Tensor],
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        query, query_valid = left
-        key, key_valid = right
-        return _mean(query + _attention(query, key, key_valid), query_valid), query_valid.any(1) & key_valid.any(1)
+        return _directed_pair(left, right)
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
-        values: dict[str, torch.Tensor] = {}
-        valid: dict[str, torch.Tensor] = {}
-        for i in self.names:
-            for j in self.names:
-                if i == j or i not in feats or j not in feats:
-                    continue
-                values[f"{i}->{j}"], valid[f"{i}->{j}"] = self._pair(feats[i], feats[j])
-
+        values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSDCMMOEFusionModel needs at least two available modalities.")
 
-        keys = list(values)
-        z = torch.stack([values[key] for key in keys], 1)
-        available = torch.stack([valid[key] for key in keys], 1)
-        scores = self.gates(z).squeeze(-1).masked_fill(~available, -torch.finfo(z.dtype).max)
-        alpha = torch.softmax(scores, 1) * available.to(z.dtype)
-        alpha = alpha / alpha.sum(1, keepdim=True).clamp_min(1e-8)
-        fused = self.output((z * alpha.unsqueeze(-1)).sum(1))
-
-        aux = {f"pair_{key}": values[key] for key in keys}
-        aux["pair_weights"] = alpha
+        fused, pair_weights, group_weights = _hierarchical_fusion(
+            self.groups, values, valid, self.group_layers, self.output, gate=self.gates
+        )
+        aux: dict[str, torch.Tensor] = {}
+        for key, value in values.items():
+            aux[f"pair_{key}"] = value
+            aux[f"pair_valid_{key}"] = valid[key]
+        aux["pair_weights"] = pair_weights
+        aux["group_weights"] = group_weights
         aux["fused"] = fused
         return ModelOutput(preds=self.head(fused), aux=aux)
 
