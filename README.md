@@ -476,10 +476,10 @@ Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty 
 
 `MODELS`:
 
-- `feature_fusion_model`
-- `prediction_fusion_model`
-- `gated_fusion_model`
-- `gated_prediction_fusion_model`
+- `tfs_fusion_model`
+- `tfs_dcmmmoe_fusion_model`
+- `raav_fusion_model`
+- `tomar_fusion_model`
 
 `LOSSES`:
 
