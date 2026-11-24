@@ -129,20 +129,27 @@ def _attention(query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor) 
 
 
 def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
-    """Encode, project and validate the requested modality feature sequences."""
+    """Read, project and validate configured modality feature sequences."""
     result: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
     batch_size: int | None = None
     for name in names:
         if name not in batch.inputs:
             continue
 
-        encoded = model.encoders[name](batch.inputs[name])
+        # Transitional encoder branch is removed once all fusion models use direct inputs.
+        encoded = model.encoders[name](batch.inputs[name]) if hasattr(model, "encoders") else batch.inputs[name]
         x = _sequence(encoded)
         if batch_size is None:
             batch_size = x.shape[0]
         elif x.shape[0] != batch_size:
             raise ValueError(f"Modality '{name}' has batch dimension {x.shape[0]}, expected {batch_size}.")
 
+        input_dims = getattr(model, "input_dims", None)
+        expected_dim = input_dims.get(name) if input_dims is not None else None
+        if expected_dim is not None and x.shape[-1] != expected_dim:
+            raise ValueError(
+                f"Feature '{name}' has input width {x.shape[-1]}, expected configured width {expected_dim}."
+            )
         projected = model.proj[name](x)
         if not torch.is_tensor(projected) or projected.ndim != 3:
             shape = getattr(projected, "shape", None)

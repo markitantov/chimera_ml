@@ -225,3 +225,21 @@ def test_fusion_utilities_validate_shapes_and_configuration_errors():
         _projections(("audio",), {}, 0)
     with pytest.raises(ValueError, match="Input dimension"):
         _projections(("audio",), {"audio": 0}, 4)
+
+
+def test_features_reads_direct_batch_inputs_and_validates_declared_width():
+    class DirectModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared_dim = 3
+            self.input_dims = {"audio": 4}
+            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Linear(4, 3)})
+
+    model = DirectModel()
+    batch = Batch(inputs={"audio": torch.ones(2, 4)}, targets=None)
+
+    result = _features(model, batch, ("audio",))
+
+    assert result["audio"][0].shape == (2, 1, 3)
+    with pytest.raises(ValueError, match="configured width"):
+        _features(model, Batch(inputs={"audio": torch.ones(2, 5)}, targets=None), ("audio",))
