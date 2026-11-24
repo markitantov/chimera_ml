@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-24
+
 ### Added
 
 - Four built-in feature-only fusion architectures: MASAI-style hierarchical TFS, adaptive TFS-DCMMOE, frame/context RAAV, and anchor-conditioned residual TOMAR.
