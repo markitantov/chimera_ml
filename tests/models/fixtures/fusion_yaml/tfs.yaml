@@ -1,0 +1,9 @@
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims:
+      text: 3
+      audio: 5
+      video: 7
+    shared_dim: 4
+    output_dim: 2
