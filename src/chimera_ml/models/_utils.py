@@ -166,6 +166,17 @@ def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[st
     return result
 
 
+def _validate_input_dims(input_dims: dict[str, int]) -> dict[str, int]:
+    """Validate and copy the declared positive feature widths."""
+    if not isinstance(input_dims, dict) or not input_dims:
+        raise ValueError("input_dims must be a non-empty dictionary.")
+    if any(not isinstance(name, str) or not name for name in input_dims):
+        raise ValueError("input_dims keys must be non-empty strings.")
+    if any(not isinstance(dim, int) or isinstance(dim, bool) or dim <= 0 for dim in input_dims.values()):
+        raise ValueError("input_dims values must be positive integers.")
+    return dict(input_dims)
+
+
 def _projections(names: tuple[str, ...], input_dims: dict[str, int], shared_dim: int) -> nn.ModuleDict:
     """Build one projection per modality, preserving identity for preprojected inputs."""
     if shared_dim <= 0:

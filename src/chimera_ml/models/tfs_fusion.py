@@ -7,7 +7,14 @@ import torch.nn.functional as F
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
-from chimera_ml.models._utils import _attention, _features, _masked_softmax, _mean, _projections
+from chimera_ml.models._utils import (
+    _attention,
+    _features,
+    _masked_softmax,
+    _mean,
+    _projections,
+    _validate_input_dims,
+)
 from chimera_ml.models.base import BaseModel
 
 Pair = tuple[str, str]
@@ -323,19 +330,21 @@ class TFSFusionModel(BaseModel):
 
     def __init__(
         self,
-        encoders: dict[str, nn.Module],
+        input_dims: dict[str, int],
         shared_dim: int,
-        head: nn.Module,
-        input_dims: dict[str, int] | None = None,
+        output_dim: int,
         groups: tuple[tuple[tuple[str, str], ...], ...] | None = None,
     ):
         super().__init__()
-        self.names = tuple(encoders)
-        self.encoders = nn.ModuleDict(encoders)
+        self.input_dims = _validate_input_dims(input_dims)
+        if shared_dim <= 0:
+            raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+        if output_dim <= 0:
+            raise ValueError(f"output_dim must be positive, got {output_dim}.")
+        self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
-        input_dims = input_dims or {}
-        self.proj = _projections(self.names, input_dims, shared_dim)
-        self.head = head
+        self.proj = _projections(self.names, self.input_dims, shared_dim)
+        self.prediction = nn.Linear(shared_dim, output_dim)
         self.groups = _normalize_groups(self.names, groups)
         self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.output = nn.Linear(shared_dim, shared_dim)
@@ -372,7 +381,7 @@ class TFSFusionModel(BaseModel):
             aux["pair_weights"] = pair_weights
             aux["group_weights"] = group_weights
             aux["fused"] = fused
-            return ModelOutput(preds=self.head(fused), aux=aux)
+            return ModelOutput(preds=self.prediction(fused), aux=aux)
 
         fused, pair_weights, group_weights = _hierarchical_fusion(
             self.groups, values, valid, self.group_layers, self.output
@@ -384,7 +393,7 @@ class TFSFusionModel(BaseModel):
         aux["pair_weights"] = pair_weights
         aux["group_weights"] = group_weights
         aux["fused"] = fused
-        return ModelOutput(preds=self.head(fused), aux=aux)
+        return ModelOutput(preds=self.prediction(fused), aux=aux)
 
 
 class TFSDCMMOEFusionModel(BaseModel):
@@ -392,20 +401,22 @@ class TFSDCMMOEFusionModel(BaseModel):
 
     def __init__(
         self,
-        encoders: dict[str, nn.Module],
+        input_dims: dict[str, int],
         shared_dim: int,
-        head: nn.Module,
-        input_dims: dict[str, int] | None = None,
+        output_dim: int,
         groups: tuple[tuple[tuple[str, str], ...], ...] | None = None,
         gate_hidden: int = 64,
     ):
         super().__init__()
-        self.names = tuple(encoders)
-        self.encoders = nn.ModuleDict(encoders)
+        self.input_dims = _validate_input_dims(input_dims)
+        if shared_dim <= 0:
+            raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+        if output_dim <= 0:
+            raise ValueError(f"output_dim must be positive, got {output_dim}.")
+        self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
-        input_dims = input_dims or {}
-        self.proj = _projections(self.names, input_dims, shared_dim)
-        self.head = head
+        self.proj = _projections(self.names, self.input_dims, shared_dim)
+        self.prediction = nn.Linear(shared_dim, output_dim)
         self.groups = _normalize_groups(self.names, groups)
         self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.gates = nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
@@ -443,7 +454,7 @@ class TFSDCMMOEFusionModel(BaseModel):
             aux["pair_weights"] = pair_weights
             aux["group_weights"] = group_weights
             aux["fused"] = fused
-            return ModelOutput(preds=self.head(fused), aux=aux)
+            return ModelOutput(preds=self.prediction(fused), aux=aux)
 
         fused, pair_weights, group_weights = _hierarchical_fusion(
             self.groups, values, valid, self.group_layers, self.output, gate=self.gates
@@ -455,7 +466,7 @@ class TFSDCMMOEFusionModel(BaseModel):
         aux["pair_weights"] = pair_weights
         aux["group_weights"] = group_weights
         aux["fused"] = fused
-        return ModelOutput(preds=self.head(fused), aux=aux)
+        return ModelOutput(preds=self.prediction(fused), aux=aux)
 
 
 @MODELS.register("tfs_fusion_model")

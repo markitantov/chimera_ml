@@ -25,10 +25,9 @@ def _batch() -> Batch:
 
 def test_tfs_fuses_directed_pairs_and_returns_auxiliary_features():
     model = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 4, "audio": 5, "video": 6},
         shared_dim=4,
-        input_dims={"audio": 5, "video": 6},
-        head=nn.Linear(4, 2),
+        output_dim=2,
     )
 
     out = model(_batch())
@@ -42,9 +41,9 @@ def test_tfs_fuses_directed_pairs_and_returns_auxiliary_features():
 
 def test_tfs_supports_explicit_groups_and_missing_modalities():
     model = TFSFusionModel(
-        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4), "video": nn.Linear(3, 4)},
+        input_dims={"text": 3, "audio": 3, "video": 3},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         groups=((("text", "audio"), ("audio", "text")), (("video", "text"),)),
     )
 
@@ -57,9 +56,9 @@ def test_tfs_supports_explicit_groups_and_missing_modalities():
 
 def test_tfs_requires_two_available_modalities():
     model = TFSFusionModel(
-        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4)},
+        input_dims={"text": 3, "audio": 3},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
     )
 
     with pytest.raises(ValueError, match="at least two available modalities"):
@@ -68,17 +67,15 @@ def test_tfs_requires_two_available_modalities():
 
 def test_tfs_factory_is_registered():
     assert MODELS.get("tfs_fusion_model") is tfs_fusion_model
-    model = tfs_fusion_model(
-        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4)}, shared_dim=4, head=nn.Identity()
-    )
+    model = tfs_fusion_model(input_dims={"text": 3, "audio": 3}, shared_dim=4, output_dim=4)
     assert isinstance(model, TFSFusionModel)
 
 
 def _identity_tfs() -> TFSFusionModel:
     model = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
     )
     with torch.no_grad():
         for layer in model.group_layers:
@@ -151,9 +148,9 @@ def test_tfs_group_configuration_changes_hierarchical_aggregation():
 
     all_pairs = _identity_tfs()
     split_pairs = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
         groups=((("text", "audio"),), (("audio", "text"), ("text", "video"), ("video", "text"))),
     )
     with torch.no_grad():
@@ -207,9 +204,9 @@ def test_tfs_passes_unscaled_triples_through_both_second_level_blocks():
             return query * query_valid.unsqueeze(-1).to(query.dtype)
 
     model = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=1,
-        head=nn.Identity(),
+        output_dim=4,
     ).eval()
     backbone = model.triple_fusion
     assert backbone is not None
@@ -240,9 +237,9 @@ def test_tfs_passes_unscaled_triples_through_both_second_level_blocks():
 
 def test_tfs_second_level_blocks_receive_finite_gradients():
     model = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
     )
     batch = Batch(
         inputs={
@@ -262,9 +259,9 @@ def test_tfs_second_level_blocks_receive_finite_gradients():
 
 def test_tfs_zeroes_unavailable_pairs_before_second_level_attention():
     model = TFSFusionModel(
-        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        input_dims={"text": 2, "audio": 2, "video": 2},
         shared_dim=2,
-        head=nn.Identity(),
+        output_dim=2,
     ).eval()
     captured = []
     hooks = [
