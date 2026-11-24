@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 
@@ -33,7 +35,7 @@ class TOMARFusionModel(BaseModel):
         extras = [name for name in self.names if name != anchor_modality]
         self.rho = nn.ModuleDict(
             {
-                name: nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
+                name: nn.Sequential(nn.Linear(shared_dim * 2, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
                 for name in extras
             }
         )
@@ -45,19 +47,24 @@ class TOMARFusionModel(BaseModel):
         if self.anchor_modality not in feats:
             raise ValueError(f"Anchor modality '{self.anchor_modality}' is missing.")
 
-        anchor = _mean(*feats[self.anchor_modality])
+        anchor_features, anchor_mask = feats[self.anchor_modality]
+        anchor_available = anchor_mask.any(1)
+        if not anchor_available.all():
+            raise ValueError(f"Anchor modality '{self.anchor_modality}' is unavailable for one or more samples.")
+        anchor = _mean(anchor_features, anchor_mask)
         correction = torch.zeros_like(anchor)
         aux = {"anchor": anchor}
         for name in self.names:
             if name == self.anchor_modality or name not in feats:
                 continue
             value = _mean(*feats[name])
-            coefficient = torch.sigmoid(self.rho[name](value))
-            delta = self.delta[name](value)
             present = feats[name][1].any(1).to(value.dtype)[:, None]
-            correction = correction + coefficient * delta * present
+            joint = torch.cat([anchor, value], dim=-1)
+            coefficient = torch.sigmoid(self.rho[name](joint)) * present
+            delta = self.delta[name](value) * present
+            correction = correction + coefficient * delta
             aux[f"rho_{name}"] = coefficient
-            aux[f"delta_{name}"] = delta * present
+            aux[f"delta_{name}"] = delta
 
         fused = self.norm(anchor + correction)
         aux["fused"] = fused

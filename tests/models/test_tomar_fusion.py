@@ -61,3 +61,122 @@ def test_tomar_validates_anchor_and_registers_factory():
         encoders={"text": nn.Linear(3, 4)}, shared_dim=4, head=nn.Identity(), anchor_modality="text"
     )
     assert isinstance(model, TOMARFusionModel)
+
+
+def _tomar_joint_model() -> TOMARFusionModel:
+    return TOMARFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+        anchor_modality="text",
+        gate_hidden=3,
+    ).eval()
+
+
+def test_tomar_gate_depends_on_anchor_and_additional_representation():
+    model = _tomar_joint_model()
+    fixed_audio = torch.tensor([[[0.5, 1.0]]])
+    first = Batch(
+        inputs={"text": torch.tensor([[[1.0, 0.0]]]), "audio": fixed_audio},
+        targets=None,
+        masks={"text_mask": torch.ones(1), "audio_mask": torch.ones(1)},
+    )
+    second = Batch(
+        inputs={"text": torch.tensor([[[0.0, 1.0]]]), "audio": fixed_audio},
+        targets=None,
+        masks={"text_mask": torch.ones(1), "audio_mask": torch.ones(1)},
+    )
+
+    first_rho = model(first).aux["rho_audio"]
+    second_rho = model(second).aux["rho_audio"]
+
+    assert not torch.allclose(first_rho, second_rho)
+
+
+def test_tomar_residual_matches_manual_reference_and_masks_coefficients():
+    model = TOMARFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+        anchor_modality="text",
+        gate_hidden=2,
+    ).eval()
+    with torch.no_grad():
+        model.delta["audio"].weight.copy_(torch.eye(2))
+        model.delta["audio"].bias.zero_()
+        model.rho["audio"][0].weight.zero_()
+        model.rho["audio"][0].bias.zero_()
+        model.rho["audio"][2].weight.zero_()
+        model.rho["audio"][2].bias.zero_()
+
+    batch = Batch(
+        inputs={
+            "text": torch.tensor([[[1.0, 3.0]], [[2.0, 2.0]]]),
+            "audio": torch.tensor([[[4.0, 1.0]], [[100.0, 100.0]]]),
+        },
+        targets=None,
+        masks={"text_mask": torch.ones(2), "audio_mask": torch.tensor([1, 0])},
+    )
+
+    output = model(batch)
+    expected_first = model.norm(torch.tensor([[1.0, 3.0]]) + 0.5 * torch.tensor([[4.0, 1.0]]))
+    expected_second = model.norm(torch.tensor([[2.0, 2.0]]))
+
+    assert torch.allclose(output.aux["fused"][0], expected_first)
+    assert torch.allclose(output.aux["fused"][1], expected_second)
+    assert torch.allclose(output.aux["rho_audio"][1], torch.zeros(1))
+    assert torch.allclose(output.aux["delta_audio"][1], torch.zeros(2))
+
+
+def test_tomar_rejects_per_sample_missing_anchor():
+    model = _tomar_joint_model()
+    batch = Batch(
+        inputs={"text": torch.ones(2, 1, 2), "audio": torch.ones(2, 1, 2)},
+        targets=None,
+        masks={"text_mask": torch.tensor([1, 0]), "audio_mask": torch.ones(2)},
+    )
+
+    with pytest.raises(ValueError, match="unavailable for one or more samples"):
+        model(batch)
+
+
+def test_tomar_gates_and_delta_networks_receive_finite_gradients():
+    model = TOMARFusionModel(
+        encoders={"text": nn.Linear(3, 4), "audio": nn.Linear(3, 4), "video": nn.Linear(3, 4)},
+        shared_dim=4,
+        head=nn.Linear(4, 2),
+        anchor_modality="text",
+        gate_hidden=5,
+    )
+    batch = Batch(
+        inputs={"text": torch.randn(2, 3), "audio": torch.randn(2, 3), "video": torch.randn(2, 3)},
+        targets=None,
+    )
+
+    model(batch).preds.sum().backward()
+
+    residual_parameters = list(model.rho.parameters()) + list(model.delta.parameters())
+    assert all(parameter.grad is not None and torch.isfinite(parameter.grad).all() for parameter in residual_parameters)
+
+
+def test_tomar_state_round_trip_preserves_predictions():
+    torch.manual_seed(13)
+    model = TOMARFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+        anchor_modality="text",
+    ).eval()
+    restored = TOMARFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+        anchor_modality="text",
+    ).eval()
+    restored.load_state_dict(model.state_dict())
+    batch = Batch(
+        inputs={"text": torch.randn(2, 3, 2), "audio": torch.randn(2, 2)},
+        targets=None,
+    )
+
+    assert torch.equal(model(batch).preds, restored(batch).preds)
