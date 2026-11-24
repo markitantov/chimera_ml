@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 
@@ -52,11 +50,14 @@ class RAAVFusionModel(BaseModel):
         super().__init__()
         if num_latents <= 0:
             raise ValueError(f"num_latents must be positive, got {num_latents}.")
+
         self.input_dims = _validate_input_dims(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
+
         self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
         self.proj = _projections(self.names, self.input_dims, shared_dim)
@@ -64,9 +65,11 @@ class RAAVFusionModel(BaseModel):
         self.frame_modalities = tuple(frame_modalities)
         if not self.frame_modalities:
             raise ValueError("RAAVFusionModel requires at least one frame modality.")
+
         unknown = set(self.frame_modalities) - set(self.names)
         if context_modality not in self.names or unknown:
             raise ValueError("RAAV modalities must be present in input_dims.")
+
         self.context_modality = context_modality
         self.gate = nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
         self.latents = nn.Parameter(torch.randn(num_latents, shared_dim) / shared_dim**0.5)
@@ -143,6 +146,7 @@ class RAAVFusionModel(BaseModel):
                 refined = self.temporal(refined)
             if refined.ndim != 3 or refined.shape[:2] != frame_valid.shape or refined.shape[-1] != self.shared_dim:
                 raise ValueError("RAAV temporal module must preserve shape [B, T, shared_dim].")
+
             refined = refined * frame_valid.to(refined.dtype).unsqueeze(-1)
 
         preds = self.prediction(refined)

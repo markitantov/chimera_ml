@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,8 +14,6 @@ from chimera_ml.models._utils import (
     _validate_input_dims,
 )
 from chimera_ml.models.base import BaseModel
-
-Pair = tuple[str, str]
 
 
 class _SafeBatchNorm1d(nn.BatchNorm1d):
@@ -67,6 +63,7 @@ class _TransformerCrossAttention(nn.Module):
         heads = min(8, dim)
         while dim % heads:
             heads -= 1
+
         self.attention = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
         self.positional_encoding = _PositionalEncoding(dim, dropout)
         self.dropout = nn.Dropout(dropout)
@@ -95,6 +92,7 @@ class _TransformerCrossAttention(nn.Module):
         empty_keys = ~safe_key_valid.any(dim=1)
         if empty_keys.any():
             safe_key_valid[empty_keys, 0] = True
+
         safe_key = key.masked_fill(~key_valid.unsqueeze(-1), 0)
         attended, _ = self.attention(
             query,
@@ -133,8 +131,10 @@ def _align_and_concatenate(
         if padding:
             value = F.pad(value, (0, 0, 0, padding))
             valid = F.pad(valid, (0, padding))
+
         padded_values.append(value)
         padded_validities.append(valid)
+
     return torch.cat(padded_values, dim=-1), torch.stack(padded_validities, dim=-1).any(dim=-1)
 
 
@@ -151,8 +151,10 @@ class _TripleFusionBackbone(nn.Module):
             for target in names:
                 if source == target:
                     continue
+
                 self._block_indices[(source, target)] = len(blocks)
                 blocks.append(_TransformerCrossAttention(shared_dim))
+
         self.blocks = nn.ModuleList(blocks)
         self.cross_blocks = nn.ModuleList(
             [_TransformerCrossAttention(shared_dim * 3), _TransformerCrossAttention(shared_dim * 3)]
@@ -218,28 +220,32 @@ class _TripleFusionBackbone(nn.Module):
         return fused, pair_values, pair_valid, pair_keys, pair_weights
 
 
-def _pair_name(pair: Pair) -> str:
+def _pair_name(pair: tuple[str, str]) -> str:
     return f"{pair[0]}->{pair[1]}"
 
 
 def _normalize_groups(
-    names: tuple[str, ...], groups: tuple[tuple[Pair, ...], ...] | None
-) -> tuple[tuple[Pair, ...], ...]:
+    names: tuple[str, ...], groups: tuple[tuple[tuple[str, str], ...], ...] | None
+) -> tuple[tuple[tuple[str, str], ...], ...]:
     if groups is None:
         return tuple(((left, right), (right, left)) for index, left in enumerate(names) for right in names[index + 1 :])
+
     normalized = tuple(tuple(tuple(pair) for pair in group) for group in groups)
     if not normalized or any(not group for group in normalized):
         raise ValueError("groups must contain at least one non-empty group.")
 
     known = set(names)
-    seen: set[Pair] = set()
+    seen: set[tuple[str, str]] = set()
     for group in normalized:
         for pair in group:
             if len(pair) != 2 or pair[0] == pair[1] or pair[0] not in known or pair[1] not in known:
                 raise ValueError(f"Invalid directed pair {pair!r} in groups.")
+
             if pair in seen:
                 raise ValueError(f"Directed pair {_pair_name(pair)!r} occurs more than once in groups.")
+
             seen.add(pair)
+
     return normalized
 
 
@@ -256,7 +262,7 @@ def _directed_pair(
 
 
 def _collect_pairs(
-    feats: dict[str, tuple[torch.Tensor, torch.Tensor]], groups: tuple[tuple[Pair, ...], ...], pair_fn
+    feats: dict[str, tuple[torch.Tensor, torch.Tensor]], groups: tuple[tuple[tuple[str, str], ...], ...], pair_fn
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], tuple[str, ...]]:
     values: dict[str, torch.Tensor] = {}
     valid: dict[str, torch.Tensor] = {}
@@ -265,12 +271,14 @@ def _collect_pairs(
         left, right = key.split("->", 1)
         if left not in feats or right not in feats:
             continue
+
         values[key], valid[key] = pair_fn(feats[left], feats[right])
+
     return values, valid, pair_keys
 
 
 def _hierarchical_fusion(
-    groups: tuple[tuple[Pair, ...], ...],
+    groups: tuple[tuple[tuple[str, str], ...], ...],
     values: dict[str, torch.Tensor],
     valid: dict[str, torch.Tensor],
     group_layers: nn.ModuleList,
@@ -292,6 +300,7 @@ def _hierarchical_fusion(
         keys = [_pair_name(pair) for pair in group if _pair_name(pair) in values]
         if not keys:
             continue
+
         stacked = torch.stack([values[key] for key in keys], dim=1)
         available = torch.stack([valid[key] for key in keys], dim=1)
         if gate is None:
@@ -300,6 +309,7 @@ def _hierarchical_fusion(
         else:
             scores = gate(stacked).squeeze(-1)
             weights = _masked_softmax(scores, available)
+
         for index, key in enumerate(keys):
             pair_available[:, pair_indices[key]] = available[:, index]
             pair_weights[:, pair_indices[key]] = weights[:, index]
@@ -346,8 +356,10 @@ class TFSFusionModel(BaseModel):
         self.input_dims = _validate_input_dims(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
+
         self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
         self.proj = _projections(self.names, self.input_dims, shared_dim)
@@ -385,6 +397,7 @@ class TFSFusionModel(BaseModel):
             for key, value in values.items():
                 aux[f"pair_{key}"] = value
                 aux[f"pair_valid_{key}"] = valid[key]
+
             aux["pair_weights"] = pair_weights
             aux["group_weights"] = group_weights
             aux["fused"] = fused
@@ -397,6 +410,7 @@ class TFSFusionModel(BaseModel):
         for key, value in values.items():
             aux[f"pair_{key}"] = value
             aux[f"pair_valid_{key}"] = valid[key]
+
         aux["pair_weights"] = pair_weights
         aux["group_weights"] = group_weights
         aux["fused"] = fused
@@ -418,8 +432,10 @@ class TFSDCMMOEFusionModel(BaseModel):
         self.input_dims = _validate_input_dims(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
+
         self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
         self.proj = _projections(self.names, self.input_dims, shared_dim)
@@ -458,6 +474,7 @@ class TFSDCMMOEFusionModel(BaseModel):
             for key, value in values.items():
                 aux[f"pair_{key}"] = value
                 aux[f"pair_valid_{key}"] = valid[key]
+
             aux["pair_weights"] = pair_weights
             aux["group_weights"] = group_weights
             aux["fused"] = fused
@@ -470,6 +487,7 @@ class TFSDCMMOEFusionModel(BaseModel):
         for key, value in values.items():
             aux[f"pair_{key}"] = value
             aux[f"pair_valid_{key}"] = valid[key]
+
         aux["pair_weights"] = pair_weights
         aux["group_weights"] = group_weights
         aux["fused"] = fused

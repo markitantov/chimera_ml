@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 
@@ -25,14 +23,17 @@ class TOMARFusionModel(BaseModel):
         self.input_dims = _validate_input_dims(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
+
         self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
         self.proj = _projections(self.names, self.input_dims, shared_dim)
         self.prediction = nn.Linear(shared_dim, output_dim)
         if anchor_modality not in self.names:
             raise ValueError(f"Unknown anchor modality: {anchor_modality}")
+
         self.anchor_modality = anchor_modality
         extras = [name for name in self.names if name != anchor_modality]
         self.rho = nn.ModuleDict(
@@ -53,12 +54,14 @@ class TOMARFusionModel(BaseModel):
         anchor_available = anchor_mask.any(1)
         if not anchor_available.all():
             raise ValueError(f"Anchor modality '{self.anchor_modality}' is unavailable for one or more samples.")
+
         anchor = _mean(anchor_features, anchor_mask)
         correction = torch.zeros_like(anchor)
         aux = {"anchor": anchor}
         for name in self.names:
             if name == self.anchor_modality or name not in feats:
                 continue
+
             value = _mean(*feats[name])
             present = feats[name][1].any(1).to(value.dtype)[:, None]
             joint = torch.cat([anchor, value], dim=-1)

@@ -7,8 +7,6 @@ import torch
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import COLLATES
 
-_TARGET_KEYS: tuple[str, ...] = ("targets", "target")
-
 
 @dataclass
 class MultimodalSequenceCollate:
@@ -68,6 +66,7 @@ class MultimodalSequenceCollate:
                 raise ValueError(
                     f"Modality '{modality}' must contain feature vectors [D] or sequences [T, D], got rank {rank}."
                 )
+
             if any(tensor.ndim != rank for tensor in present):
                 raise ValueError(f"Modality '{modality}' has incompatible ranks across samples.")
 
@@ -146,6 +145,7 @@ class MultimodalSequenceCollate:
         missing = [index for index, tensor in enumerate(tensors) if tensor is None]
         if missing:
             output[missing] = 0
+
         return output, temporal
 
     def _collate_targets(self, batch: Sequence[Mapping[str, Any]]) -> torch.Tensor | None:
@@ -157,6 +157,7 @@ class MultimodalSequenceCollate:
         reference = present[0]
         if any(tensor.ndim != reference.ndim for tensor in present):
             raise ValueError("Cannot collate targets with different ranks.")
+
         if any(tuple(tensor.shape[1:]) != tuple(reference.shape[1:]) for tensor in present):
             raise ValueError("Cannot collate targets with incompatible feature dimensions.")
 
@@ -166,18 +167,21 @@ class MultimodalSequenceCollate:
             for index, tensor in enumerate(tensors):
                 if tensor is not None:
                     output[index, : tensor.shape[0]] = tensor
+
             return output
 
         output = reference.new_full((len(tensors), *reference.shape), fill_value=self.pad_value)
         for index, tensor in enumerate(tensors):
             if tensor is None:
                 continue
+
             if tuple(tensor.shape) != tuple(reference.shape):
                 raise ValueError(
                     "Cannot stack targets with different shapes when pad_sequences=False. "
                     "Enable padding for variable-length data."
                 )
             output[index] = tensor
+
         return output
 
     @staticmethod
@@ -197,6 +201,7 @@ class MultimodalSequenceCollate:
             nested = meta.get("masks")
             if isinstance(nested, Mapping):
                 candidates.append(nested.get(key))
+
         nested = sample.get("masks")
         if isinstance(nested, Mapping):
             candidates.append(nested.get(key))
@@ -213,13 +218,15 @@ class MultimodalSequenceCollate:
     def _as_tensor_or_none(value: Any) -> torch.Tensor | None:
         if value is None:
             return None
+
         return value if torch.is_tensor(value) else torch.as_tensor(value)
 
     @staticmethod
     def _get_target_tensor(sample: Mapping[str, Any]) -> torch.Tensor | None:
-        for key in _TARGET_KEYS:
+        for key in ("targets", "target"):
             if key in sample:
                 return MultimodalSequenceCollate._as_tensor_or_none(sample.get(key))
+
         return None
 
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 
@@ -27,6 +25,7 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
                 f"Dedicated temporal mask for '{name}' must have shape "
                 f"({batch_size}, {time_steps}), got {tuple(result.shape)}."
             )
+
         return result
 
     value = batch.get_masks(f"{name}_mask")
@@ -37,10 +36,12 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
         if result.ndim == 1:
             if result.shape[0] != batch_size:
                 raise ValueError(f"Mask for '{name}' has batch dimension {result.shape[0]}, expected {batch_size}.")
+
             result = result[:, None].expand(-1, time_steps)
         elif result.ndim == 2:
             if result.shape[0] != batch_size:
                 raise ValueError(f"Mask for '{name}' has batch dimension {result.shape[0]}, expected {batch_size}.")
+
             if result.shape[1] != time_steps:
                 raise ValueError(f"Mask for '{name}' must have temporal width {time_steps}, got {result.shape[1]}.")
         else:
@@ -52,6 +53,7 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
         if sequence_mask.ndim == 1:
             if sequence_mask.shape[0] != batch_size:
                 raise ValueError(f"sequence_mask has batch dimension {sequence_mask.shape[0]}, expected {batch_size}.")
+
             sequence_mask = sequence_mask[:, None]
         elif sequence_mask.ndim == 2:
             if sequence_mask.shape[0] != batch_size:
@@ -69,10 +71,13 @@ def _sequence(x: torch.Tensor) -> torch.Tensor:
     """Normalize a feature tensor from ``[B, D]`` or ``[B, T, D]`` to 3-D."""
     if not torch.is_tensor(x):
         raise ValueError(f"Expected [B, D] or [B, T, D], got {type(x).__name__}.")
+
     if x.ndim == 2:
         return x[:, None, :]
+
     if x.ndim == 3:
         return x
+
     raise ValueError(f"Expected [B, D] or [B, T, D], got {tuple(x.shape)}.")
 
 
@@ -80,6 +85,7 @@ def _mean(x: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     """Pool a sequence over valid positions, returning zero for empty rows."""
     if x.ndim != 3:
         raise ValueError(f"Expected values with shape [B, T, D], got {tuple(x.shape)}.")
+
     valid = torch.as_tensor(valid, device=x.device).bool()
     if valid.shape != x.shape[:2]:
         raise ValueError(f"Expected validity mask with shape {tuple(x.shape[:2])}, got {tuple(valid.shape)}.")
@@ -93,11 +99,13 @@ def _masked_softmax(scores: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     """Compute a masked softmax with an all-invalid result of exactly zero."""
     if scores.ndim < 2:
         raise ValueError(f"Expected scores with at least two dimensions, got {tuple(scores.shape)}.")
+
     valid = torch.as_tensor(valid, device=scores.device).bool()
     if valid.ndim != 2 or valid.shape[0] != scores.shape[0] or valid.shape[1] != scores.shape[-1]:
         raise ValueError(
             f"Expected validity mask with shape ({scores.shape[0]}, {scores.shape[-1]}), got {tuple(valid.shape)}."
         )
+
     if scores.shape[-1] == 0:
         return scores * 0
 
@@ -122,6 +130,7 @@ def _attention(query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor) 
         raise ValueError(
             f"Expected query and key with shape [B, T, D], got {tuple(query.shape)} and {tuple(key.shape)}."
         )
+
     if query.shape[0] != key.shape[0] or query.shape[2] != key.shape[2]:
         raise ValueError(
             "Query and key must have matching batch and feature dimensions, "
@@ -160,10 +169,12 @@ def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[st
             raise ValueError(
                 f"Feature '{name}' has input width {x.shape[-1]}, expected configured width {expected_dim}."
             )
+
         projected = model.proj[name](x)
         if not torch.is_tensor(projected) or projected.ndim != 3:
             shape = getattr(projected, "shape", None)
             raise ValueError(f"Projection for '{name}' must return [B, T, D], got {shape}.")
+
         if projected.shape[-1] != model.shared_dim:
             raise ValueError(f"Feature '{name}' has width {projected.shape[-1]}, expected {model.shared_dim}.")
 
@@ -180,10 +191,13 @@ def _validate_input_dims(input_dims: dict[str, int]) -> dict[str, int]:
     """Validate and copy the declared positive feature widths."""
     if not isinstance(input_dims, dict) or not input_dims:
         raise ValueError("input_dims must be a non-empty dictionary.")
+
     if any(not isinstance(name, str) or not name for name in input_dims):
         raise ValueError("input_dims keys must be non-empty strings.")
+
     if any(not isinstance(dim, int) or isinstance(dim, bool) or dim <= 0 for dim in input_dims.values()):
         raise ValueError("input_dims values must be positive integers.")
+
     return dict(input_dims)
 
 
@@ -191,8 +205,10 @@ def _projections(names: tuple[str, ...], input_dims: dict[str, int], shared_dim:
     """Build one trainable projection per declared modality."""
     if shared_dim <= 0:
         raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
     input_dims = _validate_input_dims(input_dims)
     missing = [name for name in names if name not in input_dims]
     if missing:
         raise ValueError(f"Missing input dimensions for modalities: {missing!r}.")
+
     return nn.ModuleDict({name: nn.Linear(input_dims[name], shared_dim) for name in names})

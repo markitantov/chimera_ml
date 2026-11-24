@@ -225,6 +225,7 @@ def build_datamodule(cfg: dict[str, Any], *, context: BuildContext | None = None
     name = cfg.get("name")
     if name is None or (isinstance(name, str) and not name.strip()):
         raise ValueError("A datamodule name is required before injecting a configured collate.")
+
     factory = DATAMODULES.get(str(name).lower())
     try:
         signature = inspect.signature(factory)
