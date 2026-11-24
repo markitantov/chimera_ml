@@ -52,6 +52,10 @@ class _PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.shape[1] > self.encoding.shape[1]:
+            raise ValueError(
+                f"Sequence length {x.shape[1]} exceeds positional encoding max_len {self.encoding.shape[1]}."
+            )
         return self.dropout(x + self.encoding[:, : x.shape[1]].to(dtype=x.dtype, device=x.device))
 
 

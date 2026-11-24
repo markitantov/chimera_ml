@@ -294,6 +294,48 @@ def test_raav_empty_context_is_unavailable_without_nan():
     assert torch.isfinite(output.aux["context_latent_attention"]).all()
 
 
+def test_raav_skips_arbitrary_temporal_module_for_empty_sequences():
+    class _RecordingTemporal(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def forward(self, values):
+            self.calls += 1
+            return values
+
+    temporal = _RecordingTemporal()
+    model = RAAVFusionModel(
+        input_dims={"frame": 3, "context": 4},
+        shared_dim=4,
+        output_dim=2,
+        frame_modalities=("frame",),
+        context_modality="context",
+        temporal=temporal,
+    ).eval()
+    empty = Batch(
+        inputs={"frame": torch.empty(2, 0, 3), "context": torch.randn(2, 1, 4)},
+        targets=None,
+        masks={
+            "frame_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+            "context_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
+        },
+    )
+
+    output = model(empty)
+
+    assert temporal.calls == 0
+    assert output.preds.shape == (2, 0, 2)
+    assert torch.isfinite(output.preds).all()
+
+    non_empty = Batch(
+        inputs={"frame": torch.randn(2, 1, 3), "context": torch.randn(2, 1, 4)},
+        targets=None,
+    )
+    model(non_empty)
+    assert temporal.calls == 1
+
+
 def test_raav_zero_length_frames_preserve_empty_prediction_sequence():
     model = RAAVFusionModel(
         input_dims={"frame": 3, "context": 4},

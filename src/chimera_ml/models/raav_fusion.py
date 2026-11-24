@@ -130,7 +130,7 @@ class RAAVFusionModel(BaseModel):
         context_delta = self.refine(frame_context) * context_valid.to(frame_context.dtype)[:, None, None]
         refined = self.frame_context_norm(fused + context_delta)
         refined = refined * frame_valid.to(refined.dtype).unsqueeze(-1)
-        if self.temporal is not None:
+        if self.temporal is not None and refined.shape[1] > 0:
             if isinstance(self.temporal, nn.TransformerEncoder):
                 temporal_out = refined.new_zeros(refined.shape)
                 rows_with_frames = frame_valid.any(1)

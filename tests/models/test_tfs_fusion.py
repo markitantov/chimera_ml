@@ -6,6 +6,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.models.tfs_fusion import (
     TFSFusionModel,
+    _PositionalEncoding,
     _stat_pool,
     _TransformerCrossAttention,
     tfs_fusion_model,
@@ -310,6 +311,15 @@ def test_stat_pool_returns_mean_and_zero_std_for_degenerate_sequences():
     assert torch.allclose(pooled, torch.tensor([[2.0, 0.0], [1.0, 0.0], [0.0, 0.0]]))
     pooled.sum().backward()
     assert values.grad is not None and torch.isfinite(values.grad).all()
+
+
+def test_positional_encoding_validates_maximum_sequence_length():
+    encoding = _PositionalEncoding(dim=4, dropout=0.0, max_len=3).eval()
+
+    assert encoding(torch.zeros(2, 3, 4)).shape == (2, 3, 4)
+    assert encoding(torch.zeros(2, 0, 4)).shape == (2, 0, 4)
+    with pytest.raises(ValueError, match="exceeds positional encoding max_len 3"):
+        encoding(torch.zeros(2, 4, 4))
 
 
 def test_transformer_cross_attention_supports_empty_key_and_query_sequences():
