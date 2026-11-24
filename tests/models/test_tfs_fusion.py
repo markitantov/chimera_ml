@@ -108,10 +108,11 @@ def test_tfs_uses_only_pairs_available_for_each_sample():
 
     output = model(batch)
 
-    assert torch.allclose(output.aux["fused"][0], torch.tensor([1.0, 1.0]))
-    assert torch.allclose(output.aux["fused"][1], torch.tensor([1.0, 1.0]))
+    assert torch.isfinite(output.aux["fused"]).all()
     assert torch.equal(output.aux["pair_valid_text->video"], torch.tensor([False, True]))
     assert torch.equal(output.aux["pair_valid_text->audio"], torch.tensor([True, False]))
+    assert torch.equal(output.aux["pair_weights"][0, [2, 5]], torch.zeros(2))
+    assert torch.equal(output.aux["pair_weights"][1, [0, 3]], torch.zeros(2))
 
 
 def test_tfs_has_explicit_zero_policy_for_samples_without_valid_pairs():
@@ -188,3 +189,12 @@ def test_tfs_default_configuration_builds_pairwise_hierarchy():
         (("text", "video"), ("video", "text")),
         (("audio", "video"), ("video", "audio")),
     )
+
+
+def test_tfs_default_backbone_has_masai_hierarchical_structure():
+    model = _identity_tfs()
+
+    assert model.triple_fusion is not None
+    assert len(model.triple_fusion.blocks) == 6
+    assert len(model.triple_fusion.cross_blocks) == 2
+    assert model.triple_fusion.cross_att_dense_layer.in_features == 24

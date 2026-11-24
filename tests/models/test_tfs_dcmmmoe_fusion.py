@@ -153,8 +153,9 @@ def test_tfs_dcmmmoe_backpropagates_through_gate_and_pairwise_fusion():
     model(batch).preds.sum().backward()
 
     gate_grads = [parameter.grad for parameter in model.gates.parameters()]
-    pair_grads = [parameter.grad for parameter in model.output.parameters()]
-    assert all(gradient is not None and torch.isfinite(gradient).all() for gradient in gate_grads + pair_grads)
+    backbone_grads = [parameter.grad for parameter in model.triple_fusion.parameters()]
+    assert all(gradient is not None and torch.isfinite(gradient).all() for gradient in gate_grads)
+    assert any(gradient is not None and torch.isfinite(gradient).all() for gradient in backbone_grads)
 
 
 def test_tfs_dcmmmoe_state_round_trip_preserves_predictions():

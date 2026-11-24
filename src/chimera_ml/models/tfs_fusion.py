@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
@@ -10,6 +11,175 @@ from chimera_ml.models._utils import _attention, _features, _masked_softmax, _me
 from chimera_ml.models.base import BaseModel
 
 Pair = tuple[str, str]
+
+
+class _SafeBatchNorm1d(nn.BatchNorm1d):
+    """Keep the publication's batch normalization defined for one-sample batches."""
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if self.training and input.shape[0] == 1:
+            return F.batch_norm(
+                input,
+                self.running_mean,
+                self.running_var,
+                self.weight,
+                self.bias,
+                training=False,
+                momentum=self.momentum,
+                eps=self.eps,
+            )
+        return super().forward(input)
+
+
+class _TransformerCrossAttention(nn.Module):
+    """A masked, independent Transformer cross-attention block."""
+
+    def __init__(self, dim: int, dropout: float = 0.1):
+        super().__init__()
+        heads = min(8, dim)
+        while dim % heads:
+            heads -= 1
+        self.attention = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(dim)
+        self.feed_forward = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim, dim),
+        )
+        self.feed_forward_norm = nn.LayerNorm(dim)
+
+    def forward(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        query_valid: torch.Tensor,
+        key_valid: torch.Tensor,
+    ) -> torch.Tensor:
+        safe_key_valid = key_valid.clone()
+        empty_keys = ~safe_key_valid.any(dim=1)
+        if empty_keys.any():
+            safe_key_valid[empty_keys, 0] = True
+        safe_key = key.masked_fill(~key_valid.unsqueeze(-1), 0)
+        attended, _ = self.attention(
+            query,
+            safe_key,
+            safe_key,
+            key_padding_mask=~safe_key_valid,
+            need_weights=False,
+        )
+        result = self.layer_norm(query + self.dropout(attended))
+        result = self.feed_forward_norm(result + self.dropout(self.feed_forward(result)))
+        return result * query_valid.unsqueeze(-1).to(result.dtype)
+
+
+def _stat_pool(x: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
+    """Return masked mean and population standard deviation concatenated by width."""
+    weight = valid.to(x.dtype).unsqueeze(-1)
+    count = weight.sum(dim=1)
+    mean = (x * weight).sum(dim=1) / count.clamp_min(1)
+    centered = (x - mean.unsqueeze(1)) * weight
+    variance = centered.square().sum(dim=1) / count.clamp_min(1)
+    std = variance.clamp_min(torch.finfo(x.dtype).eps).sqrt()
+    return torch.cat((mean, std), dim=-1)
+
+
+def _align_and_concatenate(
+    values: list[torch.Tensor], validities: list[torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Pad query streams to a common length before concatenating their channels."""
+    length = max(value.shape[1] for value in values)
+    padded_values = []
+    padded_validities = []
+    for value, valid in zip(values, validities, strict=True):
+        padding = length - value.shape[1]
+        if padding:
+            value = F.pad(value, (0, 0, 0, padding))
+            valid = F.pad(valid, (0, padding))
+        padded_values.append(value)
+        padded_validities.append(valid)
+    return torch.cat(padded_values, dim=-1), torch.stack(padded_validities, dim=-1).any(dim=-1)
+
+
+class _TripleFusionBackbone(nn.Module):
+    """Encoder-independent MASAI TripleFusion backbone for three modalities."""
+
+    def __init__(self, names: tuple[str, str, str], shared_dim: int):
+        super().__init__()
+        self.names = names
+        self.shared_dim = shared_dim
+        self._block_indices = {}
+        blocks = []
+        for source in names:
+            for target in names:
+                if source == target:
+                    continue
+                self._block_indices[(source, target)] = len(blocks)
+                blocks.append(_TransformerCrossAttention(shared_dim))
+        self.blocks = nn.ModuleList(blocks)
+        self.cross_blocks = nn.ModuleList(
+            [_TransformerCrossAttention(shared_dim * 3), _TransformerCrossAttention(shared_dim * 3)]
+        )
+        self.cross_att_dense_layer = nn.Linear(shared_dim * 12, shared_dim)
+        self.cross_att_batch_norm = _SafeBatchNorm1d(shared_dim)
+        self.cross_att_activation = nn.Tanh()
+
+    def _block(self, source: str, target: str) -> _TransformerCrossAttention:
+        return self.blocks[self._block_indices[(source, target)]]
+
+    def forward(
+        self,
+        features: dict[str, tuple[torch.Tensor, torch.Tensor]],
+        gate: nn.Module | None = None,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor], dict[str, torch.Tensor], tuple[str, ...], torch.Tensor]:
+        first_triple = ((self.names[0], self.names[1]), (self.names[1], self.names[2]), (self.names[2], self.names[0]))
+        second_triple = ((self.names[1], self.names[0]), (self.names[2], self.names[1]), (self.names[0], self.names[2]))
+        outputs: dict[str, torch.Tensor] = {}
+        output_valid: dict[str, torch.Tensor] = {}
+        pair_values: dict[str, torch.Tensor] = {}
+        pair_valid: dict[str, torch.Tensor] = {}
+
+        for source, target in first_triple + second_triple:
+            source_features, source_valid = features[source]
+            target_features, target_valid = features[target]
+            key = _pair_name((source, target))
+            outputs[key] = self._block(source, target)(
+                target_features,
+                source_features,
+                target_valid,
+                source_valid,
+            )
+            output_valid[key] = target_valid & source_valid.any(dim=1, keepdim=True)
+            pair_values[key] = _mean(outputs[key], output_valid[key])
+            pair_valid[key] = output_valid[key].any(dim=1)
+
+        pair_keys = tuple(_pair_name(pair) for pair in first_triple + second_triple)
+        stacked_values = torch.stack([pair_values[key] for key in pair_keys], dim=1)
+        stacked_valid = torch.stack([pair_valid[key] for key in pair_keys], dim=1)
+        if gate is None:
+            pair_weights = stacked_valid.to(stacked_values.dtype)
+            pair_weights = pair_weights / pair_weights.sum(dim=1, keepdim=True).clamp_min(1)
+        else:
+            pair_weights = _masked_softmax(gate(stacked_values).squeeze(-1), stacked_valid)
+        for key, value in zip(pair_keys, pair_weights.unbind(dim=1), strict=True):
+            outputs[key] = outputs[key] * value[:, None, None]
+
+        avt, avt_valid = _align_and_concatenate(
+            [outputs[_pair_name(pair)] for pair in first_triple],
+            [output_valid[_pair_name(pair)] for pair in first_triple],
+        )
+        vta, vta_valid = _align_and_concatenate(
+            [outputs[_pair_name(pair)] for pair in second_triple],
+            [output_valid[_pair_name(pair)] for pair in second_triple],
+        )
+        avt_vta = self.cross_blocks[0](vta, avt, vta_valid, avt_valid)
+        vta_avt = self.cross_blocks[1](avt, vta, avt_valid, vta_valid)
+        fused_sequence, fused_valid = _align_and_concatenate([avt_vta, vta_avt], [vta_valid, avt_valid])
+        pooled = _stat_pool(fused_sequence, fused_valid)
+        fused = self.cross_att_activation(self.cross_att_batch_norm(self.cross_att_dense_layer(pooled)))
+        fused = fused * stacked_valid.any(dim=1, keepdim=True).to(fused.dtype)
+        return fused, pair_values, pair_valid, pair_keys, pair_weights
 
 
 def _pair_name(pair: Pair) -> str:
@@ -122,11 +292,11 @@ def _hierarchical_fusion(
 class TFSFusionModel(BaseModel):
     """Hierarchical fusion of directed pairwise cross-modal interactions.
 
-    The exact publication grouping is not available in this repository. The
-    implementation therefore exposes explicit directed-pair groups as a
-    testable generalization: pairs are averaged within each group, each group
-    is transformed independently, and valid groups are averaged at the final
-    hierarchy level.
+    With three configured modalities and the default groups this follows the
+    MASAI TripleFusion backbone: six independent directed Transformer
+    cross-attention blocks, two concatenated triples, reciprocal second-level
+    cross-attention, masked mean+STD pooling, and Dense+BatchNorm+Tanh.
+    Incomplete or explicitly grouped inputs use the generalized hierarchy.
     """
 
     def __init__(
@@ -147,6 +317,7 @@ class TFSFusionModel(BaseModel):
         self.groups = _normalize_groups(self.names, groups)
         self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.output = nn.Linear(shared_dim, shared_dim)
+        self.triple_fusion = _TripleFusionBackbone(self.names, shared_dim) if len(self.names) == 3 else None
 
     def _pair(
         self,
@@ -160,6 +331,25 @@ class TFSFusionModel(BaseModel):
         values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSFusionModel needs at least two available modalities.")
+
+        if (
+            self.triple_fusion is not None
+            and all(name in feats for name in self.names)
+            and self.groups == _normalize_groups(self.names, None)
+        ):
+            fused, values, valid, pair_keys, pair_weights = self.triple_fusion(feats)
+            group_weights = torch.stack(
+                [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],
+                dim=1,
+            )
+            aux: dict[str, torch.Tensor] = {}
+            for key, value in values.items():
+                aux[f"pair_{key}"] = value
+                aux[f"pair_valid_{key}"] = valid[key]
+            aux["pair_weights"] = pair_weights
+            aux["group_weights"] = group_weights
+            aux["fused"] = fused
+            return ModelOutput(preds=self.head(fused), aux=aux)
 
         fused, pair_weights, group_weights = _hierarchical_fusion(
             self.groups, values, valid, self.group_layers, self.output
@@ -197,6 +387,7 @@ class TFSDCMMOEFusionModel(BaseModel):
         self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.gates = nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
         self.output = nn.Linear(shared_dim, shared_dim)
+        self.triple_fusion = _TripleFusionBackbone(self.names, shared_dim) if len(self.names) == 3 else None
 
     def _pair(
         self,
@@ -210,6 +401,25 @@ class TFSDCMMOEFusionModel(BaseModel):
         values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSDCMMOEFusionModel needs at least two available modalities.")
+
+        if (
+            self.triple_fusion is not None
+            and all(name in feats for name in self.names)
+            and self.groups == _normalize_groups(self.names, None)
+        ):
+            fused, values, valid, pair_keys, pair_weights = self.triple_fusion(feats, gate=self.gates)
+            group_weights = torch.stack(
+                [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],
+                dim=1,
+            )
+            aux: dict[str, torch.Tensor] = {}
+            for key, value in values.items():
+                aux[f"pair_{key}"] = value
+                aux[f"pair_valid_{key}"] = valid[key]
+            aux["pair_weights"] = pair_weights
+            aux["group_weights"] = group_weights
+            aux["fused"] = fused
+            return ModelOutput(preds=self.head(fused), aux=aux)
 
         fused, pair_weights, group_weights = _hierarchical_fusion(
             self.groups, values, valid, self.group_layers, self.output, gate=self.gates
