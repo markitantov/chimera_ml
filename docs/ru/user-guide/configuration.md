@@ -27,6 +27,28 @@ params:
   plugin_specific_option: value
 ~~~
 
+
+## Встроенная fusion-конфигурация
+
+Встроенные fusion-модели получают precomputed feature tensors из Batch.inputs.
+Projections и prediction layers создаются внутри model constructor.
+
+~~~yaml
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims:
+      text: 1024
+      audio: 768
+      video: 512
+    shared_dim: 256
+    output_dim: 2
+~~~
+
+Имя модели можно заменить на tfs_dcmmmoe_fusion_model, raav_fusion_model или
+tomar_fusion_model и добавить model-specific поля из guides. Эти четыре factory
+зарегистрированы именно под указанными keys.
+
 ## TrainConfig fields
 
 train.params передаётся в TrainConfig:

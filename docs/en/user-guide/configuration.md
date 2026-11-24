@@ -28,6 +28,28 @@ params:
   plugin_specific_option: value
 ~~~
 
+
+## Built-in fusion configuration
+
+Built-in fusion models read precomputed feature tensors from Batch.inputs. The
+model constructors create projections and prediction layers internally.
+
+~~~yaml
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims:
+      text: 1024
+      audio: 768
+      video: 512
+    shared_dim: 256
+    output_dim: 2
+~~~
+
+Replace the model name with tfs_dcmmmoe_fusion_model, raav_fusion_model, or
+tomar_fusion_model and add the model-specific fields described in the model
+guides. The four model factories are registered under those exact keys.
+
 ## TrainConfig fields
 
 The train.params mapping is passed to TrainConfig:

@@ -28,5 +28,46 @@ Grid trials use parameters or trials, while Optuna uses typed parameters and
 adds sweep_target_callback. Review [Sweeps](../user-guide/sweeps.md) and the
 canonical changelog when upgrading.
 
+
+## From encoder/head fusion constructors
+
+The built-in fusion constructors changed in the feature-only refactor. Earlier
+versions accepted an encoders mapping and an externally supplied head; current
+constructors accept input_dims, shared_dim, and output_dim instead.
+
+Before:
+
+~~~python
+TOMARFusionModel(
+    encoders=encoders,
+    shared_dim=256,
+    head=head,
+    anchor_modality="text",
+)
+~~~
+
+After:
+
+~~~python
+TOMARFusionModel(
+    input_dims={"text": 1024, "audio": 768},
+    shared_dim=256,
+    anchor_modality="text",
+    output_dim=2,
+)
+~~~
+
+Move precomputed features into Batch.inputs. The model now performs the input
+projections and prediction layer internally. RAAV additionally keeps
+frame_modalities and context_modality; TFS-DCMMOE may set gate_hidden; TFS may
+set groups; TOMAR may set gate_hidden.
+
+If each modality needs independent temporal padding and masks, use
+multimodal_sequence_collate. Keep masking_collate for existing pipelines whose
+legacy sequence and presence-mask behavior is sufficient. The built-in registry
+keys remain tfs_fusion_model, tfs_dcmmmoe_fusion_model, raav_fusion_model, and
+tomar_fusion_model; no other removed fusion registry name is documented without
+history evidence.
+
 No additional migration action is documented here without source/history
 evidence.

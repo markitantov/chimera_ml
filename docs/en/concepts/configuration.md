@@ -35,6 +35,31 @@ optimizer:
     lr: 0.001
 ```
 
+
+## Fusion and sequence-collate example
+
+The same registry contract can build a feature-only fusion model and an
+independent sequence collate:
+
+~~~yaml
+model:
+  name: raav_fusion_model
+  params:
+    input_dims: {video: 512, audio: 768, text: 1024}
+    shared_dim: 256
+    output_dim: 2
+    frame_modalities: [video, audio]
+    context_modality: text
+
+collate:
+  name: multimodal_sequence_collate
+  params:
+    pad_sequences: true
+~~~
+
+The collate emits modality-specific presence and temporal masks. Fusion models
+read those masks from Batch and do not align independent timelines automatically.
+
 ## Structural rules
 
 `data`, `model`, `loss`, and `optimizer` must be mappings with non-empty
