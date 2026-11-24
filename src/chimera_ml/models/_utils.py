@@ -19,6 +19,16 @@ def _mask(batch: Batch, name: str, x: torch.Tensor) -> torch.Tensor:
         raise ValueError(f"Expected normalized features for '{name}' to have shape [B, T, D], got {tuple(x.shape)}.")
 
     batch_size, time_steps = x.shape[:2]
+    dedicated_mask = batch.get_masks(f"{name}_temporal_mask")
+    if dedicated_mask is not None:
+        result = torch.as_tensor(dedicated_mask, device=x.device).bool()
+        if result.shape != (batch_size, time_steps):
+            raise ValueError(
+                f"Dedicated temporal mask for '{name}' must have shape "
+                f"({batch_size}, {time_steps}), got {tuple(result.shape)}."
+            )
+        return result
+
     value = batch.get_masks(f"{name}_mask")
     if value is None:
         result = torch.ones((batch_size, time_steps), dtype=torch.bool, device=x.device)

@@ -243,3 +243,28 @@ def test_features_reads_direct_batch_inputs_and_validates_declared_width():
     assert result["audio"][0].shape == (2, 1, 3)
     with pytest.raises(ValueError, match="configured width"):
         _features(model, Batch(inputs={"audio": torch.ones(2, 5)}, targets=None), ("audio",))
+
+
+def test_mask_prefers_dedicated_temporal_mask_over_legacy_masks():
+    x = torch.ones(2, 3, 4)
+    batch = Batch(
+        inputs={},
+        targets=None,
+        masks={
+            "audio_mask": torch.ones(2),
+            "audio_temporal_mask": torch.tensor([[True, False, True], [False, True, False]]),
+            "sequence_mask": torch.zeros(2, 3, dtype=torch.bool),
+        },
+    )
+
+    result = _mask(batch, "audio", x)
+
+    assert torch.equal(result, batch.masks["audio_temporal_mask"])
+
+
+def test_mask_rejects_wrong_dedicated_temporal_mask_shape():
+    x = torch.ones(2, 3, 4)
+    batch = Batch(inputs={}, targets=None, masks={"audio_temporal_mask": torch.ones(2, 2)})
+
+    with pytest.raises(ValueError, match="Dedicated temporal mask"):
+        _mask(batch, "audio", x)
