@@ -241,6 +241,44 @@ def test_cli_train_wires_builders_and_trainer(monkeypatch):
     assert _TrainerStub.last_fit == ("train_loader", {"val": "val_loader"})
 
 
+@pytest.mark.parametrize("stage", ["train", "eval"])
+def test_cli_builds_top_level_collate_for_train_and_eval(stage):
+    config = _config_for_train() if stage == "train" else _config_for_eval()
+    config["collate"] = {"name": "multimodal_sequence_collate", "params": {}}
+    experiment = cli.ExperimentConfig(config)
+    context = cli.BuildContext(config=experiment, stage=stage)
+    marker = object()
+    seen = {}
+
+    def _build_collate(config_section, *, context):
+        seen["collate_config"] = config_section
+        seen["collate_context"] = context
+        return marker
+
+    def _build_datamodule(config_section, *, context, collate_fn=None):
+        seen["data_config"] = config_section
+        seen["data_context"] = context
+        seen["collate_fn"] = collate_fn
+        return _DMStub()
+
+    original_build_collate = cli.build_collate
+    original_build_datamodule = cli.build_datamodule
+    try:
+        cli.build_collate = _build_collate
+        cli.build_datamodule = _build_datamodule
+        datamodule = cli._build_datamodule(experiment, context)
+    finally:
+        cli.build_collate = original_build_collate
+        cli.build_datamodule = original_build_datamodule
+
+    assert datamodule.__class__ is _DMStub
+    assert seen["collate_config"] == config["collate"]
+    assert seen["data_config"] == config["data"]
+    assert seen["collate_context"] is context
+    assert seen["data_context"] is context
+    assert seen["collate_fn"] is marker
+
+
 def test_cli_train_uses_config_run_name_as_generated_base_name(monkeypatch):
     model = _ModelStub()
     cfg = _config_for_train()

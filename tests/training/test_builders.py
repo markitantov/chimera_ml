@@ -5,6 +5,7 @@ import chimera_ml.models as fusion_models
 from chimera_ml.core.registry import (
     CALLBACKS,
     COLLATES,
+    DATAMODULES,
     LOGGERS,
     LOSSES,
     METRICS,
@@ -17,6 +18,7 @@ from chimera_ml.training.builders import (
     BuildContext,
     build_callbacks,
     build_collate,
+    build_datamodule,
     build_from_registry,
     build_logger,
     build_loss,
@@ -209,6 +211,83 @@ def test_build_collate_passes_context_when_supported():
 
     out = build_collate({"name": key, "params": {}}, context=context)
     assert out == {"num_classes": 4}
+
+
+def test_build_datamodule_injects_configured_collate_into_loader():
+    key = "_test_datamodule_collate_injection"
+
+    if key not in DATAMODULES._items:
+
+        @DATAMODULES.register(key)
+        def _demo_datamodule(*, collate_fn):
+            from torch.utils.data import DataLoader, Dataset
+
+            class _Dataset(Dataset):
+                def __len__(self):
+                    return 1
+
+                def __getitem__(self, index):
+                    return index
+
+            class _DataModule:
+                def train_dataloader(self):
+                    return DataLoader(_Dataset(), batch_size=1, collate_fn=collate_fn)
+
+            return _DataModule()
+
+    collate = build_collate({"name": "multimodal_sequence_collate", "params": {}})
+    datamodule = build_datamodule({"name": key, "params": {}}, collate_fn=collate)
+
+    assert datamodule.train_dataloader().collate_fn is collate
+
+
+def test_build_datamodule_without_collate_preserves_factory_behavior():
+    key = "_test_datamodule_without_collate_injection"
+
+    if key not in DATAMODULES._items:
+
+        @DATAMODULES.register(key)
+        def _demo_datamodule(context=None):
+            return {"context": context}
+
+    context = BuildContext(stage="train")
+    datamodule = build_datamodule({"name": key, "params": {}}, context=context)
+
+    assert datamodule == {"context": context}
+
+
+def test_build_datamodule_rejects_unsupported_configured_collate():
+    key = "_test_datamodule_without_collate_support"
+
+    if key not in DATAMODULES._items:
+
+        @DATAMODULES.register(key)
+        def _demo_datamodule():
+            return object()
+
+    with pytest.raises(TypeError, match="does not support configured collation"):
+        build_datamodule({"name": key, "params": {}}, collate_fn=lambda _: None)
+
+
+def test_build_datamodule_rejects_conflicting_collate_configuration():
+    key = "_test_datamodule_collate_conflict"
+
+    if key not in DATAMODULES._items:
+
+        @DATAMODULES.register(key)
+        def _demo_datamodule(*, collate_fn):
+            return collate_fn
+
+    with pytest.raises(ValueError, match="configured in both"):
+        build_datamodule(
+            {"name": key, "params": {"collate_fn": "legacy"}},
+            collate_fn=lambda _: None,
+        )
+
+
+def test_build_collate_reports_unknown_registry_key():
+    with pytest.raises(KeyError, match="unknown key"):
+        build_collate({"name": "missing_collate", "params": {}})
 
 
 def test_build_logger_passes_context_when_supported():
