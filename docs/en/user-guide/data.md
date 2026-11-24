@@ -27,8 +27,8 @@ feature modalities whose temporal lengths are independent.
   [B, T_max] and has boolean dtype.
 - Missing rows are zero-filled. Padding uses pad_value.
 - Explicit one-dimensional temporal masks may be supplied as
-  meta[`<modality>_temporal_mask`], meta[masks][`<modality>_temporal_mask`], or
-  sample-level masks[`<modality>_temporal_mask`]; they are validated and combined
+  `meta[<modality>_temporal_mask]`, `meta["masks"][<modality>_temporal_mask]`, or
+  sample-level `sample["masks"][<modality>_temporal_mask]`; they are validated and combined
   with padding.
 - pad_sequences, pad_value, and include_legacy_meta_masks are configurable.
 - Zero-length sequences are supported.

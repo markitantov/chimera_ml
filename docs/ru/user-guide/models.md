@@ -1,35 +1,39 @@
 # Models
 
 Model наследует BaseModel и реализует forward(batch: Batch) -> ModelOutput.
-ModelOutput.preds — основной prediction tensor, а ModelOutput.aux содержит
-fused representations, validity masks, weights и attention diagnostics.
+ModelOutput.preds — основной тензор предсказания, а ModelOutput.aux содержит
+объединённые представления, маски валидности, веса и диагностические данные
+механизмов внимания.
 
-## Built-in fusion models
+## Встроенные модели слияния признаков
 
-Четыре встроенные fusion-модели получают precomputed features напрямую из
-Batch.inputs. Они сами создают modality projections и prediction layers; внешние
-encoder dictionaries и prediction heads в constructor не передаются.
+Четыре встроенные модели получают заранее вычисленные признаки напрямую из
+Batch.inputs. Они сами создают проекции модальностей и слои предсказания;
+внешние словари энкодеров и головы предсказания в constructor не передаются.
 
 | Registry key | Class | Prediction shape | Основной механизм |
 | --- | --- | --- | --- |
-| tfs_fusion_model | TFSFusionModel | [B, output_dim] | MASAI-style directed hierarchy и statistical pooling |
-| tfs_dcmmmoe_fusion_model | TFSDCMMOEFusionModel | [B, output_dim] | TFS hierarchy с adaptive masked pair gates |
-| raav_fusion_model | RAAVFusionModel | [B, T, output_dim] | Frame fusion и context-latent attention |
-| tomar_fusion_model | TOMARFusionModel | [B, output_dim] | Anchor-conditioned gated residuals |
+| tfs_fusion_model | TFSFusionModel | [B, output_dim] | Иерархия направленных связей в стиле MASAI и статистическая агрегация |
+| tfs_dcmmmoe_fusion_model | TFSDCMMOEFusionModel | [B, output_dim] | Иерархия TFS с адаптивными весами пар |
+| raav_fusion_model | RAAVFusionModel | [B, T, output_dim] | Слияние кадров и внимание к латентным векторам контекста |
+| tomar_fusion_model | TOMARFusionModel | [B, output_dim] | Остаточные поправки с условием на anchor |
 
 Общие поля constructor — input_dims, shared_dim и output_dim. Для RAAV
 обязательны frame_modalities и context_modality, для TOMAR —
-anchor_modality. Подробности о masks, aux values и edge cases:
+anchor_modality. Подробности о масках, aux values и граничных случаях:
 
 - [TFS](tfs-fusion.md)
 - [TFS-DCMMOE](tfs-dcmmmoe-fusion.md)
 - [RAAV](raav-fusion.md)
 - [TOMAR](tomar-fusion.md)
 
-Modality может отсутствовать в Batch.inputs или быть недоступной для sample
-при false mask. TFS и TFS-DCMMOE требуют доступную directed pair. RAAV требует
-одинаковую temporal length у присутствующих frame modalities, но context
-timeline может отличаться. TOMAR требует anchor для каждого sample.
+Модальность может отсутствовать в Batch.inputs или быть недоступной для
+образца при false маске. Для TFS и TFS-DCMMOE нужны как минимум два тензора
+модальностей в Batch.inputs, чтобы сформировать пару; если все их временные
+позиции замаскированы, fused становится нулевым, но предсказание всё равно
+возвращается. RAAV требует одинаковую длину последовательности у присутствующих
+кадровых модальностей, но временная шкала контекста может отличаться. TOMAR
+требует anchor для каждого образца.
 
-Модели можно создать через Python classes или через MODELS registry из YAML.
-[API reference](../api/models.md) содержит публичные classes и factories.
+Модели можно создать через Python-классы или через MODELS registry из YAML.
+[API reference](../api/models.md) содержит публичные классы и фабрики.

@@ -42,9 +42,12 @@ Masks are read from Batch.masks, including legacy nested masks. A dedicated
 `<modality>_temporal_mask` with shape [B, T] takes precedence; otherwise
 `<modality>_mask` may have shape [B] or [B, T]. A compatible sequence_mask is also
 combined. Invalid positions do not contribute to attention or pooling, and
-invalid directed pairs are zero before second-level fusion. A modality can be
-missing from Batch.inputs; per-sample absence is represented by a false mask.
-At least one directed pair must be available.
+invalid directed pairs are zero before second-level fusion. A directed pair
+can be formed only when at least two configured modality tensors are present in Batch.inputs. Their masks may still mark every temporal
+position invalid for a sample. In that case pair_valid and pair_weights are zero,
+fused is zero, and the internal prediction layer still returns preds. If fewer
+than two modality tensors are present, no pair can be formed and the model raises
+ValueError.
 
 The auxiliary output contains `pair_<source>-><target>`,
 `pair_valid_<source>-><target>`, pair_weights, group_weights, and fused. The main

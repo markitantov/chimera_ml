@@ -1,10 +1,10 @@
 # TOMAR fusion
 
-TOMARFusionModel использует одну modality как anchor и добавляет residual
-corrections от остальных configured modalities. Для каждой correction отдельные
-projection и MLP вычисляют gate по конкатенации anchor и pooled представления
-дополнительной modality. Anchor и gated corrections проходят normalization
-перед внутренним prediction layer.
+TOMARFusionModel использует одну модальность как anchor и добавляет остаточные
+поправки от остальных заданных модальностей. Для каждой поправки отдельные
+проекция и MLP вычисляют шлюз по конкатенации anchor и усреднённого
+представления дополнительной модальности. Anchor и управляемые поправки
+нормализуются перед внутренним слоем предсказания.
 
 ## Параметры
 
@@ -18,22 +18,23 @@ TOMARFusionModel(
 )
 ~~~
 
-input_dims задаёт положительные feature widths и внутренние projections.
-shared_dim — residual width, anchor_modality — обязательная modality,
-output_dim — prediction width, gate_hidden — ширина каждого extra gate MLP.
+input_dims задаёт положительные ширины признаков и внутренние проекции.
+shared_dim — ширина остаточного представления, anchor_modality —
+обязательная модальность, output_dim — ширина предсказания, gate_hidden —
+ширина MLP для шлюза каждой дополнительной модальности.
 
-## Входы, masks и выходы
+## Входы, маски и выходы
 
-Входы — feature-only tensors [B, D] или [B, T, D]. Temporal inputs
-маскируются и pool-ятся в [B, shared_dim]; prediction имеет форму
-[B, output_dim]. Dedicated temporal masks имеют приоритет над legacy presence
-masks. Отсутствующая или полностью masked non-anchor modality не добавляет
-residual. Anchor должен существовать и быть доступен для каждого sample; иначе
-модель выбрасывает ValueError, а не создаёт скрыто неверный prediction.
+Входы — признаки формы [B, D] или [B, T, D]. Временные признаки
+маскируются и сворачиваются в [B, shared_dim]; предсказание имеет форму
+[B, output_dim]. Выделенные временные маски имеют приоритет над legacy-масками
+присутствия. Отсутствующая или полностью замаскированная дополнительная
+модальность не добавляет поправку. Тензор anchor должен существовать и быть
+доступен для каждого образца; иначе модель выбрасывает ValueError.
 
-ModelOutput.aux содержит anchor, по одному коэффициенту rho_`<modality>` и
-residual delta_`<modality>` для каждой доступной non-anchor modality, а также
-fused. Основной результат находится в preds.
+В ModelOutput.aux находятся anchor, по одному коэффициенту `<rho_modality>` и
+остаточной поправке `<delta_modality>` для каждой доступной дополнительной
+модальности, а также fused. Основной результат находится в preds.
 
 ## Python
 
@@ -63,5 +64,5 @@ model:
     gate_hidden: 64
 ~~~
 
-Anchor является жёстким требованием. Другие modalities могут отсутствовать в
-Batch.inputs, быть недоступны для отдельных samples или быть пустыми.
+Anchor является обязательным. Другие модальности могут отсутствовать в
+Batch.inputs, быть недоступными для отдельных образцов или быть пустыми.

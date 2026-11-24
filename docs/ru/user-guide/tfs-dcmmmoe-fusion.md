@@ -1,14 +1,15 @@
 # Adaptive TFS-DCMMOE fusion
 
-TFSDCMMOEFusionModel сохраняет иерархию TFS и добавляет входозависимые gates
-над directed pair experts. Для каждой доступной pair вычисляется score, а
-masked softmax исключает недоступные pairs до применения весов. Поэтому модель
-может выбирать relations отдельно для каждого sample.
+TFSDCMMOEFusionModel сохраняет иерархию TFS и добавляет входозависимые шлюзы
+над экспертами направленных пар. Для каждой доступной пары вычисляется score,
+а softmax с маской исключает недоступные пары до применения весов. Поэтому
+модель может выбирать межмодальные связи отдельно для каждого образца.
 
-Для трёх modalities и default groups используются те же шесть directed
-Transformer-блоков первого уровня и два reciprocal second-level блока, что и
-в TFS. Обычный TFS использует бинарную доступность pair, а DCMMOE применяет
-learned normalized pair weights, сохраняя нулевой вес для недоступных experts.
+Для трёх модальностей и групп по умолчанию используются те же шесть
+направленных блоков Transformer первого уровня и два взаимных блока второго
+уровня, что и в TFS. Обычный TFS использует бинарную доступность пары, а
+DCMMOE применяет обучаемые нормированные веса, сохраняя нулевой вес для
+недоступных экспертов.
 
 ## Параметры
 
@@ -23,21 +24,28 @@ TFSDCMMOEFusionModel(
 ~~~
 
 input_dims, shared_dim, output_dim и groups имеют тот же смысл, что в TFS.
-gate_hidden — ширина скрытого слоя pair-gating MLP. Размерности должны быть
-положительными.
+gate_hidden — ширина скрытого слоя MLP, вычисляющего веса пар. Размерности
+должны быть положительными.
 
-## Входы, masks и выходы
+## Входы, маски и выходы
 
-В Batch.inputs передаются feature-only tensors [B, D] или [B, T, D]; модель
-сама проецирует их в shared_dim. Prediction имеет форму [B, output_dim].
-Dedicated temporal masks имеют приоритет над legacy presence masks, а полностью
-masked pairs получают нулевой вес. Отсутствующая modality и false mask для
-отдельного sample не влияют на valid pair или second-level fusion. Нужна хотя
-бы одна доступная directed pair.
+В Batch.inputs передаются только признаки формы [B, D] или [B, T, D]; модель
+сама проецирует их в shared_dim. Предсказание имеет форму [B, output_dim].
+Выделенные временные маски имеют приоритет над legacy-масками присутствия, а
+полностью замаскированные пары получают нулевой вес.
 
-ModelOutput.aux содержит pair representations и validity keys, а также
-pair_weights, group_weights и fused. pair_weights показывает mask-aware
-adaptive expert weights; task output находится в preds.
+Направленная пара формируется только при наличии в Batch.inputs как минимум
+двух тензоров заданных модальностей. Их маски при этом могут пометить все
+временные позиции образца как невалидные. В таком случае pair_valid и
+pair_weights равны нулю, fused заполнен нулями, а внутренний слой предсказания
+всё равно возвращает preds. Если в Batch.inputs присутствует меньше двух
+тензоров модальностей, модель не может сформировать пару и выбрасывает
+ValueError.
+
+В ModelOutput.aux находятся представления пар и признаки их валидности, а
+также pair_weights, group_weights и fused. pair_weights показывает
+учитывающие маски адаптивные веса экспертов; результат задачи находится в
+preds.
 
 ## Python
 
@@ -67,6 +75,6 @@ model:
     gate_hidden: 128
 ~~~
 
-groups позволяет задать явную grouped hierarchy. При нестандартных groups или
-менее чем трёх names используется generalized TFS path, но adaptive masked pair
-weighting сохраняется.
+groups позволяет задать явную иерархию групп. При нестандартных groups или
+менее чем трёх именах используется обобщённый путь TFS, но адаптивное
+взвешивание пар с учётом масок сохраняется.

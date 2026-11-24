@@ -29,9 +29,11 @@ values, and edge cases:
 - [TOMAR](tomar-fusion.md)
 
 A modality may be absent from Batch.inputs or unavailable for a sample when
-its mask is false. TFS and TFS-DCMMOE need an available directed pair. RAAV
-requires equal temporal length across present frame modalities; its context
-timeline may differ. TOMAR requires the anchor for every sample.
+its mask is false. TFS and TFS-DCMMOE need at least two modality tensors in
+Batch.inputs to form a pair. If all their temporal positions are masked, fused
+is zero but the prediction layer still returns a prediction. RAAV requires
+equal temporal length across present frame modalities; its context timeline may
+differ. TOMAR requires the anchor for every sample.
 
 Models can be instantiated as Python classes or built through the MODELS
 registry from YAML. The [API reference](../api/models.md) documents the public

@@ -1,43 +1,47 @@
 # Data и loaders
 
 Datamodule factory возвращает train, validation и test DataLoaders. Dataset
-передаёт feature tensors и может добавлять targets, masks и metadata.
+передаёт тензоры признаков и может добавлять targets, masks и metadata.
 
-## Collates и masks
+## Collates и маски
 
 В CHIMERA-ML есть два разных встроенных collate.
 
 ### MaskingCollate
 
-MaskingCollate с registry key masking_collate сохраняет legacy behavior для
-существующих pipelines. Он padding-ит или stack-ит tensor fields, создаёт
-sequence_mask и presence masks вроде audio_mask, а при настройке может копировать
-masks в legacy meta["masks"]. Новый collate его не заменяет.
+MaskingCollate с registry key masking_collate сохраняет legacy-поведение для
+существующих pipelines. Он дополняет или объединяет tensor fields, создаёт
+sequence_mask и маски присутствия вроде audio_mask, а при настройке может
+копировать маски в legacy meta["masks"]. Новый collate его не заменяет.
 
 ### MultimodalSequenceCollate
 
 MultimodalSequenceCollate с registry key multimodal_sequence_collate нужен для
-feature modalities с независимыми temporal lengths.
+модальностей признаков с независимыми длинами последовательностей.
 
-- Вектор sample [D] собирается в [B, D], temporal mask имеет форму [B, 1].
-- Sequence [T, D] отдельно для каждой modality padding-ится в [B, T_max, D].
-- Для каждой modality создаётся float32 presence mask `<modality>_mask` формы [B].
-- Для temporal modality создаётся boolean `<modality>_temporal_mask` формы
-  [B, T_max] и имеет boolean dtype. Presence mask имеет float32 dtype.
-- Отсутствующие rows заполняются нулями, padding использует pad_value.
-- Явная one-dimensional temporal mask может быть в
-  meta[`<modality>_temporal_mask`], meta[masks][`<modality>_temporal_mask`] или
-  sample-level masks[`<modality>_temporal_mask`]; она проверяется и объединяется
-  с padding mask.
+- Вектор образца [D] собирается в [B, D], временная маска имеет форму [B, 1].
+- Последовательность [T, D] отдельно для каждой модальности дополняется до
+  [B, T_max, D].
+- Для каждой модальности создаётся float32-маска присутствия
+  `<modality>_mask` формы [B].
+- Для временной модальности создаётся булева маска
+  `<modality>_temporal_mask` формы [B, T_max].
+- Отсутствующие строки заполняются нулями, для дополнения используется
+  pad_value.
+- Явная одномерная временная маска может находиться в
+  `meta[<modality>_temporal_mask]`, `meta["masks"][<modality>_temporal_mask]`
+  или в `sample["masks"][<modality>_temporal_mask]`; она проверяется
+  и объединяется с маской дополнения.
 - Настройки: pad_sequences, pad_value и include_legacy_meta_masks.
-- Поддерживаются zero-length sequences.
-- Автоматического выравнивания timelines между modalities нет.
+- Поддерживаются последовательности нулевой длины.
+- Автоматического выравнивания временных шкал между модальностями нет.
 
-Например, audio sequences длины 2 и 1 получают audio [B, 2, D_audio], а video
-длины 3 и 2 — video [B, 3, D_video]. Каждая modality сохраняет собственную
-temporal width и mask; общий maximum между ними не используется.
+Например, последовательности audio длины 2 и 1 получают audio [B, 2, D_audio],
+а video длины 3 и 2 — video [B, 3, D_video]. Каждая модальность сохраняет
+собственную ширину последовательности и маску; общий максимум для них не
+используется.
 
-Минимальная registry configuration:
+Минимальная конфигурация через registry:
 
 ~~~yaml
 collate:
@@ -46,9 +50,9 @@ collate:
     pad_sequences: true
 ~~~
 
-Fusion utilities получают эти masks через _mask(). Dedicated temporal mask имеет
-приоритет и проверяется относительно normalized [B, T, D] features. Старые
-форматы [B], [B, T] и совместимый sequence_mask остаются поддержанными.
+Fusion utilities получают эти маски через _mask(). Выделенная временная маска
+имеет приоритет и проверяется относительно нормализованных признаков [B, T, D].
+Старые форматы [B], [B, T] и совместимый sequence_mask остаются поддержанными.
 
 ## Multiple loaders
 
@@ -67,5 +71,6 @@ Batch(
 )
 ~~~
 
-Batch.get_masks() возвращает все masks, а с аргументом — один flat key. Для
-совместимости читаются также legacy nested masks из masks["mask"] и meta["masks"].
+Batch.get_masks() возвращает все маски, а с аргументом — одну плоскую маску.
+Для совместимости читаются также legacy nested masks из masks["mask"] и
+meta["masks"].

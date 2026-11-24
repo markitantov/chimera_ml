@@ -33,9 +33,12 @@ positive.
 Inputs are feature-only [B, D] or [B, T, D] tensors in Batch.inputs; the model
 projects them to shared_dim. Predictions have shape [B, output_dim]. Dedicated
 temporal masks are preferred over legacy presence masks, and fully masked pairs
-receive zero weight. A missing modality or per-sample false mask cannot
-influence a valid pair or second-level fusion. At least one available directed
-pair is required.
+receive zero weight. A directed pair can be formed only when at least two configured modality
+tensors are present in Batch.inputs. Their masks may still mark every temporal
+position invalid for a sample. In that case pair_valid and pair_weights are zero,
+fused is zero, and the internal prediction layer still returns preds. If fewer
+than two modality tensors are present, no pair can be formed and the model raises
+ValueError.
 
 ModelOutput.aux includes pair representations and validity keys, plus
 pair_weights, group_weights, and fused. pair_weights exposes mask-aware
