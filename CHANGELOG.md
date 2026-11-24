@@ -6,6 +6,27 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- Four built-in feature-only fusion architectures: MASAI-style hierarchical TFS, adaptive TFS-DCMMOE, frame/context RAAV, and anchor-conditioned residual TOMAR.
+- Public fusion model classes and YAML/registry construction for all four architectures.
+- MultimodalSequenceCollate with independent modality padding, presence masks, and dedicated temporal masks; the legacy MaskingCollate remains available.
+
+### Changed
+
+- Fusion models now accept input_dims, shared_dim, and output_dim, project features internally, and create their prediction layers internally.
+- TFS uses six directed attention blocks, reciprocal second-level attention, and masked statistical pooling; TFS-DCMMOE adds input-dependent masking-aware pair gates.
+- RAAV uses frame/context fusion with bottleneck latents, while TOMAR uses anchor-conditioned gated residual contributions.
+
+### Fixed
+
+- Masked attention now avoids overflow from invalid scores and returns finite results for zero-length and fully masked modalities.
+- Regression and integration coverage now exercises missing modalities, temporal masks, YAML construction, and feature-only model inputs.
+
+### Removed
+
+- External encoders and head constructor dependencies from the built-in fusion models.
+
 ## [0.3.0] - 2026-08-10
 
 ### Added
