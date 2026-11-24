@@ -22,6 +22,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 - Masked attention now avoids overflow from invalid scores and returns finite results for zero-length and fully masked modalities.
 - Regression and integration coverage now exercises missing modalities, temporal masks, YAML construction, and feature-only model inputs.
+- CLI `train` and `eval` now apply a present top-level `collate:` section to
+  datamodules that explicitly support the `collate_fn` integration; absent
+  configuration preserves the existing datamodule default.
+- RAAV skips arbitrary temporal modules for zero-length frame sequences, and
+  TFS reports a descriptive error when positional encoding length is exceeded.
 
 ### Removed
 

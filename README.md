@@ -408,6 +408,14 @@ The new collate does not align timelines automatically and does not replace
 MaskingCollate. Fusion utilities prefer dedicated temporal masks and validate
 them against normalized feature shapes.
 
+During CLI `train` and `eval`, an explicitly present top-level `collate:`
+section is resolved with `build_collate()` and passed to the datamodule factory
+as `collate_fn`. A custom datamodule must declare a keyword-capable `collate_fn`
+parameter; datamodules without that contract fail with an actionable error.
+When `collate:` is absent, the CLI preserves the existing datamodule construction
+and does not inject an extra collate. Do not configure both top-level `collate:`
+and `data.params.collate_fn`.
+
 ## Built-In Fusion Models
 
 The built-in fusion models consume precomputed feature tensors from

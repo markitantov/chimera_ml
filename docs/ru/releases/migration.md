@@ -26,54 +26,37 @@ trials, Optuna — typed parameters и sweep_target_callback. См.
 [Sweeps](../user-guide/sweeps.md) и canonical changelog.
 
 
-## Переход от fusion constructors с encoder/head
+## Текущие feature-only fusion-модели
 
-В feature-only refactor constructors встроенных fusion-моделей изменились.
-Ранее они принимали mapping encoders и внешний head; теперь принимают
-input_dims, shared_dim и output_dim.
+Текущие TFS, TFS-DCMMOE, RAAV и TOMAR — это новые feature-only
+архитектуры. Они принимают `input_dims`, `shared_dim` и `output_dim`, читают
+precomputed features из `Batch.inputs` и сами создают projections и prediction
+layers. Это не обратно совместимое продолжение публичного API
+`TOMARFusionModel(encoders=..., head=...)`: такого примера нет в выпущенной
+реализации `main`, поэтому его нельзя использовать как исторический migration
+пример.
 
-До:
-
-~~~python
-TOMARFusionModel(
-    encoders=encoders,
-    shared_dim=256,
-    head=head,
-    anchor_modality="text",
-)
-~~~
-
-После:
-
-~~~python
-TOMARFusionModel(
-    input_dims={"text": 1024, "audio": 768},
-    shared_dim=256,
-    anchor_modality="text",
-    output_dim=2,
-)
-~~~
-
-Перенесите precomputed features в Batch.inputs. Теперь model сама выполняет
-input projections и prediction layer. Для RAAV также нужны frame_modalities и
-context_modality; у TFS-DCMMOE можно задать gate_hidden, у TFS — groups, у
-TOMAR — gate_hidden.
+Поля конструкторов описаны в руководствах конкретных моделей. RAAV также
+требует `frame_modalities` и `context_modality`; у TFS-DCMMOE можно задать
+`gate_hidden`, у TFS — `groups`, у TOMAR — `gate_hidden`.
 
 ## Намеренное удаление legacy fusion-моделей
 
-В рамках рефакторинга намеренно удалены классы FeatureFusionModel,
-PredictionFusionModel, GatedFusionModel и GatedPredictionFusionModel, а также
-их registry keys feature_fusion_model, prediction_fusion_model,
-gated_fusion_model и gated_prediction_fusion_model. Прямого drop-in replacement
-для этих классов нет. Выберите одну из четырёх feature-only fusion-моделей,
-если её архитектура соответствует задаче, и явно перенесите контракт входов и
-выходов; старые параметры конструктора и композиция submodels несовместимы.
+В рамках рефакторинга намеренно удалены классы
+`FeatureFusionModel`, `PredictionFusionModel`, `GatedFusionModel` и
+`GatedPredictionFusionModel`, а также их registry keys
+`feature_fusion_model`, `prediction_fusion_model`, `gated_fusion_model` и
+`gated_prediction_fusion_model`. Прямого drop-in replacement для этих классов
+нет. Выберите одну из четырёх текущих feature-only fusion-моделей, если её
+архитектура соответствует задаче, и явно перенесите контракт входов и выходов;
+старые параметры конструктора и композиция submodels несовместимы.
 
-Если каждой modality нужны независимые padding и temporal masks, используйте
-multimodal_sequence_collate. Для существующих pipelines, которым достаточно
-legacy sequence и presence-mask behavior, оставьте masking_collate. Известные
-registry keys остаются tfs_fusion_model, tfs_dcmmmoe_fusion_model,
-raav_fusion_model и tomar_fusion_model; другие удалённые fusion keys без
-подтверждения history не перечисляются.
+Если модальностям нужны независимые padding и temporal masks, используйте
+`multimodal_sequence_collate`. Во время CLI `train` и `eval` присутствующая
+верхнеуровневая секция `collate:` разрешается через `build_collate()` и
+передаётся в factory datamodule как `collate_fn`. Для такой интеграции custom
+datamodule должен явно объявить keyword-параметр `collate_fn`. Если секции нет,
+CLI не создаёт и не внедряет collate, сохраняя существующий default datamodule,
+включая legacy-поведение `MaskingCollate`.
 
-Другие migration actions не добавляются без evidence из source/history.
+Для удалённого legacy registry key нет прямой замены.

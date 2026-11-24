@@ -61,6 +61,13 @@ Collate создаёт отдельные presence и temporal masks для ка
 Fusion-модели читают эти masks из Batch и не выравнивают независимые timelines
 автоматически.
 
+Если эта верхнеуровневая секция присутствует, CLI `train` и `eval` разрешают её
+через `build_collate()` и передают callable в factory datamodule как
+`collate_fn`. Factory должна явно объявить этот keyword-параметр. Без секции
+`collate:` CLI сохраняет существующий default datamodule и ничего не внедряет;
+одновременная настройка верхнеуровневого `collate:` и
+`data.params.collate_fn` считается ошибкой.
+
 ## Структурные правила
 
 data, model, loss и optimizer должны быть mappings с непустым name. train

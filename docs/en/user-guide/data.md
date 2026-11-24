@@ -48,6 +48,14 @@ collate:
     pad_sequences: true
 ~~~
 
+During CLI `train` and `eval`, the top-level section is resolved through
+`build_collate()` and passed to the selected datamodule factory as `collate_fn`.
+A custom datamodule must explicitly declare a keyword-capable `collate_fn`
+parameter; unsupported datamodules fail clearly instead of silently ignoring
+this setting. If the section is absent, no collate is built or injected and the
+existing datamodule default remains in effect. Do not configure both this
+section and `data.params.collate_fn`.
+
 Fusion utilities consume these masks through _mask(). The dedicated temporal
 mask is preferred and its shape is validated against the normalized [B, T, D]
 features. Older [B] or [B, T] modality masks and compatible sequence_mask

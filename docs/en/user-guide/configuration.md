@@ -11,6 +11,7 @@ core.
 | seed | integer | no | Passed to define_seed; defaults to 0. |
 | experiment_info | mapping | for train/sweep | params.experiment_name is required; run_name, include_time, datetime_format, and timezone affect run naming. |
 | data | name + params | yes for train/eval | Builds a datamodule from DATAMODULES. |
+| collate | name + params | no | When present, `train` and `eval` resolve it with `build_collate()` and inject the callable into a datamodule factory that declares `collate_fn`; when absent, no injection occurs. |
 | model | name + params | yes for train/eval | Builds a model from MODELS. |
 | train | params | yes for train/eval | Builds TrainConfig. Evaluation changes epochs to 1. |
 | loss | name + params | yes for train/eval | Builds a callable from LOSSES. |
@@ -19,6 +20,11 @@ core.
 | metrics | list of named items | no | Each item is built from METRICS. |
 | callbacks | list of named items | no | Each item is built from CALLBACKS. |
 | logging | list of named items | no | Builds configured logger entries. |
+
+The top-level `collate:` section is separate from `data.params`. It is
+optional and is consumed only by CLI `train` and `eval`. A custom datamodule
+must explicitly declare a keyword-capable `collate_fn` parameter. Configuring
+both top-level `collate:` and `data.params.collate_fn` is rejected.
 
 A component item uses this form:
 

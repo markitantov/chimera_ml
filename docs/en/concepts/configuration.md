@@ -60,6 +60,13 @@ collate:
 The collate emits modality-specific presence and temporal masks. Fusion models
 read those masks from Batch and do not align independent timelines automatically.
 
+When this top-level section is present, CLI `train` and `eval` resolve it with
+`build_collate()` and inject the callable into the datamodule factory as
+`collate_fn`. The factory must explicitly declare that keyword parameter. With
+no `collate:` section, the CLI preserves the datamodule's existing default and
+injects nothing; configuring both top-level `collate:` and
+`data.params.collate_fn` is an error.
+
 ## Structural rules
 
 `data`, `model`, `loss`, and `optimizer` must be mappings with non-empty

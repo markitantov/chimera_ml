@@ -10,6 +10,7 @@ plugin-defined params core не проверяет.
 | seed | integer | no | Передаётся в define_seed; default 0. |
 | experiment_info | mapping | для train/sweep | Требует params.experiment_name; run_name и поля времени влияют на имя. |
 | data | name + params | да для train/eval | Строит datamodule из DATAMODULES. |
+| collate | name + params | нет | При наличии `train` и `eval` разрешают секцию через `build_collate()` и передают callable в factory datamodule с `collate_fn`; при отсутствии ничего не внедряется. |
 | model | name + params | да для train/eval | Строит model из MODELS. |
 | train | params | да для train/eval | Строит TrainConfig; eval выставляет epochs=1. |
 | loss | name + params | да для train/eval | Строит callable из LOSSES. |
@@ -18,6 +19,11 @@ plugin-defined params core не проверяет.
 | metrics | список named items | нет | Каждый item строится из METRICS. |
 | callbacks | список named items | нет | Каждый item строится из CALLBACKS. |
 | logging | список named items | нет | Строит настроенные loggers. |
+
+Верхнеуровневая секция `collate:` отделена от `data.params`. Она
+необязательна и используется CLI `train` и `eval`. Custom datamodule должен
+явно объявить keyword-параметр `collate_fn`. Одновременная настройка
+верхнеуровневого `collate:` и `data.params.collate_fn` отклоняется.
 
 Форма component:
 
