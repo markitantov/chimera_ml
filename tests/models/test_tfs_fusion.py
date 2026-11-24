@@ -198,3 +198,63 @@ def test_tfs_default_backbone_has_masai_hierarchical_structure():
     assert len(model.triple_fusion.blocks) == 6
     assert len(model.triple_fusion.cross_blocks) == 2
     assert model.triple_fusion.cross_att_dense_layer.in_features == 24
+    assert all(hasattr(block, "positional_encoding") for block in model.triple_fusion.blocks)
+
+
+def test_tfs_passes_unscaled_triples_through_both_second_level_blocks():
+    class EchoBlock(nn.Module):
+        def forward(self, query, key, query_valid, key_valid):
+            return query * query_valid.unsqueeze(-1).to(query.dtype)
+
+    model = TFSFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        shared_dim=1,
+        head=nn.Identity(),
+    ).eval()
+    backbone = model.triple_fusion
+    assert backbone is not None
+    backbone.blocks = nn.ModuleList(EchoBlock() for _ in backbone.blocks)
+    backbone.cross_blocks = nn.ModuleList(EchoBlock() for _ in backbone.cross_blocks)
+    captured = []
+    hooks = [
+        block.register_forward_hook(lambda _, inputs, __: captured.append((inputs[0].clone(), inputs[1].clone())))
+        for block in backbone.cross_blocks
+    ]
+    try:
+        features = {
+            "text": (torch.tensor([[[1.0]]]), torch.ones(1, 1, dtype=torch.bool)),
+            "audio": (torch.tensor([[[2.0]]]), torch.ones(1, 1, dtype=torch.bool)),
+            "video": (torch.tensor([[[3.0]]]), torch.ones(1, 1, dtype=torch.bool)),
+        }
+        _, _, _, _, pair_weights = backbone(features)
+    finally:
+        for hook in hooks:
+            hook.remove()
+
+    assert torch.equal(pair_weights, torch.ones(1, 6))
+    assert torch.equal(captured[0][0], torch.tensor([[[1.0, 2.0, 3.0]]]))
+    assert torch.equal(captured[0][1], torch.tensor([[[2.0, 3.0, 1.0]]]))
+    assert torch.equal(captured[1][0], torch.tensor([[[2.0, 3.0, 1.0]]]))
+    assert torch.equal(captured[1][1], torch.tensor([[[1.0, 2.0, 3.0]]]))
+
+
+def test_tfs_second_level_blocks_receive_finite_gradients():
+    model = TFSFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+    )
+    batch = Batch(
+        inputs={
+            "text": torch.randn(2, 1, 2),
+            "audio": torch.randn(2, 1, 2),
+            "video": torch.randn(2, 1, 2),
+        },
+        targets=None,
+    )
+
+    model(batch).aux["fused"].sum().backward()
+
+    for block in model.triple_fusion.cross_blocks:
+        gradients = [parameter.grad for parameter in block.parameters()]
+        assert any(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)

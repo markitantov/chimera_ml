@@ -31,6 +31,23 @@ class _SafeBatchNorm1d(nn.BatchNorm1d):
         return super().forward(input)
 
 
+class _PositionalEncoding(nn.Module):
+    """MASAI-compatible sinusoidal positional encoding with dropout."""
+
+    def __init__(self, dim: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        position = torch.arange(max_len, dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, dim, 2, dtype=torch.float32) * (-torch.log(torch.tensor(10000.0)) / dim))
+        encoding = torch.zeros(max_len, dim)
+        encoding[:, 0::2] = torch.sin(position * div_term)
+        encoding[:, 1::2] = torch.cos(position * div_term[: encoding[:, 1::2].shape[1]])
+        self.register_buffer("encoding", encoding.unsqueeze(0))
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.dropout(x + self.encoding[:, : x.shape[1]].to(dtype=x.dtype, device=x.device))
+
+
 class _TransformerCrossAttention(nn.Module):
     """A masked, independent Transformer cross-attention block."""
 
@@ -40,12 +57,13 @@ class _TransformerCrossAttention(nn.Module):
         while dim % heads:
             heads -= 1
         self.attention = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+        self.positional_encoding = _PositionalEncoding(dim, dropout)
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(dim)
         self.feed_forward = nn.Sequential(
             nn.Linear(dim, dim),
-            nn.ReLU(),
             nn.Dropout(dropout),
+            nn.ReLU(),
             nn.Linear(dim, dim),
         )
         self.feed_forward_norm = nn.LayerNorm(dim)
@@ -57,6 +75,8 @@ class _TransformerCrossAttention(nn.Module):
         query_valid: torch.Tensor,
         key_valid: torch.Tensor,
     ) -> torch.Tensor:
+        query = self.positional_encoding(query)
+        key = self.positional_encoding(key)
         safe_key_valid = key_valid.clone()
         empty_keys = ~safe_key_valid.any(dim=1)
         if empty_keys.any():
@@ -159,11 +179,10 @@ class _TripleFusionBackbone(nn.Module):
         stacked_valid = torch.stack([pair_valid[key] for key in pair_keys], dim=1)
         if gate is None:
             pair_weights = stacked_valid.to(stacked_values.dtype)
-            pair_weights = pair_weights / pair_weights.sum(dim=1, keepdim=True).clamp_min(1)
         else:
             pair_weights = _masked_softmax(gate(stacked_values).squeeze(-1), stacked_valid)
-        for key, value in zip(pair_keys, pair_weights.unbind(dim=1), strict=True):
-            outputs[key] = outputs[key] * value[:, None, None]
+            for key, value in zip(pair_keys, pair_weights.unbind(dim=1), strict=True):
+                outputs[key] = outputs[key] * value[:, None, None]
 
         avt, avt_valid = _align_and_concatenate(
             [outputs[_pair_name(pair)] for pair in first_triple],
@@ -342,6 +361,7 @@ class TFSFusionModel(BaseModel):
                 [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],
                 dim=1,
             )
+            group_weights = group_weights / group_weights.sum(dim=1, keepdim=True).clamp_min(1)
             aux: dict[str, torch.Tensor] = {}
             for key, value in values.items():
                 aux[f"pair_{key}"] = value
@@ -412,6 +432,7 @@ class TFSDCMMOEFusionModel(BaseModel):
                 [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],
                 dim=1,
             )
+            group_weights = group_weights / group_weights.sum(dim=1, keepdim=True).clamp_min(1)
             aux: dict[str, torch.Tensor] = {}
             for key, value in values.items():
                 aux[f"pair_{key}"] = value
