@@ -20,8 +20,7 @@ def _normalize_groups(
     names: tuple[str, ...], groups: tuple[tuple[Pair, ...], ...] | None
 ) -> tuple[tuple[Pair, ...], ...]:
     if groups is None:
-        pairs = tuple((left, right) for left in names for right in names if left != right)
-        return (pairs,)
+        return tuple(((left, right), (right, left)) for index, left in enumerate(names) for right in names[index + 1 :])
     normalized = tuple(tuple(tuple(pair) for pair in group) for group in groups)
     if not normalized or any(not group for group in normalized):
         raise ValueError("groups must contain at least one non-empty group.")

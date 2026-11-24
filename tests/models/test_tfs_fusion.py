@@ -178,3 +178,13 @@ def test_tfs_state_round_trip_preserves_predictions():
     restored.load_state_dict(model.state_dict())
 
     assert torch.equal(model(batch).preds, restored(batch).preds)
+
+
+def test_tfs_default_configuration_builds_pairwise_hierarchy():
+    model = _identity_tfs()
+
+    assert model.groups == (
+        (("text", "audio"), ("audio", "text")),
+        (("text", "video"), ("video", "text")),
+        (("audio", "video"), ("video", "audio")),
+    )

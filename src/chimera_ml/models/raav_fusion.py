@@ -125,7 +125,7 @@ class RAAVFusionModel(BaseModel):
             frame_context, frame_context_weights = self.frame_to_context_attn(fused, context_latents, latent_valid)
             frame_context = frame_context * context_valid.to(frame_context.dtype)[:, None, None]
 
-        context_delta = self.refine(frame_context)
+        context_delta = self.refine(frame_context) * context_valid.to(frame_context.dtype)[:, None, None]
         refined = self.frame_context_norm(fused + context_delta)
         refined = refined * frame_valid.to(refined.dtype).unsqueeze(-1)
         if self.temporal is not None:

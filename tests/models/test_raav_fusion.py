@@ -242,3 +242,18 @@ def test_raav_temporal_encoder_does_not_attend_to_padding():
     )
 
     assert torch.allclose(short_model(short).preds, padded_model(padded).preds[:, :2], atol=1e-6)
+
+
+def test_raav_missing_context_has_no_learned_context_residual():
+    model = _raav_frame_model()
+    with torch.no_grad():
+        model.refine.bias.fill_(3.0)
+    batch = Batch(
+        inputs={"frame": torch.ones(1, 2, 4)},
+        targets=None,
+        masks={"frame_mask": torch.ones(1)},
+    )
+
+    output = model(batch)
+
+    assert torch.allclose(output.aux["context_delta"], torch.zeros_like(output.aux["context_delta"]))
