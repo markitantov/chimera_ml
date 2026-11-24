@@ -1,10 +1,11 @@
 # Models API
 
-Models implement \`BaseModel.forward(Batch) -> ModelOutput\`. The built-in
-fusion models cover hierarchical pair, adaptive pair, asymmetric frame, and
-anchor-residual fusion. They are commonly assembled through the \`MODELS\`
-registry from configuration; encoders and heads are supplied as constructor
-dependencies. See [Models](../user-guide/models.md) for task-oriented setup.
+Models implement BaseModel.forward(Batch) -> ModelOutput. The four built-in
+fusion models consume feature-only tensors from Batch.inputs. Their constructors
+declare input_dims, shared_dim, and output_dim; modality projections and
+prediction layers are internal. They can be constructed directly in Python or
+through the MODELS registry and YAML. See [Models](../user-guide/models.md) for
+task-oriented examples.
 
 ## Model contract
 

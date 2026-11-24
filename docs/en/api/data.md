@@ -1,27 +1,29 @@
 # Data API
 
-The data subsystem turns datasets into the \`DataLoader\` containers consumed by
-\`Trainer\`. \`DataModule\` handles common train/validation/test construction;
-\`MaskingCollate\` converts sample mappings into a typed \`Batch\`, pads variable
-length inputs, and records presence/sequence masks. See [Data](../user-guide/data.md)
-for dataset and YAML examples.
+The data subsystem turns datasets into DataLoader containers consumed by
+Trainer. DataModule handles common train/validation/test construction. Two
+built-in collates are available: the legacy MaskingCollate under
+masking_collate and MultimodalSequenceCollate under
+multimodal_sequence_collate. See [Data](../user-guide/data.md) for shapes,
+masks, and YAML examples.
 
 ## Data module
 
 ::: chimera_ml.data.datamodule.DataModule
 
-## Collation and masks
+## Legacy collation
 
 ::: chimera_ml.data.masking_collate.MaskingCollate
 
-The registry key for the default collator is \`masking_collate\`.
-
 ::: chimera_ml.data.masking_collate.masking_collate
 
-## Loader utilities
+## Independent sequence collation
 
-These helpers normalize a single loader, a mapping, or a sequence into stable
-split names used by metrics, callbacks, and artifact paths.
+::: chimera_ml.data.multimodal_sequence_collate.MultimodalSequenceCollate
+
+::: chimera_ml.data.multimodal_sequence_collate.multimodal_sequence_collate
+
+## Loader utilities
 
 ::: chimera_ml.data.loader_utils.normalize_loaders
 
