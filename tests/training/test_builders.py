@@ -1,6 +1,18 @@
+import pytest
 import torch
 
-from chimera_ml.core.registry import CALLBACKS, COLLATES, LOGGERS, LOSSES, METRICS, OPTIMIZERS, SCHEDULERS, Registry
+import chimera_ml.models as fusion_models
+from chimera_ml.core.registry import (
+    CALLBACKS,
+    COLLATES,
+    LOGGERS,
+    LOSSES,
+    METRICS,
+    MODELS,
+    OPTIMIZERS,
+    SCHEDULERS,
+    Registry,
+)
 from chimera_ml.training.builders import (
     BuildContext,
     build_callbacks,
@@ -9,6 +21,7 @@ from chimera_ml.training.builders import (
     build_logger,
     build_loss,
     build_metrics,
+    build_model,
     build_optimizer,
     build_scheduler,
     build_train_config,
@@ -210,3 +223,40 @@ def test_build_logger_passes_context_when_supported():
     context = BuildContext(stage="train")
     out = build_logger({"name": key, "params": {}}, context=context)
     assert out == {"stage": "train"}
+
+
+@pytest.mark.parametrize(
+    ("name", "params"),
+    [
+        (
+            "tfs_fusion_model",
+            {"input_dims": {"text": 4, "audio": 4, "video": 4}, "shared_dim": 4, "output_dim": 2},
+        ),
+        (
+            "tfs_dcmmmoe_fusion_model",
+            {"input_dims": {"text": 4, "audio": 4, "video": 4}, "shared_dim": 4, "output_dim": 2},
+        ),
+        (
+            "raav_fusion_model",
+            {
+                "input_dims": {"frame": 4, "context": 4},
+                "shared_dim": 4,
+                "output_dim": 2,
+                "frame_modalities": ("frame",),
+                "context_modality": "context",
+            },
+        ),
+        (
+            "tomar_fusion_model",
+            {"input_dims": {"text": 4, "audio": 4}, "shared_dim": 4, "anchor_modality": "text", "output_dim": 2},
+        ),
+    ],
+)
+def test_build_model_constructs_feature_only_fusion_models(name, params):
+    model = build_model({"name": name, "params": params})
+
+    assert tuple(model.input_dims) == tuple(params["input_dims"])
+    assert not hasattr(model, "encoders")
+    assert model.prediction.out_features == params["output_dim"]
+    assert callable(MODELS.get(name))
+    assert hasattr(fusion_models, name)

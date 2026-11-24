@@ -117,7 +117,7 @@ def test_masked_softmax_does_not_exponentiate_extreme_invalid_scores(dtype: torc
     assert scores.grad is not None and torch.isfinite(scores.grad).all()
 
 
-def test_sequence_and_features_reject_unsupported_encoder_outputs():
+def test_sequence_and_features_reject_unsupported_feature_inputs():
     with pytest.raises(ValueError, match="Expected \\[B, D\\] or \\[B, T, D\\]"):
         _sequence(torch.ones(2, 3, 4, 5))
 
@@ -125,11 +125,11 @@ def test_sequence_and_features_reject_unsupported_encoder_outputs():
         def __init__(self):
             super().__init__()
             self.shared_dim = 4
-            self.encoders = torch.nn.ModuleDict({"audio": torch.nn.Flatten()})
-            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Identity()})
+            self.input_dims = {"audio": 4}
+            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Linear(4, 4)})
 
-    batch = Batch(inputs={"audio": torch.ones(2, 3, 4)}, targets=None)
-    with pytest.raises(ValueError, match="Feature 'audio' has width"):
+    batch = Batch(inputs={"audio": torch.ones(2, 3, 5)}, targets=None)
+    with pytest.raises(ValueError, match="configured width"):
         _features(Model(), batch, ("audio",))
 
 
@@ -196,8 +196,8 @@ def test_fusion_utilities_validate_shapes_and_configuration_errors():
         def __init__(self):
             super().__init__()
             self.shared_dim = 4
-            self.encoders = torch.nn.ModuleDict({"a": torch.nn.Identity(), "b": torch.nn.Identity()})
-            self.proj = torch.nn.ModuleDict({"a": torch.nn.Identity(), "b": torch.nn.Identity()})
+            self.input_dims = {"a": 4, "b": 4}
+            self.proj = torch.nn.ModuleDict({"a": torch.nn.Linear(4, 4), "b": torch.nn.Linear(4, 4)})
 
     with pytest.raises(ValueError, match="batch dimension"):
         _features(
@@ -210,7 +210,7 @@ def test_fusion_utilities_validate_shapes_and_configuration_errors():
         def __init__(self):
             super().__init__()
             self.shared_dim = 4
-            self.encoders = torch.nn.ModuleDict({"audio": torch.nn.Identity()})
+            self.input_dims = {"audio": 4}
             self.proj = torch.nn.ModuleDict({"audio": torch.nn.Flatten()})
 
     with pytest.raises(ValueError, match="Projection for 'audio'"):
@@ -223,7 +223,7 @@ def test_fusion_utilities_validate_shapes_and_configuration_errors():
         from chimera_ml.models._utils import _projections
 
         _projections(("audio",), {}, 0)
-    with pytest.raises(ValueError, match="Input dimension"):
+    with pytest.raises(ValueError, match="input_dims values"):
         _projections(("audio",), {"audio": 0}, 4)
 
 

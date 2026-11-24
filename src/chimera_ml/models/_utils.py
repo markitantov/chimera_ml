@@ -136,9 +136,7 @@ def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[st
         if name not in batch.inputs:
             continue
 
-        # Transitional encoder branch is removed once all fusion models use direct inputs.
-        encoded = model.encoders[name](batch.inputs[name]) if hasattr(model, "encoders") else batch.inputs[name]
-        x = _sequence(encoded)
+        x = _sequence(batch.inputs[name])
         if batch_size is None:
             batch_size = x.shape[0]
         elif x.shape[0] != batch_size:
@@ -178,16 +176,11 @@ def _validate_input_dims(input_dims: dict[str, int]) -> dict[str, int]:
 
 
 def _projections(names: tuple[str, ...], input_dims: dict[str, int], shared_dim: int) -> nn.ModuleDict:
-    """Build one projection per modality, preserving identity for preprojected inputs."""
+    """Build one trainable projection per declared modality."""
     if shared_dim <= 0:
         raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
-
-    projections = {}
-    for name in names:
-        if name in input_dims:
-            if input_dims[name] <= 0:
-                raise ValueError(f"Input dimension for '{name}' must be positive, got {input_dims[name]}.")
-            projections[name] = nn.Linear(input_dims[name], shared_dim)
-        else:
-            projections[name] = nn.Identity()
-    return nn.ModuleDict(projections)
+    input_dims = _validate_input_dims(input_dims)
+    missing = [name for name in names if name not in input_dims]
+    if missing:
+        raise ValueError(f"Missing input dimensions for modalities: {missing!r}.")
+    return nn.ModuleDict({name: nn.Linear(input_dims[name], shared_dim) for name in names})
