@@ -35,6 +35,38 @@ optimizer:
     lr: 0.001
 ```
 
+
+## Fusion and sequence-collate example
+
+The same registry contract can build a feature-only fusion model and an
+independent sequence collate:
+
+~~~yaml
+model:
+  name: raav_fusion_model
+  params:
+    input_dims: {video: 512, audio: 768, text: 1024}
+    shared_dim: 256
+    output_dim: 2
+    frame_modalities: [video, audio]
+    context_modality: text
+
+collate:
+  name: multimodal_sequence_collate
+  params:
+    pad_sequences: true
+~~~
+
+The collate emits modality-specific presence and temporal masks. Fusion models
+read those masks from Batch and do not align independent timelines automatically.
+
+When this top-level section is present, CLI `train` and `eval` resolve it with
+`build_collate()` and inject the callable into the datamodule factory as
+`collate_fn`. The factory must explicitly declare that keyword parameter. With
+no `collate:` section, the CLI preserves the datamodule's existing default and
+injects nothing; configuring both top-level `collate:` and
+`data.params.collate_fn` is an error.
+
 ## Structural rules
 
 `data`, `model`, `loss`, and `optimizer` must be mappings with non-empty

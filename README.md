@@ -395,12 +395,70 @@ Batch(
 )
 ```
 
-Built-in `MaskingCollate` (`masking_collate`) supports variable-length multimodal inputs and creates:
+Built-in collates support two data contracts:
 
-- padded modality tensors,
-- `sequence_mask`,
-- per-modality masks like `{modality}_mask`,
-- optional legacy `meta["masks"]`.
+- MaskingCollate (masking_collate) preserves the legacy padded inputs,
+  sequence_mask, per-modality presence masks, and optional legacy meta masks.
+- MultimodalSequenceCollate (multimodal_sequence_collate) pads each temporal
+  modality independently and emits float32 `<modality>_mask` presence masks
+  plus boolean `<modality>_temporal_mask` masks. It supports missing and zero-length
+  sequences, explicit temporal masks, pad_sequences, and pad_value.
+
+The new collate does not align timelines automatically and does not replace
+MaskingCollate. Fusion utilities prefer dedicated temporal masks and validate
+them against normalized feature shapes.
+
+During CLI `train` and `eval`, an explicitly present top-level `collate:`
+section is resolved with `build_collate()` and passed to the datamodule factory
+as `collate_fn`. A custom datamodule must declare a keyword-capable `collate_fn`
+parameter; datamodules without that contract fail with an actionable error.
+When `collate:` is absent, the CLI preserves the existing datamodule construction
+and does not inject an extra collate. Do not configure both top-level `collate:`
+and `data.params.collate_fn`.
+
+## Built-In Fusion Models
+
+The built-in fusion models consume precomputed feature tensors from
+Batch.inputs. They create input projections and prediction layers internally;
+constructors do not receive external encoder dictionaries or prediction heads.
+
+| Model | Use it for | Prediction |
+| --- | --- | --- |
+| tfs_fusion_model | MASAI-style directed hierarchical fusion | [B, output_dim] |
+| tfs_dcmmmoe_fusion_model | TFS with adaptive masked pair gates | [B, output_dim] |
+| raav_fusion_model | Aligned frame streams with context latents | [B, T, output_dim] |
+| tomar_fusion_model | Anchor-conditioned gated residual fusion | [B, output_dim] |
+
+Python construction:
+
+~~~python
+from chimera_ml.models import TFSFusionModel
+
+model = TFSFusionModel(
+    input_dims={"text": 1024, "audio": 768, "video": 512},
+    shared_dim=256,
+    output_dim=2,
+)
+~~~
+
+YAML construction:
+
+~~~yaml
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims: {text: 1024, audio: 768, video: 512}
+    shared_dim: 256
+    output_dim: 2
+
+collate:
+  name: multimodal_sequence_collate
+  params:
+    pad_sequences: true
+~~~
+
+See the detailed English fusion guides at docs/en/user-guide/models.md and
+Russian fusion guides at docs/ru/user-guide/models.md.
 
 ## Plugin System
 
@@ -476,10 +534,10 @@ Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty 
 
 `MODELS`:
 
-- `feature_fusion_model`
-- `prediction_fusion_model`
-- `gated_fusion_model`
-- `gated_prediction_fusion_model`
+- `tfs_fusion_model`
+- `tfs_dcmmmoe_fusion_model`
+- `raav_fusion_model`
+- `tomar_fusion_model`
 
 `LOSSES`:
 
@@ -529,6 +587,7 @@ Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty 
 `COLLATES`:
 
 - `masking_collate`
+- `multimodal_sequence_collate`
 
 ## Training and Evaluation Behavior
 

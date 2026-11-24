@@ -11,6 +11,7 @@ core.
 | seed | integer | no | Passed to define_seed; defaults to 0. |
 | experiment_info | mapping | for train/sweep | params.experiment_name is required; run_name, include_time, datetime_format, and timezone affect run naming. |
 | data | name + params | yes for train/eval | Builds a datamodule from DATAMODULES. |
+| collate | name + params | no | When present, `train` and `eval` resolve it with `build_collate()` and inject the callable into a datamodule factory that declares `collate_fn`; when absent, no injection occurs. |
 | model | name + params | yes for train/eval | Builds a model from MODELS. |
 | train | params | yes for train/eval | Builds TrainConfig. Evaluation changes epochs to 1. |
 | loss | name + params | yes for train/eval | Builds a callable from LOSSES. |
@@ -20,6 +21,11 @@ core.
 | callbacks | list of named items | no | Each item is built from CALLBACKS. |
 | logging | list of named items | no | Builds configured logger entries. |
 
+The top-level `collate:` section is separate from `data.params`. It is
+optional and is consumed only by CLI `train` and `eval`. A custom datamodule
+must explicitly declare a keyword-capable `collate_fn` parameter. Configuring
+both top-level `collate:` and `data.params.collate_fn` is rejected.
+
 A component item uses this form:
 
 ~~~yaml
@@ -27,6 +33,28 @@ name: registry_key
 params:
   plugin_specific_option: value
 ~~~
+
+
+## Built-in fusion configuration
+
+Built-in fusion models read precomputed feature tensors from Batch.inputs. The
+model constructors create projections and prediction layers internally.
+
+~~~yaml
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims:
+      text: 1024
+      audio: 768
+      video: 512
+    shared_dim: 256
+    output_dim: 2
+~~~
+
+Replace the model name with tfs_dcmmmoe_fusion_model, raav_fusion_model, or
+tomar_fusion_model and add the model-specific fields described in the model
+guides. The four model factories are registered under those exact keys.
 
 ## TrainConfig fields
 

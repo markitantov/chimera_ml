@@ -10,6 +10,7 @@ plugin-defined params core не проверяет.
 | seed | integer | no | Передаётся в define_seed; default 0. |
 | experiment_info | mapping | для train/sweep | Требует params.experiment_name; run_name и поля времени влияют на имя. |
 | data | name + params | да для train/eval | Строит datamodule из DATAMODULES. |
+| collate | name + params | нет | При наличии `train` и `eval` разрешают секцию через `build_collate()` и передают callable в factory datamodule с `collate_fn`; при отсутствии ничего не внедряется. |
 | model | name + params | да для train/eval | Строит model из MODELS. |
 | train | params | да для train/eval | Строит TrainConfig; eval выставляет epochs=1. |
 | loss | name + params | да для train/eval | Строит callable из LOSSES. |
@@ -19,6 +20,11 @@ plugin-defined params core не проверяет.
 | callbacks | список named items | нет | Каждый item строится из CALLBACKS. |
 | logging | список named items | нет | Строит настроенные loggers. |
 
+Верхнеуровневая секция `collate:` отделена от `data.params`. Она
+необязательна и используется CLI `train` и `eval`. Custom datamodule должен
+явно объявить keyword-параметр `collate_fn`. Одновременная настройка
+верхнеуровневого `collate:` и `data.params.collate_fn` отклоняется.
+
 Форма component:
 
 ~~~yaml
@@ -26,6 +32,28 @@ name: registry_key
 params:
   plugin_specific_option: value
 ~~~
+
+
+## Встроенная fusion-конфигурация
+
+Встроенные fusion-модели получают precomputed feature tensors из Batch.inputs.
+Projections и prediction layers создаются внутри model constructor.
+
+~~~yaml
+model:
+  name: tfs_fusion_model
+  params:
+    input_dims:
+      text: 1024
+      audio: 768
+      video: 512
+    shared_dim: 256
+    output_dim: 2
+~~~
+
+Имя модели можно заменить на tfs_dcmmmoe_fusion_model, raav_fusion_model или
+tomar_fusion_model и добавить model-specific поля из guides. Эти четыре factory
+зарегистрированы именно под указанными keys.
 
 ## TrainConfig fields
 

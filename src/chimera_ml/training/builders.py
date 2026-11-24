@@ -18,6 +18,8 @@ from chimera_ml.core.registry import (
 )
 from chimera_ml.training.config import TrainConfig
 
+_UNSET = object()
+
 
 class ContextDescribable(Protocol):
     """Optional protocol for components that enrich BuildContext during registration."""
@@ -207,9 +209,44 @@ def build_metrics(cfg_list: list[dict[str, Any]], *, context: BuildContext | Non
     return [build_from_registry(METRICS, mcfg, inject=inject, smart_inject=True) for mcfg in cfg_list]
 
 
-def build_datamodule(cfg: dict[str, Any], *, context: BuildContext | None = None) -> object:
-    """Build a data module from DATAMODULES configuration."""
+def build_datamodule(cfg: dict[str, Any], *, context: BuildContext | None = None, collate_fn: Any = _UNSET) -> object:
+    """Build a data module, optionally injecting an explicitly selected collate."""
     inject = {"context": context} if context is not None else None
+    if collate_fn is _UNSET:
+        return build_from_registry(DATAMODULES, cfg, inject=inject, smart_inject=True)
+
+    params = cfg.get("params", {}) or {}
+    if "collate_fn" in params:
+        raise ValueError(
+            "Collate is configured in both the top-level 'collate' section and "
+            "'data.params.collate_fn'; configure only one of them."
+        )
+
+    name = cfg.get("name")
+    if name is None or (isinstance(name, str) and not name.strip()):
+        raise ValueError("A datamodule name is required before injecting a configured collate.")
+
+    factory = DATAMODULES.get(str(name).lower())
+    try:
+        signature = inspect.signature(factory)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"Datamodule '{name}' cannot be inspected for collate_fn support; "
+            "declare an explicit collate_fn parameter in its factory."
+        ) from exc
+
+    parameter = signature.parameters.get("collate_fn")
+    if parameter is None or parameter.kind not in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    ):
+        raise TypeError(
+            f"Datamodule '{name}' does not support configured collation. "
+            "Its factory must declare a keyword-capable 'collate_fn' parameter."
+        )
+
+    inject = dict(inject or {})
+    inject["collate_fn"] = collate_fn
     return build_from_registry(DATAMODULES, cfg, inject=inject, smart_inject=True)
 
 

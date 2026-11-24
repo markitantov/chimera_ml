@@ -3,6 +3,11 @@
 Canonical history находится в [CHANGELOG.md](https://github.com/markitantov/chimera_ml/blob/main/CHANGELOG.md)
 репозитория. Он использует Keep a Changelog и Semantic Versioning.
 
+Секция Unreleased теперь фиксирует встроенные feature-only fusion-модели,
+independent sequence collate, mask-safe attention и переход от внешних fusion
+encoders и heads. Эта страница является индексом, а не отдельной историей
+релизов.
+
 Последние entries охватывают 0.3.0 (Optuna sweeps), 0.2.5.post1/0.2.5
 (sweep metadata/naming и PDF confusion matrices), 0.2.4 (affective states и
 inference artifact merge), 0.2.3 (inference pipeline, checkpoint resolution,

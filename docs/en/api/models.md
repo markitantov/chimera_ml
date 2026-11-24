@@ -1,39 +1,30 @@
 # Models API
 
-Models implement \`BaseModel.forward(Batch) -> ModelOutput\`. The built-in
-fusion models cover feature-level fusion, prediction-level fusion, and gated
-variants. They are commonly assembled through the \`MODELS\` registry from
-configuration; encoders, heads, and submodels are supplied as constructor
-dependencies. See [Models](../user-guide/models.md) for task-oriented setup.
+Models implement BaseModel.forward(Batch) -> ModelOutput. The four built-in
+fusion models consume feature-only tensors from Batch.inputs. Their constructors
+declare input_dims, shared_dim, and output_dim; modality projections and
+prediction layers are internal. They can be constructed directly in Python or
+through the MODELS registry and YAML. See [Models](../user-guide/models.md) for
+task-oriented examples.
 
 ## Model contract
 
 ::: chimera_ml.models.base.BaseModel
 
-## Feature and prediction fusion
+## Fusion models
 
-\`FeatureFusionModel\` concatenates encoder embeddings before the head.
-\`PredictionFusionModel\` combines per-modality predictions using mean, sum, or
-weighted averaging.
+::: chimera_ml.models.tfs_fusion.TFSFusionModel
 
-::: chimera_ml.models.fusion.FeatureFusionModel
+::: chimera_ml.models.tfs_fusion.tfs_fusion_model
 
-::: chimera_ml.models.fusion.feature_fusion_model
+::: chimera_ml.models.tfs_fusion.TFSDCMMOEFusionModel
 
-::: chimera_ml.models.fusion.PredictionFusionModel
+::: chimera_ml.models.tfs_fusion.tfs_dcmmmoe_fusion_model
 
-::: chimera_ml.models.fusion.prediction_fusion_model
+::: chimera_ml.models.raav_fusion.RAAVFusionModel
 
-## Gated fusion
+::: chimera_ml.models.raav_fusion.raav_fusion_model
 
-The gated models learn per-modality weights and honor optional modality masks.
-\`GatedFusionModel\` gates embeddings before the head; \`GatedPredictionFusionModel\`
-gates logits and requires a known class count.
+::: chimera_ml.models.tomar_fusion.TOMARFusionModel
 
-::: chimera_ml.models.gating.GatedFusionModel
-
-::: chimera_ml.models.gating.gated_fusion_model
-
-::: chimera_ml.models.gated_prediction_fusion.GatedPredictionFusionModel
-
-::: chimera_ml.models.gated_prediction_fusion.gated_prediction_fusion_model
+::: chimera_ml.models.tomar_fusion.tomar_fusion_model

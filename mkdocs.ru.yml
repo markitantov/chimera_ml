@@ -27,6 +27,10 @@ nav:
       - Configuration reference: user-guide/configuration.md
       - Data: user-guide/data.md
       - Models: user-guide/models.md
+      - TFS: user-guide/tfs-fusion.md
+      - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
+      - RAAV: user-guide/raav-fusion.md
+      - TOMAR: user-guide/tomar-fusion.md
       - Training: user-guide/training.md
       - Evaluation: user-guide/evaluation.md
       - Losses: user-guide/losses.md

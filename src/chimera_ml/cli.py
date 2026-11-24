@@ -20,6 +20,7 @@ from chimera_ml.logging.utils import generate_run_name
 from chimera_ml.training.builders import (
     BuildContext,
     build_callbacks,
+    build_collate,
     build_datamodule,
     build_logger,
     build_loss,
@@ -39,6 +40,15 @@ registry_app = typer.Typer(help="Inspect registered components.")
 plugins_app = typer.Typer(help="Inspect entry-point plugins.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(plugins_app, name="plugins")
+
+
+def _build_datamodule(cfg: ExperimentConfig, context: BuildContext) -> object:
+    """Build a datamodule and honor an explicitly configured top-level collate."""
+    if "collate" not in cfg.raw:
+        return build_datamodule(cfg.section("data"), context=context)
+
+    collate = build_collate(cfg.section("collate"), context=context)
+    return build_datamodule(cfg.section("data"), context=context, collate_fn=collate)
 
 
 def _merge_eval_loaders(dm: Any) -> dict[str, DataLoader]:
@@ -162,7 +172,7 @@ def _run_train_from_config(
     typer.echo("[train] Building datamodule and model...")
     context = BuildContext(config=cfg, stage="train")
 
-    dm = build_datamodule(cfg.section("data"), context=context)
+    dm = _build_datamodule(cfg, context)
     context.register(dm)
 
     model_obj = build_model(cfg.section("model"), context=context)
@@ -611,7 +621,7 @@ def eval(
     typer.echo("[eval] Building datamodule and model...")
     context = BuildContext(config=cfg, stage="eval")
 
-    dm = build_datamodule(cfg.section("data"), context=context)
+    dm = _build_datamodule(cfg, context)
     context.register(dm)
     model_obj = build_model(cfg.section("model"), context=context)
     context.register(model_obj)
