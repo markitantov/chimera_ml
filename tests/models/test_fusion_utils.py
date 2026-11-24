@@ -118,3 +118,97 @@ def test_sequence_and_features_reject_unsupported_encoder_outputs():
     batch = Batch(inputs={"audio": torch.ones(2, 3, 4)}, targets=None)
     with pytest.raises(ValueError, match="Feature 'audio' has width"):
         _features(Model(), batch, ("audio",))
+
+
+def test_fusion_utilities_validate_shapes_and_configuration_errors():
+    with pytest.raises(ValueError, match="normalized features"):
+        _mask(Batch(inputs={}, targets=None), "audio", torch.ones(2, 4))
+
+    with pytest.raises(ValueError, match="temporal width"):
+        _mask(
+            Batch(inputs={}, targets=None, masks={"audio_mask": torch.ones(2, 2)}),
+            "audio",
+            torch.ones(2, 3, 4),
+        )
+
+    with pytest.raises(ValueError, match="batch dimension"):
+        _mask(
+            Batch(inputs={}, targets=None, masks={"audio_mask": torch.ones(2, 3)}),
+            "audio",
+            torch.ones(3, 3, 4),
+        )
+
+    one_step = Batch(
+        inputs={},
+        targets=None,
+        masks={"sequence_mask": torch.tensor([1, 0])},
+    )
+    assert torch.equal(_mask(one_step, "audio", torch.ones(2, 1, 4)), torch.tensor([[True], [False]]))
+
+    with pytest.raises(ValueError, match="sequence_mask has batch dimension"):
+        _mask(
+            Batch(inputs={}, targets=None, masks={"sequence_mask": torch.ones(3, 2)}),
+            "audio",
+            torch.ones(2, 2, 4),
+        )
+
+    with pytest.raises(ValueError, match="sequence_mask must"):
+        _mask(
+            Batch(inputs={}, targets=None, masks={"sequence_mask": torch.ones(2, 2, 1)}),
+            "audio",
+            torch.ones(2, 2, 4),
+        )
+
+    with pytest.raises(ValueError, match="Expected \[B, D\]"):
+        _sequence([1, 2, 3])
+    with pytest.raises(ValueError, match="values with shape"):
+        _mean(torch.ones(2, 3), torch.ones(2, 3))
+    with pytest.raises(ValueError, match="validity mask"):
+        _mean(torch.ones(2, 3, 4), torch.ones(2, 2))
+    with pytest.raises(ValueError, match="at least two dimensions"):
+        from chimera_ml.models._utils import _masked_softmax
+
+        _masked_softmax(torch.ones(2), torch.ones(2, 1))
+    with pytest.raises(ValueError, match="Expected validity mask"):
+        _masked_softmax(torch.ones(2, 3), torch.ones(2, 2))
+
+    with pytest.raises(ValueError, match="query and key"):
+        _attention(torch.ones(2, 3), torch.ones(2, 3, 4), torch.ones(2, 3))
+    with pytest.raises(ValueError, match="matching batch"):
+        _attention(torch.ones(2, 3, 4), torch.ones(1, 3, 4), torch.ones(1, 3))
+    with pytest.raises(ValueError, match="key validity"):
+        _attention(torch.ones(2, 3, 4), torch.ones(2, 3, 4), torch.ones(2, 2))
+
+    class BatchMismatchModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared_dim = 4
+            self.encoders = torch.nn.ModuleDict({"a": torch.nn.Identity(), "b": torch.nn.Identity()})
+            self.proj = torch.nn.ModuleDict({"a": torch.nn.Identity(), "b": torch.nn.Identity()})
+
+    with pytest.raises(ValueError, match="batch dimension"):
+        _features(
+            BatchMismatchModel(),
+            Batch(inputs={"a": torch.ones(2, 1, 4), "b": torch.ones(3, 1, 4)}, targets=None),
+            ("a", "b"),
+        )
+
+    class InvalidProjectionModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared_dim = 4
+            self.encoders = torch.nn.ModuleDict({"audio": torch.nn.Identity()})
+            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Flatten()})
+
+    with pytest.raises(ValueError, match="Projection for 'audio'"):
+        _features(InvalidProjectionModel(), Batch(inputs={"audio": torch.ones(2, 1, 4)}, targets=None), ("audio",))
+
+    with pytest.raises(ValueError, match="No configured modalities"):
+        _features(BatchMismatchModel(), Batch(inputs={}, targets=None), ("a",))
+
+    with pytest.raises(ValueError, match="shared_dim"):
+        from chimera_ml.models._utils import _projections
+
+        _projections(("audio",), {}, 0)
+    with pytest.raises(ValueError, match="Input dimension"):
+        _projections(("audio",), {"audio": 0}, 4)
