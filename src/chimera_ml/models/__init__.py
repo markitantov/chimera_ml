@@ -10,12 +10,14 @@ from chimera_ml.models.tfs_fusion import (
     tfs_dcmmmoe_fusion_model,
     tfs_fusion_model,
 )
+from chimera_ml.models.tomar_fusion import TOMARFusionModel, tomar_fusion_model
 
 __all__ = [
     "BaseModel",
     "RAAVFusionModel",
     "TFSDCMMOEFusionModel",
     "TFSFusionModel",
+    "TOMARFusionModel",
     "feature_fusion_model",
     "gated_fusion_model",
     "gated_prediction_fusion_model",
@@ -23,4 +25,5 @@ __all__ = [
     "raav_fusion_model",
     "tfs_dcmmmoe_fusion_model",
     "tfs_fusion_model",
+    "tomar_fusion_model",
 ]
