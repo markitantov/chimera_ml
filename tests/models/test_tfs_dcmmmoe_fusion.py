@@ -173,3 +173,60 @@ def test_tfs_dcmmmoe_state_round_trip_preserves_predictions():
     restored.load_state_dict(model.state_dict())
 
     assert torch.equal(model(_dcmmmoe_batch()).preds, restored(_dcmmmoe_batch()).preds)
+
+
+def test_tfs_dcmmmoe_zero_length_modality_has_zero_pair_outputs_and_weights():
+    model = TFSDCMMOEFusionModel(
+        input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2, gate_hidden=3
+    ).eval()
+    batch = Batch(
+        inputs={
+            "text": torch.randn(2, 2, 3),
+            "audio": torch.randn(2, 1, 4),
+            "video": torch.empty(2, 0, 5),
+        },
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.ones(2, 2, dtype=torch.bool),
+            "audio_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
+            "video_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert torch.isfinite(output.preds).all()
+    for key, value in output.aux.items():
+        if key.startswith("pair_valid_") and "video" in key:
+            assert not value.any()
+        if key.startswith("pair_") and not key.startswith("pair_valid_") and "video" in key:
+            assert torch.equal(value, torch.zeros_like(value))
+    pair_weights = output.aux["pair_weights"]
+    assert torch.equal(pair_weights[:, [1, 2, 4, 5]], torch.zeros_like(pair_weights[:, [1, 2, 4, 5]]))
+
+
+def test_tfs_dcmmmoe_all_invalid_nonempty_modalities_keep_zero_fused_representation():
+    model = TFSDCMMOEFusionModel(
+        input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2, gate_hidden=3
+    ).eval()
+    batch = Batch(
+        inputs={
+            "text": torch.randn(2, 1, 3),
+            "audio": torch.randn(2, 1, 4),
+            "video": torch.randn(2, 1, 5),
+        },
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+            "audio_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+            "video_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert torch.equal(output.aux["fused"], torch.zeros_like(output.aux["fused"]))
+    assert torch.equal(output.aux["pair_weights"], torch.zeros_like(output.aux["pair_weights"]))
+    assert torch.isfinite(output.preds).all()

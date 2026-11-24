@@ -98,6 +98,8 @@ def _masked_softmax(scores: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
         raise ValueError(
             f"Expected validity mask with shape ({scores.shape[0]}, {scores.shape[-1]}), got {tuple(valid.shape)}."
         )
+    if scores.shape[-1] == 0:
+        return scores * 0
 
     work_dtype = torch.float32 if scores.dtype in (torch.float16, torch.bfloat16) else scores.dtype
     work_scores = scores.to(work_dtype)

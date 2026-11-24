@@ -4,7 +4,12 @@ import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.models.tfs_fusion import TFSFusionModel, _stat_pool, tfs_fusion_model
+from chimera_ml.models.tfs_fusion import (
+    TFSFusionModel,
+    _stat_pool,
+    _TransformerCrossAttention,
+    tfs_fusion_model,
+)
 
 
 def _batch() -> Batch:
@@ -305,3 +310,70 @@ def test_stat_pool_returns_mean_and_zero_std_for_degenerate_sequences():
     assert torch.allclose(pooled, torch.tensor([[2.0, 0.0], [1.0, 0.0], [0.0, 0.0]]))
     pooled.sum().backward()
     assert values.grad is not None and torch.isfinite(values.grad).all()
+
+
+def test_transformer_cross_attention_supports_empty_key_and_query_sequences():
+    block = _TransformerCrossAttention(4, dropout=0.0).eval()
+    query = torch.randn(2, 3, 4)
+    empty_key = torch.empty(2, 0, 4)
+
+    result = block(query, empty_key, torch.ones(2, 3, dtype=torch.bool), torch.zeros(2, 0, dtype=torch.bool))
+    empty_query = torch.empty(2, 0, 4)
+    empty_result = block(empty_query, query, torch.zeros(2, 0, dtype=torch.bool), torch.ones(2, 3, dtype=torch.bool))
+
+    assert result.shape == query.shape
+    assert torch.equal(result, torch.zeros_like(result))
+    assert empty_result.shape == empty_query.shape
+    assert empty_result.numel() == 0
+
+
+def test_tfs_zero_length_modality_is_excluded_from_default_hierarchy():
+    model = TFSFusionModel(input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2).eval()
+    batch = Batch(
+        inputs={
+            "text": torch.randn(2, 2, 3),
+            "audio": torch.randn(2, 1, 4),
+            "video": torch.empty(2, 0, 5),
+        },
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.ones(2, 2, dtype=torch.bool),
+            "audio_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
+            "video_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert torch.isfinite(output.preds).all()
+    assert torch.isfinite(output.aux["fused"]).all()
+    for key, value in output.aux.items():
+        if key.startswith("pair_valid_") and "video" in key:
+            assert not value.any()
+        if key.startswith("pair_") and not key.startswith("pair_valid_") and "video" in key:
+            assert torch.equal(value, torch.zeros_like(value))
+
+
+def test_tfs_all_invalid_nonempty_modalities_keep_zero_fused_representation():
+    model = TFSFusionModel(input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2).eval()
+    batch = Batch(
+        inputs={
+            "text": torch.randn(2, 1, 3),
+            "audio": torch.randn(2, 1, 4),
+            "video": torch.randn(2, 1, 5),
+        },
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+            "audio_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+            "video_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert torch.equal(output.aux["fused"], torch.zeros_like(output.aux["fused"]))
+    assert torch.equal(output.aux["pair_weights"], torch.zeros_like(output.aux["pair_weights"]))
+    assert torch.isfinite(output.preds).all()

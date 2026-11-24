@@ -264,3 +264,58 @@ def test_raav_missing_context_has_no_learned_context_residual():
     output = model(batch)
 
     assert torch.allclose(output.aux["context_delta"], torch.zeros_like(output.aux["context_delta"]))
+
+
+def test_raav_empty_context_is_unavailable_without_nan():
+    model = RAAVFusionModel(
+        input_dims={"frame": 3, "context": 4},
+        shared_dim=4,
+        output_dim=2,
+        frame_modalities=("frame",),
+        context_modality="context",
+        num_latents=2,
+    ).eval()
+    batch = Batch(
+        inputs={"frame": torch.randn(2, 2, 3), "context": torch.empty(2, 0, 4)},
+        targets=None,
+        masks={
+            "frame_temporal_mask": torch.ones(2, 2, dtype=torch.bool),
+            "context_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert output.preds.shape == (2, 2, 2)
+    assert torch.isfinite(output.preds).all()
+    assert not output.aux["context_mask"].any()
+    assert torch.equal(output.aux["context_delta"], torch.zeros_like(output.aux["context_delta"]))
+    assert torch.isfinite(output.aux["context_latent_attention"]).all()
+
+
+def test_raav_zero_length_frames_preserve_empty_prediction_sequence():
+    model = RAAVFusionModel(
+        input_dims={"frame": 3, "context": 4},
+        shared_dim=4,
+        output_dim=2,
+        frame_modalities=("frame",),
+        context_modality="context",
+        num_latents=2,
+    ).eval()
+    batch = Batch(
+        inputs={"frame": torch.empty(2, 0, 3), "context": torch.randn(2, 2, 4)},
+        targets=None,
+        masks={
+            "frame_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+            "context_temporal_mask": torch.ones(2, 2, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert output.preds.shape == (2, 0, 2)
+    assert output.aux["frame_mask"].shape == (2, 0)
+    assert output.aux["frame_weights"].shape == (2, 1, 0)
+    assert torch.isfinite(output.preds).all()

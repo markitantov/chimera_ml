@@ -187,3 +187,47 @@ def test_tomar_state_round_trip_preserves_predictions():
     )
 
     assert torch.equal(model(batch).preds, restored(batch).preds)
+
+
+def test_tomar_empty_additional_modality_has_zero_residual_contribution():
+    model = TOMARFusionModel(
+        input_dims={"text": 3, "audio": 4},
+        shared_dim=4,
+        anchor_modality="text",
+        output_dim=2,
+    ).eval()
+    batch = Batch(
+        inputs={"text": torch.randn(2, 1, 3), "audio": torch.empty(2, 0, 4)},
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
+            "audio_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+        },
+    )
+
+    output = model(batch)
+
+    assert output.aux is not None
+    assert torch.isfinite(output.preds).all()
+    assert torch.equal(output.aux["rho_audio"], torch.zeros_like(output.aux["rho_audio"]))
+    assert torch.equal(output.aux["delta_audio"], torch.zeros_like(output.aux["delta_audio"]))
+
+
+def test_tomar_empty_anchor_preserves_explicit_error():
+    model = TOMARFusionModel(
+        input_dims={"text": 3, "audio": 4},
+        shared_dim=4,
+        anchor_modality="text",
+        output_dim=2,
+    ).eval()
+    batch = Batch(
+        inputs={"text": torch.empty(2, 0, 3), "audio": torch.randn(2, 1, 4)},
+        targets=None,
+        masks={
+            "text_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
+            "audio_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
+        },
+    )
+
+    with pytest.raises(ValueError, match="Anchor modality 'text' is unavailable"):
+        model(batch)

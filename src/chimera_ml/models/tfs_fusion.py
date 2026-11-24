@@ -82,6 +82,9 @@ class _TransformerCrossAttention(nn.Module):
         query_valid: torch.Tensor,
         key_valid: torch.Tensor,
     ) -> torch.Tensor:
+        if query.shape[1] == 0 or key.shape[1] == 0:
+            return torch.zeros_like(query)
+
         query = self.positional_encoding(query)
         key = self.positional_encoding(key)
         safe_key_valid = key_valid.clone()

@@ -268,3 +268,28 @@ def test_mask_rejects_wrong_dedicated_temporal_mask_shape():
 
     with pytest.raises(ValueError, match="Dedicated temporal mask"):
         _mask(batch, "audio", x)
+
+
+def test_masked_softmax_returns_empty_weights_for_zero_length_keys():
+    scores = torch.empty(2, 3, 0, requires_grad=True)
+    valid = torch.zeros(2, 0, dtype=torch.bool)
+
+    weights = _masked_softmax(scores, valid)
+
+    assert weights.shape == scores.shape
+    assert weights.numel() == 0
+    weights.sum().backward()
+    assert scores.grad is not None and scores.grad.shape == scores.shape
+
+
+def test_attention_supports_zero_length_key_sequences():
+    query = torch.randn(2, 3, 4, requires_grad=True)
+    key = torch.empty(2, 0, 4, requires_grad=True)
+    valid = torch.zeros(2, 0, dtype=torch.bool)
+
+    result = _attention(query, key, valid)
+
+    assert result.shape == query.shape
+    assert torch.equal(result, torch.zeros_like(result))
+    result.sum().backward()
+    assert query.grad is not None and torch.isfinite(query.grad).all()
