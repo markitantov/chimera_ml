@@ -6,7 +6,7 @@ import torch.nn as nn
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
-from chimera_ml.models._utils import _features, _masked_softmax, _projections
+from chimera_ml.models._utils import _features, _masked_softmax, _projections, _validate_input_dims
 from chimera_ml.models.base import BaseModel
 
 
@@ -40,12 +40,11 @@ class RAAVFusionModel(BaseModel):
 
     def __init__(
         self,
-        encoders: dict[str, nn.Module],
+        input_dims: dict[str, int],
         shared_dim: int,
-        head: nn.Module,
+        output_dim: int,
         frame_modalities: tuple[str, ...],
         context_modality: str,
-        input_dims: dict[str, int] | None = None,
         num_latents: int = 4,
         gate_hidden: int = 64,
         temporal: nn.Module | None = None,
@@ -53,18 +52,21 @@ class RAAVFusionModel(BaseModel):
         super().__init__()
         if num_latents <= 0:
             raise ValueError(f"num_latents must be positive, got {num_latents}.")
-        self.names = tuple(encoders)
-        self.encoders = nn.ModuleDict(encoders)
+        self.input_dims = _validate_input_dims(input_dims)
+        if shared_dim <= 0:
+            raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+        if output_dim <= 0:
+            raise ValueError(f"output_dim must be positive, got {output_dim}.")
+        self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
-        input_dims = input_dims or {}
-        self.proj = _projections(self.names, input_dims, shared_dim)
-        self.head = head
+        self.proj = _projections(self.names, self.input_dims, shared_dim)
+        self.prediction = nn.Linear(shared_dim, output_dim)
         self.frame_modalities = tuple(frame_modalities)
         if not self.frame_modalities:
             raise ValueError("RAAVFusionModel requires at least one frame modality.")
         unknown = set(self.frame_modalities) - set(self.names)
         if context_modality not in self.names or unknown:
-            raise ValueError("RAAV modalities must be present in encoders.")
+            raise ValueError("RAAV modalities must be present in input_dims.")
         self.context_modality = context_modality
         self.gate = nn.Sequential(nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, 1))
         self.latents = nn.Parameter(torch.randn(num_latents, shared_dim) / shared_dim**0.5)
@@ -143,7 +145,7 @@ class RAAVFusionModel(BaseModel):
                 raise ValueError("RAAV temporal module must preserve shape [B, T, shared_dim].")
             refined = refined * frame_valid.to(refined.dtype).unsqueeze(-1)
 
-        preds = self.head(refined)
+        preds = self.prediction(refined)
         if preds.ndim >= 2 and preds.shape[:2] == frame_valid.shape:
             preds = preds * frame_valid.to(preds.dtype).unsqueeze(-1)
         aux = {

@@ -9,9 +9,9 @@ from chimera_ml.models.raav_fusion import RAAVFusionModel, raav_fusion_model
 
 def test_raav_fuses_frames_and_refines_with_context_latents():
     model = RAAVFusionModel(
-        encoders={"audio": nn.Identity(), "video": nn.Identity(), "context": nn.Identity()},
+        input_dims={"audio": 4, "video": 4, "context": 4},
         shared_dim=4,
-        head=nn.Linear(4, 2),
+        output_dim=2,
         frame_modalities=("audio", "video"),
         context_modality="context",
         num_latents=3,
@@ -42,9 +42,9 @@ def test_raav_fuses_frames_and_refines_with_context_latents():
 
 def test_raav_allows_missing_context_and_validates_frame_lengths():
     model = RAAVFusionModel(
-        encoders={"audio": nn.Linear(3, 4), "video": nn.Linear(3, 4), "context": nn.Linear(3, 4)},
+        input_dims={"audio": 3, "video": 3, "context": 3},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         frame_modalities=("audio", "video"),
         context_modality="context",
     )
@@ -69,9 +69,9 @@ def test_raav_allows_missing_context_and_validates_frame_lengths():
 
 def test_raav_requires_an_available_frame_and_has_registered_factory():
     model = RAAVFusionModel(
-        encoders={"audio": nn.Linear(3, 4), "context": nn.Linear(3, 4)},
+        input_dims={"audio": 3, "context": 3},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         frame_modalities=("audio",),
         context_modality="context",
     )
@@ -82,9 +82,9 @@ def test_raav_requires_an_available_frame_and_has_registered_factory():
     assert MODELS.get("raav_fusion_model") is raav_fusion_model
     assert isinstance(
         raav_fusion_model(
-            encoders={"audio": nn.Linear(3, 4), "context": nn.Linear(3, 4)},
+            input_dims={"audio": 3, "context": 3},
             shared_dim=4,
-            head=nn.Identity(),
+            output_dim=4,
             frame_modalities=("audio",),
             context_modality="context",
         ),
@@ -94,9 +94,9 @@ def test_raav_requires_an_available_frame_and_has_registered_factory():
 
 def _raav_frame_model() -> RAAVFusionModel:
     model = RAAVFusionModel(
-        encoders={"frame": nn.Identity(), "context": nn.Identity()},
+        input_dims={"frame": 4, "context": 4},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         frame_modalities=("frame",),
         context_modality="context",
         num_latents=2,
@@ -167,9 +167,9 @@ def test_raav_fully_masked_context_has_no_effect():
 
 def test_raav_cross_attention_and_latents_receive_finite_gradients():
     model = RAAVFusionModel(
-        encoders={"frame": nn.Linear(3, 4), "context": nn.Linear(3, 4)},
+        input_dims={"frame": 3, "context": 3},
         shared_dim=4,
-        head=nn.Linear(4, 2),
+        output_dim=2,
         frame_modalities=("frame",),
         context_modality="context",
         num_latents=2,
@@ -186,22 +186,29 @@ def test_raav_cross_attention_and_latents_receive_finite_gradients():
     assert all(
         parameter.grad is not None and torch.isfinite(parameter.grad).all() for parameter in attention_parameters
     )
+    assert all(
+        parameter.grad is not None and torch.isfinite(parameter.grad).all() for parameter in model.proj.parameters()
+    )
+    assert all(
+        parameter.grad is not None and torch.isfinite(parameter.grad).all()
+        for parameter in model.prediction.parameters()
+    )
 
 
 def test_raav_state_round_trip_preserves_predictions():
     torch.manual_seed(11)
     model = RAAVFusionModel(
-        encoders={"frame": nn.Identity(), "context": nn.Identity()},
+        input_dims={"frame": 4, "context": 4},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         frame_modalities=("frame",),
         context_modality="context",
         num_latents=2,
     ).eval()
     restored = RAAVFusionModel(
-        encoders={"frame": nn.Identity(), "context": nn.Identity()},
+        input_dims={"frame": 4, "context": 4},
         shared_dim=4,
-        head=nn.Identity(),
+        output_dim=4,
         frame_modalities=("frame",),
         context_modality="context",
         num_latents=2,
@@ -219,9 +226,9 @@ def test_raav_temporal_encoder_does_not_attend_to_padding():
     def build() -> RAAVFusionModel:
         temporal_layer = nn.TransformerEncoderLayer(d_model=4, nhead=1, dropout=0.0, batch_first=True)
         return RAAVFusionModel(
-            encoders={"frame": nn.Identity(), "context": nn.Identity()},
+            input_dims={"frame": 4, "context": 4},
             shared_dim=4,
-            head=nn.Identity(),
+            output_dim=4,
             frame_modalities=("frame",),
             context_modality="context",
             temporal=nn.TransformerEncoder(temporal_layer, num_layers=1),
