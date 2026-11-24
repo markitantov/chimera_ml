@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.models.tfs_fusion import TFSFusionModel, tfs_fusion_model
+from chimera_ml.models.tfs_fusion import TFSFusionModel, _stat_pool, tfs_fusion_model
 
 
 def _batch() -> Batch:
@@ -258,3 +258,53 @@ def test_tfs_second_level_blocks_receive_finite_gradients():
     for block in model.triple_fusion.cross_blocks:
         gradients = [parameter.grad for parameter in block.parameters()]
         assert any(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)
+
+
+def test_tfs_zeroes_unavailable_pairs_before_second_level_attention():
+    model = TFSFusionModel(
+        encoders={"text": nn.Identity(), "audio": nn.Identity(), "video": nn.Identity()},
+        shared_dim=2,
+        head=nn.Identity(),
+    ).eval()
+    captured = []
+    hooks = [
+        block.register_forward_hook(lambda _, inputs, __: captured.append((inputs[0].clone(), inputs[1].clone())))
+        for block in model.triple_fusion.cross_blocks
+    ]
+    inputs = {
+        "text": torch.randn(2, 1, 2),
+        "audio": torch.randn(2, 1, 2),
+        "video": torch.randn(2, 1, 2),
+    }
+    masks = {
+        "text_mask": torch.ones(2),
+        "audio_mask": torch.tensor([0, 1]),
+        "video_mask": torch.ones(2),
+    }
+    batch = Batch(inputs=inputs, targets=None, masks=masks)
+    try:
+        first_output = model(batch).aux["fused"]
+    finally:
+        for hook in hooks:
+            hook.remove()
+
+    assert torch.equal(captured[0][0][0, :, :4], torch.zeros(1, 4))
+    assert torch.equal(captured[0][1][0, :, :4], torch.zeros(1, 4))
+    assert torch.equal(captured[1][0][0, :, :4], torch.zeros(1, 4))
+    assert torch.equal(captured[1][1][0, :, :4], torch.zeros(1, 4))
+    assert torch.isfinite(first_output).all()
+
+    inputs["audio"][0] = torch.randn(1, 2) * 1000
+    second_output = model(Batch(inputs=inputs, targets=None, masks=masks)).aux["fused"]
+    assert torch.allclose(first_output[0], second_output[0])
+
+
+def test_stat_pool_returns_mean_and_zero_std_for_degenerate_sequences():
+    values = torch.tensor([[[2.0], [2.0], [2.0]], [[1.0], [9.0], [3.0]], [[7.0], [8.0], [9.0]]], requires_grad=True)
+    valid = torch.tensor([[1, 1, 1], [1, 0, 0], [0, 0, 0]], dtype=torch.bool)
+
+    pooled = _stat_pool(values, valid)
+
+    assert torch.allclose(pooled, torch.tensor([[2.0, 0.0], [1.0, 0.0], [0.0, 0.0]]))
+    pooled.sum().backward()
+    assert values.grad is not None and torch.isfinite(values.grad).all()

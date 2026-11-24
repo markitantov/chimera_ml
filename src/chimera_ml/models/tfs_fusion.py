@@ -101,7 +101,9 @@ def _stat_pool(x: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     mean = (x * weight).sum(dim=1) / count.clamp_min(1)
     centered = (x - mean.unsqueeze(1)) * weight
     variance = centered.square().sum(dim=1) / count.clamp_min(1)
-    std = variance.clamp_min(torch.finfo(x.dtype).eps).sqrt()
+    positive_variance = variance > 0
+    safe_variance = torch.where(positive_variance, variance, torch.ones_like(variance))
+    std = safe_variance.sqrt() * positive_variance.to(x.dtype)
     return torch.cat((mean, std), dim=-1)
 
 
@@ -171,6 +173,7 @@ class _TripleFusionBackbone(nn.Module):
                 source_valid,
             )
             output_valid[key] = target_valid & source_valid.any(dim=1, keepdim=True)
+            outputs[key] = outputs[key] * output_valid[key].unsqueeze(-1).to(outputs[key].dtype)
             pair_values[key] = _mean(outputs[key], output_valid[key])
             pair_valid[key] = output_valid[key].any(dim=1)
 
