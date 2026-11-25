@@ -49,7 +49,11 @@ steps:
 
 `your_prediction_step` is intentionally a placeholder: verify the actual key and parameters with your plugin documentation and `registry list`. Use [Custom prediction steps](custom-steps.md) if you own the component.
 
-## 4. Run and inspect output
+## 4. Validate the right configuration
+
+`chimera-ml validate-config` constructs and validates `ExperimentConfig`, which is the training/evaluation configuration. It is not an inference-YAML validator. For inference, check the YAML shape against [Pipeline configuration](pipeline.md), confirm every `name` with `chimera-ml registry list --type inference_steps`, and let `chimera-ml inference` construct the `InferenceConfig`.
+
+## 5. Run and inspect output
 
 ```bash
 chimera-ml inference   --input input.mp4   --config-path inference.yaml   --output predictions.json   --device auto   --work-dir runs/video-001

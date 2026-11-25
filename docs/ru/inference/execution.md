@@ -1,16 +1,22 @@
 # Последовательные и параллельные pipeline
 
-В последовательном режиме шаги выполняются в порядке списка; каждый следующий получает артефакты предыдущего. Это удобно для цепочки «подготовка → модель → запись».
+## Последовательный режим
+
+При `parallel: false` или отсутствии поля шаги выполняются в порядке списка. Каждый следующий шаг получает артефакты предыдущего. Это естественная цепочка «подготовка → prediction → запись»:
 
 ```yaml
-pipeline: {name: sequential}
+pipeline: {name: sequential, parallel: false}
 steps:
   - name: prepare_step
   - name: prediction_step
   - name: write_json_predictions_step
 ```
 
-В parallel режиме pipeline строит DAG. Готовые узлы без незавершённых `after` могут выполняться одновременно в разных потоках; это параллелизм шагов, а не автоматическое распараллеливание батчей модели.
+В этом примере `prepare_step` и `prediction_step` — plugin keys; проверьте их через registry. Встроенными являются только реальные ключи из [каталога](built-in-steps.md).
+
+## Parallel DAG
+
+При `parallel: true` pipeline строит граф. Узлы без незавершённых `after` могут выполняться одновременно в разных потоках. Это параллелизм шагов, а не автоматическое распараллеливание model batches.
 
 ```yaml
 pipeline:
@@ -22,12 +28,14 @@ steps:
   - id: predict
     name: prediction_step
     after: prepare
-  - id: metrics
-    name: metrics_step
+  - id: diagnostics
+    name: diagnostics_step
     after: prepare
   - id: write
     name: write_json_predictions_step
     after: predict
 ```
 
-Каждый шаг получает копию артефактов. При слиянии учитываются только ключи, записанные через `set_artifact`. Перезапись допустима для downstream-узла, зависящего от владельца; конфликтующие записи независимых веток дают `ValueError`. Неизвестные зависимости и циклы отклоняются до запуска.
+Каждый узел получает копию upstream artifacts. При merge учитываются только ключи, записанные через `set_artifact`. Перезапись разрешена downstream-узлу, зависящему от предыдущего владельца; независимая конфликтующая запись даёт `ValueError`. Duplicate ids, unknown dependencies, self-dependency и cycles отклоняются до выполнения.
+
+Для XAI exporter должен зависеть от `xai` node. В последовательном режиме поставьте его после `xai_step`; в DAG задайте `after: [xai]`. Аналогично output writer должен зависеть от шага, который создал `predictions`.
