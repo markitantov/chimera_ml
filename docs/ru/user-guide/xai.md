@@ -16,7 +16,15 @@
           ablation_policy: zero
           modalities: [audio, image]
 
-Вложенный шаг строится через 'INFERENCE_STEPS' и должен иметь атрибут 'on_prediction'. Без XAI существующая конфигурация шагов работает как раньше.
+Вложенный шаг строится через 'INFERENCE_STEPS'. Чтобы подключить собственный prediction step, добавьте необязательный callback и вызовите его сразу после forward модели:
+
+    on_prediction: Callable[[nn.Module, Batch, ModelOutput], None] | None = field(default=None, repr=False)
+
+    output = model(batch)
+    if self.on_prediction is not None:
+        self.on_prediction(model, batch, output)
+
+Без XAI существующая конфигурация шагов работает как раньше.
 
 Поддерживаются явные политики:
 
@@ -26,4 +34,4 @@
 
 По умолчанию сравниваются исходные 'ModelOutput.preds' без softmax и догадок о типе задачи. Для преобразования используется 'score_fn(preds)'. Результат содержит baseline, ablated, delta = baseline - ablated и absolute delta. Необязательные diagnostics передаются через 'diagnostic_keys'.
 
-Для ORAGEN используется 'zero', поскольку модель требует оба входных ключа и не использует modality masks. Дельты измеряют локальную чувствительность предсказания, но не являются причинными эффектами, SHAP-значениями или калиброванной надёжностью. Оценка качества на отложенной выборке остаётся отдельной функцией 'evaluate_modality_quality'.
+Дельты измеряют локальную чувствительность предсказания, но не являются причинными эффектами, SHAP-значениями или калиброванной надёжностью. Оценка качества на отложенной выборке остаётся отдельной функцией 'evaluate_modality_quality'.

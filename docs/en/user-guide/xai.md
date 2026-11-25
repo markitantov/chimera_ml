@@ -16,7 +16,15 @@ The wrapped step remains an ordinary prediction step. The wrapper installs the c
           ablation_policy: zero
           modalities: [audio, image]
 
-The nested step is built through 'INFERENCE_STEPS'. It must expose 'on_prediction'. Existing steps without XAI configuration continue to work unchanged.
+The nested step is built through 'INFERENCE_STEPS'. To make a custom prediction step compatible, add an optional callback field and call it after the model forward:
+
+    on_prediction: Callable[[nn.Module, Batch, ModelOutput], None] | None = field(default=None, repr=False)
+
+    output = model(batch)
+    if self.on_prediction is not None:
+        self.on_prediction(model, batch, output)
+
+Existing steps without XAI configuration continue to work unchanged.
 
 The generic engine supports three explicit interventions:
 
@@ -27,17 +35,5 @@ The generic engine supports three explicit interventions:
 The caller chooses the policy compatible with the model. Masks are optional. Unexpected model errors propagate.
 
 By default, predictions are compared directly. No softmax or task semantics are inferred. Pass 'score_fn(preds)' for a task-specific score. The result contains baseline values, ablated values, delta = baseline - ablated, and absolute deltas. 'output_mask_key' can exclude invalid output positions. Diagnostics are copied only for explicitly requested 'diagnostic_keys'.
-
-ORAGEN uses zero intervention because its model requires both input keys and does not consume modality masks:
-
-    - name: xai_step
-      params:
-        step:
-          name: fusion_step
-          params:
-            batch_size: 8
-        ablation_policy: zero
-        modalities: [audio, image]
-    - name: aggregate_windows_step
 
 These deltas measure local prediction sensitivity. They are not causal effects, SHAP values, calibrated confidence, or a composite trust score. Held-out quality comparison remains separate in 'evaluate_modality_quality'.

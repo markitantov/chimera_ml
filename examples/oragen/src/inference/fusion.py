@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -8,7 +7,6 @@ from inference.utils import resolve_checkpoint_path
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
-from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext
 
 
@@ -17,7 +15,6 @@ class FusionStep:
     batch_size: int = 8
     gender_class_names: list[str] = field(default_factory=lambda: ["female", "male"])
     age_scale: float = 100.0
-    on_prediction: Callable[[torch.nn.Module, Batch, ModelOutput], None] | None = field(default=None, repr=False)
     _model: Any = field(default=None, init=False, repr=False)
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
@@ -40,10 +37,7 @@ class FusionStep:
             batch.inputs = {key: value.to(torch.device(ctx.device)) for key, value in batch.inputs.items()}
 
             with torch.no_grad():
-                output = model(batch)
-                if self.on_prediction is not None:
-                    self.on_prediction(model, batch, output)
-                outputs = output.preds.detach().cpu()
+                outputs = model(batch).preds.detach().cpu()
 
             gender_logits = outputs[:, : len(self.gender_class_names)]
             gender_probs = torch.softmax(gender_logits, dim=-1)
