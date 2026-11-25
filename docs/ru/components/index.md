@@ -1,24 +1,24 @@
 # Обзор компонентов
 
-CHIMERA-ML разделяет публичные контракты и зарегистрированные factory. `Batch`, `ModelOutput`, `BaseModel` и `BaseMetric` задают интерфейсы вызовов, а registry key делает factory доступной из YAML. Реализации datasets и task-specific prediction steps обычно находятся в plugins.
+CHIMERA-ML разделяет публичные контракты и зарегистрированные фабрики. `Batch`, `ModelOutput`, `BaseModel` и `BaseMetric` задают интерфейсы вызовов, а ключ реестра делает фабрику доступной из YAML. Реализации датасетов и шагов предсказания, специфичных для задачи, обычно находятся в плагинах.
 
 | Категория | Назначение | Публичная абстракция | Построение |
 | --- | --- | --- | --- |
-| Core | Batch, output, config и metadata построения | `Batch`, `ModelOutput`, `ExperimentConfig`, `BuildContext` | Python и builders |
-| Data | Dataset, loaders и collates | `DataModule`, `MaskingCollate`, `MultimodalSequenceCollate` | `DATAMODULES` / `COLLATES` |
-| Models | Batch → ModelOutput | `BaseModel` | `MODELS` или Python |
-| Training | Loss, metrics, optimizer, scheduler | `BaseLoss`, `BaseMetric` и factories | `LOSSES`, `METRICS`, `OPTIMIZERS`, `SCHEDULERS` |
-| Callbacks | Lifecycle Trainer, state и artifacts | `BaseCallback` | `CALLBACKS` |
-| Logging | Console/file и MLflow | `BaseLogger` и logger-compatible objects | `LOGGERS` |
-| Inference | Pipeline steps и XAI | `InferenceContext` | `INFERENCE_STEPS` |
+| Ядро | Batch, результат, конфигурация и метаданные построения | `Batch`, `ModelOutput`, `ExperimentConfig`, `BuildContext` | Python и строители |
+| Данные | Dataset, загрузчики и collate-функции | `DataModule`, `MaskingCollate`, `MultimodalSequenceCollate` | `DATAMODULES` / `COLLATES` |
+| Модели | Преобразование Batch в ModelOutput | `BaseModel` | `MODELS` или Python |
+| Обучение | Функции потерь, метрики, оптимизаторы и планировщики | `BaseLoss`, `BaseMetric` и фабрики | `LOSSES`, `METRICS`, `OPTIMIZERS`, `SCHEDULERS` |
+| Колбэки | Жизненный цикл Trainer, состояние и артефакты | `BaseCallback` | `CALLBACKS` |
+| Журналирование | Вывод в консоль, файл и MLflow | `BaseLogger` и совместимые с журналированием объекты | `LOGGERS` |
+| Инференс | Шаги конвейера и XAI | `InferenceContext` | `INFERENCE_STEPS` |
 
-Типичный training flow: `Dataset → DataModule → DataLoader → collate → Batch → BaseModel → ModelOutput → loss/metrics → optimizer/scheduler`; callbacks и loggers наблюдают Trainer. Inference использует отдельный `InferenceContext`, а не `BuildContext`.
+Типичный поток обучения выглядит так: `Dataset → DataModule → DataLoader → collate → Batch → BaseModel → ModelOutput → loss/metrics → optimizer/scheduler`. Колбэки и журналировщики наблюдают за Trainer. Инференс использует отдельный `InferenceContext`, а не `BuildContext`.
 
-- [Core](core.md): `Batch`, `ModelOutput`, configuration и builders.
-- [Data](data.md): dataset responsibilities, DataModule и collates.
-- [Models](models.md): контракт модели и четыре fusion architectures.
-- [Training components](training.md): losses, metrics, optimizers и schedulers.
-- [Callbacks](callbacks/index.md): lifecycle и все зарегистрированные callbacks.
-- [Loggers](logging.md): console/file и MLflow.
+- [Ядро](core.md): `Batch`, `ModelOutput`, конфигурация и строители.
+- [Данные](data.md): ответственность датасета, DataModule и collate-функции.
+- [Модели](models.md): контракт модели и четыре архитектуры слияния.
+- [Компоненты обучения](training.md): функции потерь, метрики, оптимизаторы и планировщики.
+- [Колбэки](callbacks/index.md): жизненный цикл и все зарегистрированные колбэки.
+- [Журналирование](logging.md): вывод в консоль, файл и MLflow.
 
-Проверяйте живой registry командой `chimera-ml registry list`. Plugin keys появляются только после установки и discovery plugin.
+Проверяйте содержимое реестра командой `chimera-ml registry list`. Ключи плагина появляются только после его установки и обнаружения.

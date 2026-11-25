@@ -1,25 +1,25 @@
 # Колбэк контрольных точек
 
-`CheckpointCallback`, key `checkpoint_callback`, сохраняет Trainer state в `on_epoch_end`.
+`CheckpointCallback`, ключ `checkpoint_callback`, сохраняет состояние Trainer в `on_epoch_end`.
 
-| Parameter | Default | Назначение |
+| Параметр | Значение по умолчанию | Назначение |
 | --- | --- | --- |
-| `log_path` | `"logs"` | output root |
-| `experiment_name` | `"chimera"` | experiment directory |
-| `run_name` | `"train"` | run directory |
-| `monitor` | `"val/loss"` | exact epoch-log key |
+| `log_path` | `"logs"` | Корневой каталог результатов |
+| `experiment_name` | `"chimera"` | Каталог эксперимента |
+| `run_name` | `"train"` | Каталог запуска |
+| `monitor` | `"val/loss"` | Точный ключ журнала эпохи |
 | `mode` | `"min"` | `min` или `max` |
-| `save_top_k` | `1` | число monitored files; non-positive отключает pruning |
-| `save_last` | `True` | rolling `last.pt` |
-| `filename_template` | `epoch={epoch}_step={step}_{monitor}={value:.4f}.pt` | fields epoch/step/monitor/value |
+| `save_top_k` | `1` | Число файлов под наблюдением; неположительное значение отключает удаление старых файлов |
+| `save_last` | `True` | Обновляемый файл `last.pt` |
+| `filename_template` | `epoch={epoch}_step={step}_{monitor}={value:.4f}.pt` | Поля epoch/step/monitor/value |
 
-Файлы: `<log_path>/<experiment>/<run>/checkpoints`. Payload содержит `epoch`, `global_step`, `model_state_dict`, `optimizer_state_dict` и `scheduler_state_dict`, если scheduler есть. Missing monitor вызывает warning; callback не загружает и не resume checkpoint.
+Файлы сохраняются в `<log_path>/<experiment>/<run>/checkpoints`. Полезная нагрузка содержит `epoch`, `global_step`, `model_state_dict`, `optimizer_state_dict` и `scheduler_state_dict`, если задан планировщик. Отсутствующий monitor вызывает предупреждение; колбэк не загружает контрольные точки и не возобновляет обучение.
 
 ```yaml
 - name: checkpoint_callback
   params: {monitor: val/mae, mode: min, save_top_k: 2, save_last: true}
 ```
 
-CLI injects `experiment_name` и `run_name` из `experiment_info.params`, если callback настроен; это runtime values.
+CLI внедряет `experiment_name` и `run_name` из `experiment_info.params`, если колбэк настроен; это значения времени выполнения.
 
-Для загрузки используйте `torch.load`, `model.load_state_dict(payload["model_state_dict"])` и state optimizer/scheduler при resume.
+Для загрузки используйте `torch.load`, `model.load_state_dict(payload["model_state_dict"])`, а при возобновлении — состояния оптимизатора и планировщика.

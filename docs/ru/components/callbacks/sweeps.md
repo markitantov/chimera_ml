@@ -1,8 +1,8 @@
 # Колбэк цели перебора — `SweepTargetCallback`
 
-`SweepTargetCallback`, key `sweep_target_callback`, отслеживает лучший scalar для Optuna/grid sweep. Parameters: `monitor="val/loss"`, `mode="min"` или `"max"`. В `on_fit_start` reset-ит состояние, в `on_epoch_end` хранит `best_value`, `best_epoch`, `last_value`, `last_epoch`, `available_keys`. Training не останавливает и files не пишет.
+`SweepTargetCallback`, ключ `sweep_target_callback`, отслеживает лучшее скалярное значение для перебора Optuna или полного перебора. Параметры: `monitor="val/loss"`, `mode="min"` или `"max"`. В `on_fit_start` сбрасывает состояние, а в `on_epoch_end` сохраняет `best_value`, `best_epoch`, `last_value`, `last_epoch`, `available_keys`. Обучение не останавливает и файлы не записывает.
 
-Обычно sweep workflow добавляет callback автоматически; manual registration нужна только для собственного caller.
+Обычно сценарий перебора добавляет колбэк автоматически; ручная регистрация нужна только для собственного вызывающего кода.
 
 ```yaml
 - name: sweep_target_callback

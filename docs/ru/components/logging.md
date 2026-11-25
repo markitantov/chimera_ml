@@ -1,10 +1,10 @@
 # Журналирование
 
-В live `LOGGERS` registry находятся `console_file_logger` и `mlflow_logger`.
+В рабочем реестре `LOGGERS` зарегистрированы `console_file_logger` и `mlflow_logger`. Журналировщики записывают ход эксперимента, метрики и артефакты, чтобы результаты обучения можно было просмотреть и сопоставить между запусками.
 
 ## `console_file_logger`
 
-Required `log_path`; defaults: `name="chimera"`, `experiment_name="chimera"`, `run_name="train"`, `log_file="train.log"`, format `"%(asctime)s:%(levelname)s:%(message)s"`, console/file level `INFO`, `file_mode="a"`, `encoding="utf-8"`. Создаёт `<log_path>/<experiment>/<run>/<log_file>` и proxy standard logging methods.
+Обязателен `log_path`; значения по умолчанию: `name="chimera"`, `experiment_name="chimera"`, `run_name="train"`, `log_file="train.log"`, формат `"%(asctime)s:%(levelname)s:%(message)s"`, уровень для консоли и файла `INFO`, `file_mode="a"`, `encoding="utf-8"`. Компонент создаёт `<log_path>/<experiment>/<run>/<log_file>` и предоставляет методы стандартного журналирования.
 
 ```yaml
 logging:
@@ -14,7 +14,7 @@ logging:
 
 ## `mlflow_logger`
 
-Parameters: `tracking_uri=None`, `experiment_name="chimera"`, `run_name="train"`, `config_path=None`. Требует lazy dependency `mlflow`, создаёт run, logs params/metrics и supports file/text/bytes artifacts. CLI может inject config/experiment/run names.
+Параметры: `tracking_uri=None`, `experiment_name="chimera"`, `run_name="train"`, `config_path=None`. Требуется отложенная зависимость `mlflow`; компонент создаёт запуск, записывает параметры и метрики, а также поддерживает файловые, текстовые и байтовые артефакты. CLI может внедрить имена конфигурации, эксперимента и запуска.
 
 ```yaml
 logging:
@@ -25,4 +25,4 @@ logging:
       run_name: baseline
 ```
 
-Оба logger можно использовать вместе. Callbacks, загружающие artifacts, требуют MLflow-capable logger; workflow instructions остаются в [Training logging](../user-guide/logging.md).
+Оба журналировщика можно использовать вместе. Колбэки, загружающие артефакты, требуют журналировщик с поддержкой MLflow; инструкции по сценарию работы приведены в разделе [Журналирование обучения](../user-guide/logging.md).

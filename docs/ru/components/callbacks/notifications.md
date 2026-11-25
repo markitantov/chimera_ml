@@ -1,8 +1,8 @@
 # Колбэк уведомлений Telegram — `TelegramNotifierCallback`
 
-`TelegramNotifierCallback`, key `telegram_notifier_callback`, создаёт session в `on_fit_start`, отслеживает best monitor в `on_epoch_end` и отправляет сообщение в `on_fit_end`.
+`TelegramNotifierCallback`, ключ `telegram_notifier_callback`, создаёт сеанс в `on_fit_start`, отслеживает лучший результат по monitor в `on_epoch_end` и отправляет сообщение в `on_fit_end`.
 
-| Parameter | Default |
+| Параметр | Значение по умолчанию |
 | --- | --- |
 | `token_env_field` / `chat_id_env_field` | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` |
 | `message_prefix` / `message_suffix` | `✅ Training finished` / `""` |
@@ -12,7 +12,7 @@
 | `monitor` / `mode` / `min_delta` | `val/loss` / `min` / `0.0` |
 | `request_timeout_sec` / `telegram_parse_mode` | `15` / `HTML` |
 
-Требуются environment variables и dependency `requests`; HTTP failures логируются как warning. Никогда не записывайте tokens в YAML.
+Требуются переменные окружения и зависимость `requests`; ошибки HTTP записываются как предупреждения. Никогда не записывайте токены в YAML.
 
 ```bash
 export TELEGRAM_BOT_TOKEN='your-token'

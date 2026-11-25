@@ -1,6 +1,8 @@
-# Каталог callbacks
+# Каталог колбэков
 
-Training callback наследует `BaseCallback` или реализует те же hooks. Trainer вызывает их в порядке:
+Колбэки реагируют на события жизненного цикла обучения: запуск и завершение обучения, эпохи и пакеты. Они позволяют сохранять состояние, собирать результаты, останавливать обучение и отправлять уведомления, не смешивая эти действия с кодом Trainer.
+
+Колбэк обучения наследует `BaseCallback` или реализует те же хуки. Trainer вызывает их в следующем порядке:
 
 ```text
 on_fit_start
@@ -8,25 +10,24 @@ on_fit_start
 on_fit_end
 ```
 
-`on_batch_end` получает `global_step` и batch logs; `on_epoch_end` — split-prefixed aggregate logs. Callbacks строятся в порядке YAML list. Это lifecycle callbacks Trainer, а не inference `on_prediction(model, batch, output)`, который использует `xai_step`.
+`on_batch_end` получает `global_step` и журналы пакета; `on_epoch_end` — агрегированные журналы с префиксом раздела. Колбэки создаются в порядке списка YAML. Это колбэки жизненного цикла Trainer, а не инференсный `on_prediction(model, batch, output)`, который используется в `xai_step`.
 
-| Registry key | Hook | Назначение |
+| Ключ реестра | Хук | Назначение |
 | --- | --- | --- |
-| `checkpoint_callback` | `on_epoch_end` | last и monitored top-k checkpoints |
+| `checkpoint_callback` | `on_epoch_end` | Последняя и отобранные top-k контрольные точки |
 | `early_stopping_callback` | `on_epoch_end` | `trainer.stop_training` после отсутствия улучшения |
-| `snapshot_callback` | `on_fit_start` | source/config snapshot |
-| `collect_predictions_callback` | start/end | cached prediction CSV в MLflow |
-| `plot_confusion_matrix_callback` | start/end | classification confusion figures |
-| `sweep_target_callback` | start/end | best scalar sweep objective |
-| `telegram_notifier_callback` | start/end | final Telegram notification |
+| `snapshot_callback` | `on_fit_start` | Снимок исходного кода и конфигурации |
+| `collect_predictions_callback` | start/end | CSV кэшированных предсказаний в MLflow |
+| `plot_confusion_matrix_callback` | start/end | Графики матрицы ошибок классификации |
+| `sweep_target_callback` | start/end | Лучшее скалярное значение цели перебора |
+| `telegram_notifier_callback` | start/end | Итоговое уведомление Telegram |
 
-Проверяйте registry: `chimera-ml registry list --type callbacks`.
+Проверяйте реестр командой `chimera-ml registry list --type callbacks`.
 
 
-## Пример confusion matrix
+## Пример матрицы ошибок
 
-Callback предназначен только для classification. Он требует cache collection,
-MLflow logger и optional dependency matplotlib.
+Колбэк предназначен только для классификации. Он включает сбор кэша и требует журналировщика MLflow, а также необязательной зависимости `matplotlib`.
 
 ~~~yaml
 - name: plot_confusion_matrix_callback
@@ -38,5 +39,4 @@ MLflow logger и optional dependency matplotlib.
     title_template: "{split} Confusion Matrix (epoch {epoch})"
 ~~~
 
-В on_fit_start callback включает collection, а в on_epoch_end пишет figure для
-каждого выбранного split. Regression predictions он интерпретировать не может.
+В `on_fit_start` колбэк включает сбор результатов, а в `on_epoch_end` записывает график для каждого выбранного раздела. Он не умеет интерпретировать предсказания регрессии.

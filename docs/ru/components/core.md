@@ -2,7 +2,7 @@
 
 ## Публичные импорты
 
-Core экспортирует `Batch`, `ModelOutput`, `ExperimentConfig`, `load_yaml`, `Registry`, and the named registries. Data экспортирует `DataModule`, both collate classes/factories, and loader utilities; models экспортирует `BaseModel` and the four architecture classes/factories.
+Ядро экспортирует `Batch`, `ModelOutput`, `ExperimentConfig`, `load_yaml`, `Registry` и именованные реестры. Подсистема данных экспортирует `DataModule`, оба класса и фабрики collate-функций, а также утилиты загрузчиков; подсистема моделей экспортирует `BaseModel` и четыре класса и фабрики архитектур.
 
 ```python
 from chimera_ml.core import Batch, ModelOutput, MODELS, Registry
@@ -23,12 +23,12 @@ Batch(
 )
 ```
 
-- `inputs` связывает стабильные имена модальностей с tensors; batch dimension — axis 0, модальность может отсутствовать.
-- `targets` — task target или `None` для unlabeled test/inference.
-- `masks` — canonical flat mapping: `<modality>_mask` для presence, `<modality>_temporal_mask` для `[B,T]`, `sequence_mask` для shared padding.
-- `meta` хранит IDs, lengths и application metadata, но не заменяет canonical masks.
+- `inputs` связывает стабильные имена модальностей с тензорами; размерность пакета находится на оси 0, а модальность может отсутствовать.
+- `targets` — целевое значение задачи или `None` для теста и инференса без меток.
+- `masks` — каноническое плоское отображение: `<modality>_mask` для наличия, `<modality>_temporal_mask` для `[B,T]`, `sequence_mask` для общей маски дополнения.
+- `meta` хранит идентификаторы, длины и прикладные метаданные, но не заменяет канонические маски.
 
-`get_masks()` возвращает нормализованный mapping, а `get_masks("audio_mask")` — один mask. Для legacy compatibility читаются nested `Batch.masks["mask"]` и `meta["masks"]`; `{ "mask": {"audio": value} }` превращается в `audio_mask`. Модель сама определяет, какие модальности и маски поддерживает.
+`get_masks()` возвращает нормализованное отображение, а `get_masks("audio_mask")` — одну маску. Для обратной совместимости читаются вложенные `Batch.masks["mask"]` и `meta["masks"]`; `{ "mask": {"audio": value} }` превращается в `audio_mask`. Модель сама определяет, какие модальности и маски поддерживает.
 
 ```python
 # Unimodal labeled vector
@@ -46,16 +46,18 @@ Batch(
 Batch(inputs={"audio": torch.randn(1, 20, 80)}, targets=None)
 ```
 
-Zero-filled missing input не равен настоящему нулевому сигналу; различие задают presence/temporal masks.
+Заполненный нулями отсутствующий вход не равен настоящему нулевому сигналу; различие задают маски наличия и временные маски.
 
 ## `ModelOutput`
 
-`ModelOutput(preds: torch.Tensor, aux: dict[str, torch.Tensor] | None = None)` — публичный результат модели. `preds` — logits для classification, logits для multi-label BCE или regression values; точная форма принадлежит задаче и модели. `aux` содержит optional tensors: fused features, attention weights, validity masks и diagnostics.
+`ModelOutput` передаёт результат работы модели дальше в Trainer, функции потерь, метрики и шаги инференса. Поле `preds` содержит основное предсказание, а `aux` предназначено для дополнительных представлений и диагностики.
 
-Trainer вычисляет loss из `output.preds` и `batch.targets`, а `aux` автоматически не оптимизирует. XAI копирует только явно запрошенные batch-aligned `aux` keys. Имена `aux` architecture-specific.
+`ModelOutput(preds: torch.Tensor, aux: dict[str, torch.Tensor] | None = None)` — публичный результат модели. `preds` содержит логиты для классификации, логиты для multi-label BCE или значения регрессии; точная форма определяется задачей и моделью. `aux` содержит необязательные тензоры: объединённые признаки, веса внимания, маски валидности и диагностические данные.
+
+Trainer вычисляет функцию потерь по `output.preds` и `batch.targets`, а значения `aux` автоматически не участвуют в оптимизации. XAI копирует только явно запрошенные ключи `aux`, выровненные по образцам пакета. Имена `aux` зависят от архитектуры.
 
 ## Конфигурация и строители
 
-Training YAML использует mapping `{"name": "mse_loss", "params": {"reduction": "mean"}}`. `build_from_registry` приводит name к lowercase, проверяет mapping `params`, объединяет injected runtime dependencies и вызывает `factory(**kwargs)`. `build_optimizer` injects `model`, scheduler — `optimizer`, а optional `context` передаётся только factory, которая его принимает.
+YAML обучения использует отображение `{"name": "mse_loss", "params": {"reduction": "mean"}}`. `build_from_registry` приводит имя к нижнему регистру, проверяет отображение `params`, объединяет внедрённые зависимости времени выполнения и вызывает `factory(**kwargs)`. `build_optimizer` внедряет `model`, планировщик получает `optimizer`, а необязательный `context` передаётся только фабрике, которая его принимает.
 
-Публичные builders: `build_model`, `build_loss`, `build_metrics`, `build_datamodule`, `build_collate`, `build_optimizer`, `build_scheduler`, `build_callbacks`, `build_logger`. Параметры factory не обязательно совпадают с параметрами underlying PyTorch class.
+Публичные строители: `build_model`, `build_loss`, `build_metrics`, `build_datamodule`, `build_collate`, `build_optimizer`, `build_scheduler`, `build_callbacks`, `build_logger`. Параметры фабрики не обязательно совпадают с параметрами базового класса PyTorch.

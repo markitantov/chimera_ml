@@ -2,7 +2,9 @@
 
 ## Интерфейс Dataset
 
-Core не регистрирует concrete dataset: в built-in registry `DATAMODULES` пуст. Plugin dataset обычно является `torch.utils.data.Dataset`, возвращающим mapping с `inputs`, optional `targets`/`target`, `meta` и `masks`:
+`Dataset` отвечает за представление отдельных образцов задачи: он читает исходные данные, возвращает входы, целевые значения и метаданные. `DataModule` затем организует эти наборы данных и предоставляет загрузчики для этапов обучения, проверки и тестирования.
+
+Ядро не регистрирует конкретные датасеты: встроенный реестр `DATAMODULES` пуст. Датасет плагина обычно является `torch.utils.data.Dataset`, возвращающим отображение с `inputs`, необязательными `targets`/`target`, `meta` и `masks`:
 
 ```python
 {
@@ -12,11 +14,11 @@ Core не регистрирует concrete dataset: в built-in registry `DATAM
 }
 ```
 
-Dataset отвечает за file format, feature extraction, labels и IDs; collate — за batching, padding и canonical masks.
+Набор данных (`Dataset`) отвечает за чтение файлов, извлечение признаков, получение целевых значений и идентификаторов образцов. Функция формирования батчей (`Collate`) объединяет образцы, дополняет последовательности до необходимой длины и формирует канонические маски.
 
 ## `DataModule`
 
-`DataModule` принимает `train_dataset`, `val_dataset`, `test_dataset` как один Dataset, mapping named datasets, sequence datasets или `None`. Defaults: `batch_size=32`, `num_workers=0`, `pin_memory=True`, `persistent_workers=False`, `shuffle_train=True`, `drop_last_train=False`, `collate_fn=MaskingCollate()`.
+`DataModule` принимает `train_dataset`, `val_dataset`, `test_dataset` как один Dataset, отображение именованных датасетов, последовательность датасетов или `None`. Значения по умолчанию: `batch_size=32`, `num_workers=0`, `pin_memory=True`, `persistent_workers=False`, `shuffle_train=True`, `drop_last_train=False`, `collate_fn=MaskingCollate()`.
 
 ```python
 from chimera_ml.data import DataModule, multimodal_sequence_collate
@@ -33,18 +35,18 @@ train_loader = module.train_dataloader()
 val_loaders = module.val_dataloader()  # mapping сохраняется
 ```
 
-`train_dataloader`, `val_dataloader`, `test_dataloader` сохраняют форму container: DataLoader, mapping, sequence или `None`. Train-only options — shuffle/drop-last. Plugin DataModule factory должна принимать `collate_fn`, если используется top-level `collate`; одновременная настройка `collate` и `data.params.collate_fn` запрещена.
+`train_dataloader`, `val_dataloader`, `test_dataloader` сохраняют форму контейнера: DataLoader, отображение, последовательность или `None`. Параметры только для обучения — shuffle и drop-last. Фабрика DataModule плагина должна принимать `collate_fn`, если используется верхнеуровневый `collate`; одновременная настройка `collate` и `data.params.collate_fn` запрещена.
 
 ## Зарегистрированные collate-функции
 
-| Key | Когда выбирать | Padding и masks |
+| Ключ | Когда выбирать | Дополнение и маски |
 | --- | --- | --- |
-| `masking_collate` | General/legacy samples и shared sequence | Общая максимальная длина, `sequence_mask` и `<modality>_mask`. |
-| `multimodal_sequence_collate` | Независимые timelines модальностей | Отдельный padding, `<modality>_mask` и `<modality>_temporal_mask`. |
+| `masking_collate` | Обычные или устаревшие образцы и общая последовательность | Общая максимальная длина, `sequence_mask` и `<modality>_mask`. |
+| `multimodal_sequence_collate` | Независимые временные шкалы модальностей | Отдельное дополнение, `<modality>_mask` и `<modality>_temporal_mask`. |
 
 ### `masking_collate`
 
-Parameters: `pad_sequences=True`, `include_legacy_meta_masks=False`, `pad_value=0.0`. Non-empty samples должны иметь совместимые rank и feature dimensions. При padding `[T,D]` → `[B,T_max,D]`; при `False` формы должны совпадать. Missing rows заполняются `pad_value`, presence — float32 `[B]`, `sequence_mask` — bool `[B,T_max]`. Targets принимают `target` или `targets`; если все отсутствуют, `Batch.targets=None`. Empty batch и несовместимые tensors дают `ValueError`.
+Параметры: `pad_sequences=True`, `include_legacy_meta_masks=False`, `pad_value=0.0`. Непустые образцы должны иметь совместимые число измерений и размеры признаков. При дополнении `[T,D]` → `[B,T_max,D]`; при `False` формы должны совпадать. Отсутствующие строки заполняются `pad_value`, маска наличия имеет тип float32 и форму `[B]`, `sequence_mask` — тип bool и форму `[B,T_max]`. Целевые значения принимаются из `target` или `targets`; если все отсутствуют, `Batch.targets=None`. Пустой пакет и несовместимые тензоры приводят к `ValueError`.
 
 ```python
 collate = masking_collate(pad_sequences=True, pad_value=-1.0)
@@ -57,7 +59,7 @@ batch = collate([
 
 ### `multimodal_sequence_collate`
 
-Parameters те же. Rank-one `[D]` → `[B,D]` и temporal mask `[B,1]`; rank-two `[T,D]` → independent `[B,T_max,D]`. Missing row zero-filled; `<modality>_mask` — float32 `[B]`, `<modality>_temporal_mask` — bool `[B,T_max]`. Explicit temporal masks принимаются из sample `meta["<modality>_temporal_mask"]`, `meta["masks"]` или sample-level `masks`; длина должна совпадать. Ranks кроме 1/2, incompatible widths, invalid masks, empty batches и variable lengths with `pad_sequences=False` дают `ValueError`.
+Параметры те же. Тензор размерности 1 `[D]` преобразуется в `[B,D]` и временную маску `[B,1]`; тензор размерности 2 `[T,D]` — в независимую форму `[B,T_max,D]`. Отсутствующая строка заполняется нулями; `<modality>_mask` имеет тип float32 и форму `[B]`, `<modality>_temporal_mask` — тип bool и форму `[B,T_max]`. Явные временные маски принимаются из `meta["<modality>_temporal_mask"]`, `meta["masks"]` или масок уровня образца `masks`; длина должна совпадать. Размерности, отличные от 1 и 2, несовместимые ширины, недействительные маски, пустые пакеты и переменная длина при `pad_sequences=False` приводят к `ValueError`.
 
 ```python
 collate = multimodal_sequence_collate()
@@ -69,4 +71,4 @@ batch = collate([
 # video [2,3,6], video_mask [1,0], video_temporal_mask [2,3]
 ```
 
-Collates не выравнивают timelines audio/video. Dataset должен заранее привести frame streams к общей шкале для архитектур вроде RAAV.
+Collate-функции не выравнивают временные шкалы аудио и видео. Dataset должен заранее привести кадровые потоки к общей шкале для архитектур вроде RAAV.

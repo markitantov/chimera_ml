@@ -1,24 +1,23 @@
 # Компоненты обучения
 
-Это встроенные зарегистрированные фабрики, используемые Trainer. Конфигурация
-выбирает одну функцию потерь и совместимые метрики; блоки YAML ниже являются отдельными
-альтернативами, а не одним объединённым конфигом.
+Это встроенные зарегистрированные фабрики, используемые Trainer. Конфигурация выбирает одну функцию потерь и совместимые с ней метрики; блоки YAML ниже являются отдельными альтернативами, а не одним объединённым конфигом.
 
 ## Функции потерь
 
-Функция потерь реализует BaseLoss.__call__(output, batch) и возвращает differentiable
-tensor. Формы predictions и targets должны совпадать.
+Функция потерь измеряет ошибку между предсказанием модели и целевым значением. Во время обучения она предоставляет дифференцируемую целевую функцию, по которой Trainer вычисляет градиенты и обновляет параметры модели.
 
-| Key | Задача и defaults |
+Функция потерь реализует метод `BaseLoss.__call__(output, batch)` и возвращает дифференцируемый тензор. Формы предсказаний и целевых значений должны соответствовать требованиям выбранной функции потерь.
+
+| Ключ | Задача и значения по умолчанию |
 | --- | --- |
-| mse_loss | Regression; reduction=mean, также sum/none |
-| mae_loss | Regression; reduction=mean, также sum/none |
-| ccc_loss | Regression; eps=1e-12; flatten по output features |
-| cross_entropy_loss | Class-index classification; label_smoothing=0.0 |
-| focal_loss | Multiclass classification; gamma=2.0, alpha=None, reduction=mean, label_smoothing=0.0 |
-| bce_with_logits_loss | Multi-label/multi-hot; pos_weight=None, reduction=mean |
+| mse_loss | Регрессия; reduction=mean, а также sum/none |
+| mae_loss | Регрессия; reduction=mean, а также sum/none |
+| ccc_loss | Регрессия; eps=1e-12; разворачивание по признакам результата |
+| cross_entropy_loss | Классификация по индексам классов; label_smoothing=0.0 |
+| focal_loss | Многоклассовая классификация; gamma=2.0, alpha=None, reduction=mean, label_smoothing=0.0 |
+| bce_with_logits_loss | Мультиметочная или multi-hot классификация; pos_weight=None, reduction=mean |
 
-Отдельные альтернативы для regression:
+Отдельные варианты для регрессии:
 
 ~~~yaml
 loss:
@@ -41,7 +40,7 @@ loss:
     eps: 0.000000000001
 ~~~
 
-Для class-index classification:
+Для классификации по индексам классов:
 
 ~~~yaml
 loss:
@@ -60,7 +59,7 @@ loss:
     label_smoothing: 0.0
 ~~~
 
-Для multi-label/multi-hot targets:
+Для мультиметочных и multi-hot целевых значений:
 
 ~~~yaml
 loss:
@@ -70,16 +69,16 @@ loss:
     reduction: mean
 ~~~
 
-Model должен возвращать logits; эти losses сами не добавляют softmax или
-sigmoid.
+Модель должна возвращать логиты; эти функции потерь сами не добавляют softmax или sigmoid.
 
 ## Метрики
 
-Trainer вызывает reset, update для labeled batches и compute в конце split/epoch.
-Regression metrics требуют matching floating shapes; PRF/confusion используют
-class-index targets и argmax по последней оси logits.
+Метрики — это показатели качества, которые описывают работу модели на предсказаниях и целевых значениях. Они накапливают статистику по пакетам и помогают оценивать обучение, но сами по себе не обновляют параметры модели.
 
-Regression:
+Trainer вызывает reset, обновляет состояние на размеченных пакетах и вызывает compute в конце раздела или эпохи.
+Метрики регрессии требуют совпадающих форм вещественных значений; PRF и матрица ошибок используют целевые значения с индексами классов и argmax по последней оси логитов.
+
+Регрессия:
 
 ~~~yaml
 metrics:
@@ -93,12 +92,12 @@ metrics:
     params: {multioutput: variance_weighted}
 ~~~
 
-| Key | Parameters/defaults |
+| Ключ | Параметры и значения по умолчанию |
 | --- | --- |
 | mae_metric, mse_metric, rmse_metric | multioutput=uniform_average или raw_values |
 | r2_metric | также variance_weighted |
 
-Classification:
+Классификация:
 
 ~~~yaml
 metrics:
@@ -116,16 +115,15 @@ metrics:
     params: {normalize: "true"}
 ~~~
 
-PRF keys возвращают precision/recall/f1 соответствующего average.
-confusion_matrix_metric возвращает cm_acc и matrix через value(); normalize
-может быть None, true, pred или all. Не объединяйте MAE и classification PRF
-в generic task без явной поддержки обоих target types.
+Ключи PRF возвращают `precision`, `recall` и `f1` для соответствующего способа усреднения. `confusion_matrix_metric` возвращает `cm_acc` и матрицу через `value()`; параметр `normalize` может иметь значение None, true, pred или all. Не объединяйте MAE и PRF классификации в общей задаче без явной поддержки обоих типов целевых значений.
 
 ## Оптимизаторы
 
+Оптимизатор получает градиенты функции потерь и обновляет параметры модели. Его параметры определяют правило и величину шага оптимизации, включая скорость обучения и регуляризацию.
+
 Фабрика получает модель через внедрение зависимости. Встроенная фабрика фреймворка:
 
-| Key | PyTorch constructor | Defaults |
+| Ключ | Конструктор PyTorch | Значения по умолчанию |
 | --- | --- | --- |
 | adamw_optimizer | AdamW | lr=1e-3, weight_decay=0.0 |
 | adam_optimizer | Adam | lr=1e-3, weight_decay=0.0 |
@@ -151,14 +149,15 @@ optimizer:
 
 ## Планировщики
 
-Фабрика планировщика получает оптимизатор через внедрение зависимости; остальные params передаются в PyTorch
-constructor.
+Планировщик изменяет скорость обучения или другие параметры оптимизатора по мере продвижения обучения. Он помогает управлять размером шага по эпохам или по значению отслеживаемой метрики.
 
-| Key | Constructor | Required parameters | Defaults |
+Фабрика планировщика получает оптимизатор через внедрение зависимости; остальные параметры передаются конструктору PyTorch.
+
+| Ключ | Конструктор | Обязательные параметры | Значения по умолчанию |
 | --- | --- | --- | --- |
 | steplr_scheduler | StepLR | step_size | gamma=0.1 |
 | cosineannealinglr_scheduler | CosineAnnealingLR | T_max | eta_min=0.0 |
-| reduceonplateau_scheduler | ReduceLROnPlateau | none | mode=min, factor=0.1, patience=10 |
+| reduceonplateau_scheduler | ReduceLROnPlateau | нет | mode=min, factor=0.1, patience=10 |
 
 ~~~yaml
 scheduler:
@@ -178,5 +177,4 @@ scheduler:
   params: {mode: min, factor: 0.1, patience: 10}
 ~~~
 
-use_scheduler, scheduler_step_per_epoch и scheduler_monitor относятся к
-Trainer, а не к scheduler constructor.
+`use_scheduler`, `scheduler_step_per_epoch` и `scheduler_monitor` относятся к Trainer, а не к конструктору планировщика.

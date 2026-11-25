@@ -1,20 +1,20 @@
-# Сравнение fusion architectures
+# Сравнение архитектур слияния
 
-Это четыре built-in registered models. Их `aux` — architecture diagnostics, а не XAI influence measurements.
+Это четыре встроенные зарегистрированные модели. Их `aux` содержит диагностические данные архитектуры, а не измерения влияния XAI.
 
-| Architecture | Required inputs | Temporal behavior | Missing data | Основные `aux` |
+| Архитектура | Обязательные входы | Работа со временем | Отсутствующие данные | Основные `aux` |
 | --- | --- | --- | --- | --- |
-| TFS | Минимум два configured tensors | `[B,D]`/`[B,T,D]`, pooled в sample output | Missing tensors пропускаются; fully masked pairs zero | Pair values/validity, `pair_weights`, `group_weights`, `fused` |
-| TFS-DCMMOE | Как TFS | Та же hierarchy и shapes | Masked pair experts получают zero adaptive weight | TFS diagnostics и learned weights |
-| RAAV | Non-empty `frame_modalities`, отдельный context | Frame streams имеют общий `T`; context `T` может отличаться; output per frame | Missing frame skip, missing context даёт zero context contribution | frame/context weights, masks, attention, refined |
-| TOMAR | Anchor valid для каждого sample | Temporal inputs pooled; sample output | Missing non-anchor не даёт residual; missing anchor error | `anchor`, `rho_<modality>`, `delta_<modality>`, `fused` |
+| TFS | Минимум два настроенных тензора | `[B,D]`/`[B,T,D]`, агрегация в результат образца | Отсутствующие тензоры пропускаются; полностью замаскированные пары дают нули | Значения и валидность пар, `pair_weights`, `group_weights`, `fused` |
+| TFS-DCMMOE | Как у TFS | Та же иерархия и формы | Эксперты замаскированных пар получают нулевой адаптивный вес | Диагностика TFS и обученные веса |
+| RAAV | Непустой `frame_modalities`, отдельный контекст | Кадровые потоки имеют общий `T`; `T` контекста может отличаться; результат для каждого кадра | Отсутствующий кадр пропускается, отсутствие контекста даёт нулевой вклад контекста | Веса кадров и контекста, маски, внимание, уточнённое представление |
+| TOMAR | Anchor валиден для каждого образца | Временные входы агрегируются; результат для образца | Отсутствующая не-опорная модальность не даёт остаточной поправки; отсутствие anchor — ошибка | `anchor`, `rho_<modality>`, `delta_<modality>`, `fused` |
 
-TFS использует directed pair hierarchy: для трёх names/default groups — шесть Transformer cross-attention blocks, reciprocal second level, masked mean/std и dense/batchnorm/tanh. TFS-DCMMOE добавляет input-dependent gate; `groups` — optional nested list directed pairs, invalid/repeated/empty groups дают `ValueError`.
+В TFS используется иерархия направленных пар: для трёх имён и групп по умолчанию — шесть блоков перекрёстного внимания Transformer, взаимный второй уровень, маскированные среднее и стандартное отклонение, а также dense/batchnorm/tanh. TFS-DCMMOE добавляет шлюз, зависящий от входа; `groups` — необязательный вложенный список направленных пар, а недействительные, повторяющиеся и пустые группы приводят к `ValueError`.
 
-TFS и DCMMOE имеют `input_dims`, `shared_dim`, `output_dim`, optional `groups`; DCMMOE также `gate_hidden=64`. Они возвращают `[B, output_dim]`; если доступно меньше двух configured tensors — error, при fully masked positions `fused` и weights zero, но head всё ещё возвращает tensor.
+У TFS и DCMMOE есть `input_dims`, `shared_dim`, `output_dim` и необязательный `groups`; у DCMMOE также есть `gate_hidden=64`. Они возвращают `[B, output_dim]`; если доступно меньше двух настроенных тензоров — ошибку; при полностью замаскированных позициях `fused` и веса равны нулю, но голова всё равно возвращает тензор.
 
-RAAV применяет frame gates, `num_latents=4` context bottleneck, frame-to-context attention и optional `temporal`. Параметры: `input_dims`, `shared_dim`, `output_dim`, `frame_modalities`, `context_modality`, `num_latents=4`, `gate_hidden=64`, `temporal=None`; temporal должен сохранять `[B,T,shared_dim]`.
+RAAV применяет шлюзы кадров, контекстное узкое место `num_latents=4`, внимание от кадров к контексту и необязательный `temporal`. Параметры: `input_dims`, `shared_dim`, `output_dim`, `frame_modalities`, `context_modality`, `num_latents=4`, `gate_hidden=64`, `temporal=None`; модуль `temporal` должен сохранять форму `[B,T,shared_dim]`.
 
-TOMAR усредняет required anchor, строит gated residual для каждой другой modality, нормализует сумму и возвращает `[B, output_dim]`. Параметры: `input_dims`, `shared_dim`, `anchor_modality`, `output_dim`, `gate_hidden=64`; anchor должен быть present и valid для каждого sample.
+Модель TOMAR усредняет обязательный anchor, строит остаточную поправку со шлюзом для каждой другой модальности, нормализует сумму и возвращает `[B, output_dim]`. Параметры: `input_dims`, `shared_dim`, `anchor_modality`, `output_dim`, `gate_hidden=64`; опорная модальность anchor должна присутствовать и быть валидной для каждого образца.
 
-Точные Python/YAML примеры находятся на индивидуальных architecture pages; не создавайте общий fictitious fusion config.
+Точные примеры Python и YAML находятся на отдельных страницах архитектур; не создавайте общий вымышленный конфиг слияния.

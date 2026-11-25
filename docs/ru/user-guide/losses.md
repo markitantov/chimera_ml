@@ -1,11 +1,8 @@
 # Функции потерь
 
-Полный registry losses и таблица параметров находятся в [Training components](../components/training.md).
+Полный реестр функций потерь и таблица параметров находятся в разделе [компонентов обучения](../components/training.md).
 
-Loss реализует BaseLoss.__call__(output, batch) и возвращает scalar tensor.
-Built-in keys: mse_loss/mae_loss для regression, cross_entropy_loss/focal_loss
-для class-index classification, bce_with_logits_loss для multi-label targets и
-ccc_loss для regression agreement.
+Функция потерь реализует метод `BaseLoss.__call__(output, batch)` и возвращает скалярный тензор. Встроенные ключи: `mse_loss` и `mae_loss` для регрессии, `cross_entropy_loss` и `focal_loss` для классификации по индексам классов, `bce_with_logits_loss` для мультиметочных целевых значений и `ccc_loss` для согласующей регрессии.
 
 ~~~yaml
 loss:
@@ -15,16 +12,12 @@ loss:
     reduction: mean
 ~~~
 
-cross_entropy_loss принимает label_smoothing. focal_loss — gamma, scalar или
-per-class alpha, reduction и label_smoothing. Regression losses принимают
-reduction; ccc_loss — eps и flatten-ит output до batch-by-feature columns.
-Shapes targets должны соответствовать выбранному loss.
+`cross_entropy_loss` принимает `label_smoothing`. `focal_loss` — `gamma`, скалярный или поклассовый `alpha`, `reduction` и `label_smoothing`. Функции потерь регрессии принимают `reduction`; `ccc_loss` — `eps` и разворачивает результат в столбцы формата «пакет × признаки». Формы целевых значений должны соответствовать выбранной функции потерь.
 
 
-## Примеры всех встроенных loss
+## Примеры всех встроенных функций потерь
 
-Используйте один согласованный тип targets; regression и class-index
-classification не следует смешивать без поддержки plugin.
+Используйте один согласованный тип целевых значений; регрессию и классификацию по индексам классов не следует смешивать без поддержки плагина.
 
     loss: {name: mse_loss, params: {reduction: mean}}
     loss: {name: mae_loss, params: {reduction: mean}}
@@ -33,7 +26,4 @@ classification не следует смешивать без поддержки 
     loss: {name: focal_loss, params: {gamma: 2.0, alpha: 0.25, reduction: mean, label_smoothing: 0.0}}
     loss: {name: bce_with_logits_loss, params: {reduction: mean}}
 
-MSE, MAE и CCC используют floating predictions/targets; cross entropy и focal
-используют class-index targets и logits; BCE-with-logits — multi-label или
-multi-hot targets. Ключи: mse_loss, mae_loss, ccc_loss, cross_entropy_loss,
-focal_loss и bce_with_logits_loss.
+MSE, MAE и CCC используют вещественные предсказания и целевые значения; cross entropy и focal используют целевые значения с индексами классов и логиты; BCE-with-logits — мультиметочные или multi-hot целевые значения. Ключи: `mse_loss`, `mae_loss`, `ccc_loss`, `cross_entropy_loss`, `focal_loss` и `bce_with_logits_loss`.

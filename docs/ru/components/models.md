@@ -2,7 +2,9 @@
 
 ## Интерфейс модели
 
-`BaseModel` — abstract `torch.nn.Module` с `forward(batch: Batch) -> ModelOutput`. Модель описывает допустимые modality names и widths, читает `Batch.inputs` и masks и возвращает task predictions в `ModelOutput.preds`. При missing required modality или incompatible width должна выдавать понятный `ValueError`.
+Модель преобразует входы `Batch` в предсказания `ModelOutput`. Она отвечает за вычисление представления и результата задачи, но получает данные и маски через установленный контракт пакета.
+
+`BaseModel` — абстрактный `torch.nn.Module` с методом `forward(batch: Batch) -> ModelOutput`. Модель описывает допустимые имена и ширины модальностей, читает `Batch.inputs` и маски и возвращает предсказания задачи в `ModelOutput.preds`. При отсутствии обязательной модальности или несовместимой ширине она должна выдавать понятный `ValueError`.
 
 ```python
 import torch
@@ -29,17 +31,17 @@ model:
   params: {input_dim: 16, output_dim: 2}
 ```
 
-Trainer переключает `train()`/`eval()`, а prediction step должен сам установить совместимую модель в `eval()`.
+Trainer переключает режимы `train()` и `eval()`, а шаг предсказания должен сам перевести совместимую модель в режим `eval()`.
 
 ## Встроенные архитектуры
 
-| Key | Class | Principle | Output |
+| Ключ | Класс | Принцип работы | Результат |
 | --- | --- | --- | --- |
-| `tfs_fusion_model` | `TFSFusionModel` | Directed pairwise hierarchy и masked statistics | `[B, output_dim]` |
-| `tfs_dcmmmoe_fusion_model` | `TFSDCMMOEFusionModel` | TFS плюс learned masked pair gates | `[B, output_dim]` |
-| `raav_fusion_model` | `RAAVFusionModel` | Aligned frame fusion и context latents | `[B,T,output_dim]` |
-| `tomar_fusion_model` | `TOMARFusionModel` | Required anchor и gated residuals | `[B, output_dim]` |
+| `tfs_fusion_model` | `TFSFusionModel` | Иерархия направленных пар и статистики с учётом масок | `[B, output_dim]` |
+| `tfs_dcmmmoe_fusion_model` | `TFSDCMMOEFusionModel` | TFS и обучаемые шлюзы пар с учётом масок | `[B, output_dim]` |
+| `raav_fusion_model` | `RAAVFusionModel` | Слияние выровненных кадров и латентные векторы контекста | `[B,T,output_dim]` |
+| `tomar_fusion_model` | `TOMARFusionModel` | Обязательная опорная модальность и остаточные поправки со шлюзами | `[B, output_dim]` |
 
-Все принимают feature tensors `[B,D]` или `[B,T,D]` и проецируют widths в `shared_dim`. TFS variants требуют минимум два доступных modality tensors; RAAV — хотя бы одну frame modality и одинаковый `T` среди frame streams; TOMAR требует anchor для каждого sample.
+Все модели принимают тензоры признаков `[B,D]` или `[B,T,D]` и проецируют ширины признаков в `shared_dim`. Варианты TFS требуют как минимум два доступных тензора модальностей; RAAV — хотя бы одну кадровую модальность и одинаковый `T` у кадровых потоков; TOMAR требует опорную модальность (`anchor`) для каждого образца.
 
 См. [сравнение fusion](fusion.md) и страницы [TFS](../user-guide/tfs-fusion.md), [TFS-DCMMOE](../user-guide/tfs-dcmmmoe-fusion.md), [RAAV](../user-guide/raav-fusion.md), [TOMAR](../user-guide/tomar-fusion.md).
