@@ -1,11 +1,15 @@
 # Распознавание аффективных состояний
 
-## Задача и подготовка
+## Задача и проект
 
-Plugin распознаёт семь emotions и три sentiments по audio, video и text. Ключ
-модели — lefsa_model; его prediction tensor содержит сначала emotion logits,
-затем sentiment logits. Inference применяет softmax отдельно и создаёт
-predictions artifact, описанный ниже.
+
+
+Плагин распознаёт семь эмоций и три тональных класса по аудио-, видео- и текстовым данным. Ключ
+модели — `lefsa_model`; её тензор предсказаний содержит сначала логиты эмоций,
+затем логиты тональности. Инференс отдельно применяет softmax и создаёт
+описанный ниже артефакт `predictions`.
+
+## Установка и подготовка данных
 
 ~~~bash
 python -m pip install -e .
@@ -16,12 +20,14 @@ chimera-ml registry list --type inference_steps
 chimera-ml validate-config --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
 ~~~
 
-Training требует подготовленных CMU-MOSEI, MELD или RAMAS, label CSV, VAD
-pickle, transcript/ASR columns и feature cache. Пути shipped YAML являются
-placeholders: замените features_root, corpus roots, label/VAD paths и подготовьте
-совместимые features. Mapping признаков: a wav2vec2, v emoaffectnet,
-t jinaai. Окна имеют максимум 3 s, shift 2 s, minimum 2 s; video — 10 fps,
-text max length 48. Проект не скачивает и не подготавливает datasets.
+Для обучения нужны подготовленные CMU-MOSEI, MELD или RAMAS, CSV с разметкой,
+pickle-файл VAD, столбцы транскрипции/ASR и кэш признаков. Пути в поставляемом
+YAML являются заполнителями: замените `features_root`, корневые пути корпусов и
+пути к разметке/VAD, а также подготовьте совместимые признаки. Отображение
+признаков: `a` — wav2vec2, `v` — emoaffectnet, `t` — jinaai. Максимальная
+длина окна — 3 s, шаг — 2 s, минимальная длина — 2 s; видео обрабатывается с
+частотой 10 fps, максимальная длина текста — 48. Проект не скачивает и не
+подготавливает наборы данных.
 
 ~~~bash
 chimera-ml train --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
@@ -30,7 +36,7 @@ chimera-ml eval --config-path examples/affective_states_recognition/configs/mult
 
 ## DAG инференса
 
-Shipped inference.yaml использует parallel DAG и следующие зависимости:
+Поставляемый `inference.yaml` использует параллельный DAG со следующими зависимостями:
 
 ~~~text
 extract_audio_step
@@ -42,22 +48,24 @@ extract_audio_step
                                            -> print_json_predictions_step
 ~~~
 
-В конфигурации face detection ждёт resolve_checkpoints_step и
-transcribe_segments_step; feature extraction ждёт face detection; fusion ждёт
-features; writer ждёт fusion; print ждёт writer. Реальные этапы: audio decode,
-Silero VAD, построение segments, Whisper transcription, YOLO face detection,
-audio/video/text feature extraction, checkpoint-backed fusion и JSON output.
+В конфигурации обнаружение лиц зависит от `resolve_checkpoints_step` и
+`transcribe_segments_step`; извлечение признаков зависит от обнаружения лиц;
+слияние — от признаков; средство записи — от слияния; печать — от средства
+записи. Фактические этапы: декодирование аудио, Silero VAD, построение
+сегментов, транскрибация Whisper, обнаружение лиц YOLO, извлечение аудио-,
+видео- и текстовых признаков, слияние с использованием контрольной точки и
+вывод JSON.
 
 ~~~bash
 chimera-ml inference   --input examples/affective_states_recognition/samples/01_neutral_neutral_cmumosei.mp4   --output prediction.json   --config-path examples/affective_states_recognition/configs/inference.yaml   --work-dir runs/affective
 ~~~
 
-emoaffectnet и lefsa кэшируются в model_cache; Whisper и YOLO требуют
-external weights. CPU поддерживается, но может быть медленным.
+`emoaffectnet` и `lefsa` кэшируются в `model_cache`; Whisper и YOLO требуют
+внешние веса. CPU поддерживается, но выполнение может быть медленным.
 
 ## Артефакт предсказаний
 
-Fusion записывает в InferenceContext.predictions объект:
+Слияние записывает в `InferenceContext.predictions` следующий объект:
 
 ~~~json
 {
@@ -92,34 +100,36 @@ Fusion записывает в InferenceContext.predictions объект:
 }
 ~~~
 
-Каждый segment содержит timing, duration, speech duration, weight для
-aggregation, transcription, flags availability modalities, number of windows и
-segment-level emotion/sentiment. Реализация строит weight как
-max(speech_duration, segment duration) в seconds; поскольку speech
-intersection ограничен segment, обычно это duration segment. Feature extraction
-усредняет audio/video windows внутри segment и использует zero feature tensor,
-если modality отсутствует. Финальные probabilities — weighted average
-segment probabilities; это softmax probabilities, не calibrated confidence.
+Каждый сегмент содержит временные границы, длительность, длительность речи,
+вес для агрегации, транскрипцию, флаги наличия модальностей, число окон и
+эмоцию/тональность на уровне сегмента. Реализация вычисляет `weight` как
+максимум `speech_duration` и длительности сегмента в секундах; поскольку
+пересечение речи ограничено сегментом, обычно это длительность сегмента.
+Извлечение признаков усредняет аудио- и видеоокна внутри сегмента и использует
+нулевой тензор признаков, если модальность отсутствует. Итоговые вероятности —
+взвешенное среднее вероятностей сегментов; это вероятности softmax, а не
+калиброванная уверенность.
 
-JSON writer добавляет outer envelope:
+Средство записи JSON добавляет внешнюю оболочку:
 
 ~~~json
 {"input": "path/to/input.mp4", "predictions": {"emotion": null, "sentiment": null, "text": "", "segments": [], "status": "no_predictions"}}
 ~~~
 
-При отсутствии features predictions artifact равен:
+При отсутствии признаков артефакт `predictions` имеет вид:
 
 ~~~json
 {"emotion": null, "sentiment": null, "text": "", "segments": [], "status": "no_predictions"}
 ~~~
 
-Следовательно, num_windows находится внутри каждого segment, а не в top-level
-predictions. Training output и inference output — разные workflows.
+Следовательно, `num_windows` находится внутри каждого сегмента, а не на
+верхнем уровне `predictions`. Результат обучения и результат инференса относятся
+к разным сценариям работы.
 
 ## XAI и ограничения
 
-FusionStep сам выполняет model call и не предоставляет on_prediction,
-необходимый xai_step. Поэтому XAI для этого example не включён. Для отдельного
-совместимого шага используйте общие руководства XAI и custom inference steps.
-Внешние data, model weights, media decoding, network и writable cache остаются
-обязательными prerequisites.
+`FusionStep` сам вызывает модель и не предоставляет `on_prediction`, необходимый
+для `xai_step`. Поэтому XAI для этого примера не включён. Для отдельного
+совместимого шага используйте общее руководство по XAI и пользовательские шаги
+инференса. Внешние данные и веса модели, декодирование медиа, сетевой доступ и
+доступный для записи кэш остаются обязательными предварительными условиями.

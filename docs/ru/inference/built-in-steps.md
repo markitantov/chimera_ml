@@ -6,18 +6,18 @@
 chimera-ml registry list --type inference_steps
 ```
 
-Core регистрирует четыре шага. Прикладные extraction, feature, fusion и prediction steps — компоненты плагина, их ключи нельзя выдумывать по имени класса.
+Ядро регистрирует четыре шага. Прикладные шаги извлечения, подготовки признаков, слияния и предсказания принадлежат плагину; их ключи нельзя угадывать по имени класса.
 
 ## `resolve_checkpoints_step`
 
 Параметры:
 
-| Параметр | Default | Поведение |
+| Параметр | Значение по умолчанию | Поведение |
 | --- | --- | --- |
-| `checkpoints` | обязателен | Mapping logical name → local path или URL HTTP(S). |
-| `cache_dir` | `checkpoints` | Относительный путь считается от `ctx.work_dir`; абсолютный используется как есть. |
-| `force_download` | `false` | Повторно скачать существующий remote cache. |
-| `chunk_size` | `8192` | Размер HTTP streaming chunk в байтах. |
+| `checkpoints` | обязателен | Отображение логического имени в локальный путь или URL HTTP(S). |
+| `cache_dir` | `checkpoints` | Относительный путь вычисляется от `ctx.work_dir`; абсолютный используется как есть. |
+| `force_download` | `false` | Повторно скачать файл, уже находящийся в удалённом кэше. |
+| `chunk_size` | `8192` | Размер фрагмента потоковой передачи HTTP в байтах. |
 
 ```yaml
 - name: resolve_checkpoints_step
@@ -27,16 +27,16 @@ Core регистрирует четыре шага. Прикладные extrac
       fusion: https://example.org/models/fusion.pt
 ```
 
-Локальный путь должен существовать и быть файлом. Remote download разрешает только HTTP(S), пишет сначала во временный `.part` файл и удаляет его при ошибке; timeout запроса — 30 секунд. Шаг публикует абсолютные пути в `artifacts["checkpoints"]` и каталог в `artifacts["cache_dir"]`. Он не загружает веса в модель.
+Локальный путь должен существовать и указывать на файл. Удалённое скачивание разрешено только по HTTP(S): сначала данные записываются во временный файл `.part`, который удаляется при ошибке; тайм-аут запроса составляет 30 секунд. Шаг публикует абсолютные пути в `artifacts["checkpoints"]` и каталог в `artifacts["cache_dir"]`. Он не загружает веса в модель.
 
 ## `write_json_predictions_step`
 
-`output_path` необязателен. Шаг требует `predictions`, создаёт родительский каталог, пишет JSON с полями `input` и `predictions` с отступом 2 и публикует `artifacts["output_path"]`. Если путь не задан, используется `ctx.input_path` с заменённым suffix `.json`.
+`output_path` необязателен. Шаг требует `predictions`, создаёт родительский каталог, пишет JSON с полями `input` и `predictions` с отступом 2 и публикует `artifacts["output_path"]`. Если путь не задан, используется `ctx.input_path` с заменённым суффиксом `.json`.
 
 ## `print_json_predictions_step`
 
-Параметров нет. Шаг требует `predictions` и печатает тот же payload в stdout, не создавая файл.
+Параметров нет. Шаг требует `predictions` и печатает ту же полезную нагрузку в stdout, не создавая файл.
 
 ## `xai_step`
 
-Оборачивает prediction step с атрибутом `on_prediction` и публикует `artifacts["xai"]`. Параметры: обязательный nested `step`; `ablation_policy` (`zero`, `mask`, `remove`); `modalities`; Python-callable `score_fn`; `diagnostic_keys`; `output_mask_key`; `validity_fn`; положительный batch-relative `temporal_axis`. Произвольные callable нельзя выразить YAML — передавайте их из Python или плагина. Подробный контракт и экспорт см. в [XAI](../user-guide/xai.md).
+Оборачивает шаг предсказания с атрибутом `on_prediction` и публикует `artifacts["xai"]`. Параметры: обязательный вложенный `step`; `ablation_policy` (`zero`, `mask`, `remove`); `modalities`; вызываемый из Python `score_fn`; `diagnostic_keys`; `output_mask_key`; `validity_fn`; положительный индекс временной оси `temporal_axis` относительно батча. Произвольные вызываемые объекты нельзя выразить в YAML — передавайте их из Python-кода или плагина. Подробный контракт и экспорт см. в [XAI](../user-guide/xai.md).

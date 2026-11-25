@@ -1,6 +1,6 @@
 # Пользовательские шаги предсказания
 
-Шаг реализует протокол `run(ctx: InferenceContext) -> InferenceContext`; наследование от базового класса не требуется. Он читает `ctx.input_path`, `ctx.device` и upstream-артефакты, а результаты публикует через `ctx.set_artifact`.
+Шаг реализует протокол `run(ctx: InferenceContext) -> InferenceContext`; наследование от базового класса не требуется. Он читает `ctx.input_path`, `ctx.device` и артефакты предыдущих шагов, а результаты публикует через `ctx.set_artifact`.
 
 ```python
 from dataclasses import dataclass
@@ -27,9 +27,9 @@ def toy_prediction_step(**params):
     return ToyPredictionStep(**params)
 ```
 
-## Полный детерминированный pipeline Python API
+## Полный детерминированный конвейер через Python API
 
-Этот пример не требует dataset, checkpoint, credentials или внешнего plugin: он регистрирует synthetic step в текущем процессе, строит pipeline и проверяет JSON writer.
+Этот пример не требует набора данных, контрольной точки, учётных данных или внешнего плагина: он регистрирует синтетический шаг в текущем процессе, строит конвейер и проверяет средство записи JSON.
 
 ```python
 from dataclasses import dataclass
@@ -84,9 +84,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert output.exists()
 ```
 
-Здесь `Batch`, `ModelOutput`, `model.eval()`, `torch.inference_mode()` и `set_artifact` соответствуют public contracts. Writer создаёт JSON только с `input` и `predictions`; произвольные артефакты context в него не попадают.
+Здесь `Batch`, `ModelOutput`, `model.eval()`, `torch.inference_mode()` и `set_artifact` соответствуют публичным контрактам. Средство записи создаёт JSON только с `input` и `predictions`; произвольные артефакты контекста в него не попадают.
 
-Для CLI положите factory в устанавливаемый плагин и объявите entry point:
+Для CLI поместите фабрику в устанавливаемый плагин и объявите точку входа:
 
 ```toml
 [project.entry-points."chimera_ml.plugins"]
@@ -100,4 +100,8 @@ def register():
     return None
 ```
 
-После `python -m pip install -e path/to/plugin` проверьте `chimera-ml plugins list` и `chimera-ml registry list --type inference_steps`. Для XAI prediction step должен предоставлять вызываемый `on_prediction`; см. [раздел XAI](../user-guide/xai.md).
+Декоратор действует только в текущем процессе Python. Для обнаружения через CLI упакуйте шаг в плагин, поместите его фабрику в модуль `steps.py` и объявите точку входа.
+
+## Доступность шага в CLI
+
+После `python -m pip install -e path/to/plugin` проверьте `chimera-ml plugins list` и `chimera-ml registry list --type inference_steps`. Для XAI шаг предсказания должен предоставлять вызываемый `on_prediction`; см. [раздел XAI](../user-guide/xai.md).

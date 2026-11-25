@@ -1,6 +1,12 @@
 # ORAGEN
 
-ORAGEN демонстрирует audio-visual gender recognition и age estimation с occlusion-robust fusion. Есть audio и multimodal training/evaluation и готовый video inference. Используется plugin-модель agender_multimodal_model_v3, не core fusion model.
+## Задача и архитектура
+
+ORAGEN демонстрирует определение пола и оценку возраста по аудио- и видеоданным с использованием мультимодального слияния, устойчивого к частичному перекрытию лица. Доступны аудио- и мультимодальное обучение и оценка, а также готовый видеоконвейер инференса. Используется модель плагина `agender_multimodal_model_v3`, а не модель слияния из ядра. Слияние возвращает логиты пола, за которыми следует один логит возраста. Инференс применяет softmax к полу и `sigmoid(age_logit) * 100` к возрасту, затем усредняет вероятности и возраст по окнам.
+
+## Установка и проверка
+
+Точка входа плагина — `oragen = chimera_plugin:register`. Установите плагин из корня репозитория и проверьте регистрацию командами ниже.
 
 ~~~bash
 python -m pip install -e .
@@ -10,11 +16,13 @@ chimera-ml registry list --type inference_steps
 chimera-ml registry list --type models
 ~~~
 
-Важные каталоги: configs/audio_{train,test}.yaml, configs/multimodal_{train,test}.yaml, configs/inference.yaml, scripts/ и src/audio, src/fusion, src/common, src/inference. Inference требует torchcodec или ffmpeg fallback, Silero VAD, Ultralytics YOLO и Hugging Face weights; первый запуск обычно требует network.
+Важные каталоги и файлы: `configs/audio_{train,test}.yaml`, `configs/multimodal_{train,test}.yaml`, `configs/inference.yaml`, `scripts/`, а также `src/audio`, `src/fusion`, `src/common`, `src/inference`. Инференс требует `torchcodec` или резервного использования `ffmpeg`, Silero VAD, Ultralytics YOLO и весов Hugging Face; при первом запуске обычно нужен доступ к сети.
 
-Audio configs используют features_root, corpus data_root, labels_file_path, vad_path; labels дают gender и age. Окна: 16 kHz, 4 s, shift 2 s. Multimodal использует VOXCELEB2 и BRAVE-MASKS, cached records с acoustic_features и visual_features. При отсутствии cache нужны feature extractor checkpoints. Corpus проект не скачивает.
+Аудиоконфигурации используют `features_root`, `corpus.data_root`, `labels_file_path` и `vad_path`; разметка содержит пол и возраст. Параметры окон: 16 kHz, 4 s, шаг 2 s. Мультимодальный режим использует VOXCELEB2 и BRAVE-MASKS, а также кэшированные записи с `acoustic_features` и `visual_features`. При отсутствии кэша нужны контрольные точки экстракторов признаков. Проект не скачивает корпуса автоматически.
 
-Измените features_root, corpora.* paths, audio/image feature_extractor.checkpoint_path и train_subsets/val_subsets. Команды:
+## Данные, кэши и обучение
+
+Измените `features_root`, пути `corpora.*`, `audio/image feature_extractor.checkpoint_path` и `train_subsets/val_subsets`. Команды:
 
 ~~~bash
 chimera-ml validate-config --config-path examples/oragen/configs/audio_train.yaml
@@ -28,9 +36,11 @@ chimera-ml train --config-path examples/oragen/configs/multimodal_train.yaml
 chimera-ml eval --config-path examples/oragen/configs/multimodal_test.yaml --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
 ~~~
 
+Ожидаемые артефакты — журналы, контрольные точки, сгруппированные метрики, необязательные графики матрицы ошибок и снимки в настроенном каталоге запуска.
+
 ## Видеоинференс
 
-Pipeline из inference.yaml последовательный:
+Конвейер из `inference.yaml` выполняется последовательно:
 
     extract_audio_step -> vad_step -> resolve_checkpoints_step
     -> face_detection_step -> build_windows_step -> extract_features_step
@@ -42,18 +52,18 @@ chimera-ml inference --input examples/oragen/samples/f_25.mp4 \
   --work-dir runs/oragen
 ~~~
 
-resolve_checkpoints_step кэширует audio/image/fusion weights в model_cache; YOLO yolo26n.pt разрешается отдельно. CPU — fallback. Нужны readable video, writable work-dir и speech/face для полезных windows. Итог содержит gender, age, num_windows, windows, debug; gender содержит label, class_index, probabilities, окно — start_sec/end_sec, gender fields, age_pred, num_faces, num_frames. При отсутствии окон gender/age null и status no_predictions.
+`resolve_checkpoints_step` кэширует веса аудио, изображения и слияния в `model_cache`; `YOLO yolo26n.pt` разрешается отдельно. CPU используется как резервный вариант. Нужны читаемый видеофайл, доступный для записи рабочий каталог, а также речь и лица, чтобы получить полезные окна. Итог содержит `gender`, `age`, `num_windows`, `windows` и `debug`; `gender` содержит `label`, `class_index` и `probabilities`, а каждое окно — `start_sec`/`end_sec`, поля пола, `age_pred`, `num_faces` и `num_frames`. При отсутствии окон `gender` и `age` равны `null`, а `status` — `no_predictions`.
 
 ## XAI и диагностика
 
-fusion_step не имеет on_prediction, поэтому xai_step здесь не поддержан. Используйте [XAI](../user-guide/xai.md) и [custom inference steps](../inference/custom-steps.md). Типовые ошибки: plugin/cache/checkpoint, decoding, invalid video, no face/speech, device и output path.
+`fusion_step` не предоставляет `on_prediction`, поэтому `xai_step` здесь не поддержан. Используйте [XAI](../user-guide/xai.md) и [пользовательские шаги инференса](../inference/custom-steps.md). Типичные проблемы связаны с плагином, кэшем и контрольной точкой, декодированием, некорректным видео, отсутствием лица или речи, устройством и путём вывода.
 
 
 ## Артефакт предсказаний и оболочка JSON
 
-AggregateWindowsStep создаёт predictions artifact с gender, age и
-num_windows. При include_windows он также содержит windows, при include_debug
-— debug.
+`AggregateWindowsStep` создаёт артефакт `predictions` с полями `gender`, `age` и
+`num_windows`. При `include_windows` он также содержит `windows`, а при
+`include_debug` — `debug`.
 
 ~~~json
 {
@@ -95,12 +105,13 @@ num_windows. При include_windows он также содержит windows, п
 }
 ~~~
 
-Fusion создаёт window record для каждого feature item. Gender probabilities —
-softmax probabilities; age_pred — sigmoid(age logit), умноженный на age_scale
-100. Aggregate усредняет window probabilities и age, затем выбирает gender с
-максимальной средней probability. Это не calibrated confidence.
+Слияние формирует запись окна для каждого элемента признаков. Вероятности
+классов пола вычисляются функцией softmax; `age_pred` — сигмоида от логита
+возраста, умноженная на `age_scale` 100. `AggregateWindowsStep` усредняет
+вероятности и оценки возраста по окнам, затем выбирает класс пола с
+максимальной средней вероятностью. Это не является калиброванной уверенностью.
 
-Built-in JSON writer оборачивает artifact как
+Встроенное средство записи JSON оборачивает артефакт так:
 {"input": "path/to/video.mp4", "predictions": {artifact}}. При отсутствии
-windows predictions равен {"gender": null, "age": null, "num_windows": 0,
+окон `predictions` равен {"gender": null, "age": null, "num_windows": 0,
 "windows": [], "status": "no_predictions"}.
