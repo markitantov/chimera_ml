@@ -1,6 +1,6 @@
 # Обзор обучения
 
-Обучение CHIMERA-ML — конфигурационный workflow `Trainer.fit`:
+Обучение CHIMERA-ML — конфигурационный сценарий `Trainer.fit`:
 
 ```text
 Dataset -> DataModule -> DataLoader -> Collate -> Batch -> Model
@@ -11,16 +11,16 @@ Dataset -> DataModule -> DataLoader -> Collate -> Batch -> Model
 
 ## Порядок работы
 
-1. Plugin Dataset читает sample с modality inputs, targets и metadata.
-2. DataModule строит train/validation/test DataLoaders и может вернуть named loaders.
-3. Collate превращает samples в `Batch`, дополняет sequences и создаёт masks.
-4. Trainer переносит batch на device и вызывает `model(batch)`.
-5. Loss получает `ModelOutput` и `Batch`, metrics обновляются по labeled batch.
-6. Training делает backward, optional gradient clipping, optimizer step и scheduler step.
+1. Датасет плагина читает образцы с входами модальностей, целевыми значениями и метаданными.
+2. DataModule строит загрузчики train/validation/test и может вернуть именованные загрузчики.
+3. Collate превращает образцы в `Batch`, дополняет последовательности и создаёт маски.
+4. Trainer переносит пакет на устройство и вызывает `model(batch)`.
+5. Функция потерь получает `ModelOutput` и `Batch`, а метрики обновляются по размеченному пакету.
+6. Обучение выполняет обратное распространение, при необходимости ограничивает градиенты, а затем делает шаг оптимизатора и планировщика.
 7. После train epoch запускается validation; callbacks получают flat logs вроде `train/loss`, `val/loss` и metric keys.
-8. Loggers сохраняют logs/metrics/artifacts, checkpoint callback пишет model state.
+8. Логгеры сохраняют журналы, метрики и артефакты, а колбэк контрольных точек записывает состояние модели.
 
-Core предоставляет `Batch`, `ModelOutput`, `DataModule`, collates, Trainer, builders, built-in components и CLI. Project supplies task data и обычно регистрирует DataModule, model, loss и metrics. Plugin factory signatures определяют plugin-specific params.
+Core предоставляет `Batch`, `ModelOutput`, `DataModule`, collate-функции, Trainer, builders, встроенные компоненты и CLI. Проект предоставляет данные задачи и обычно регистрирует DataModule, модель, функцию потерь и метрики. Сигнатуры фабрик плагина определяют параметры, специфичные для плагина.
 
 ## Команды
 
@@ -30,4 +30,4 @@ chimera-ml train --config-path config.yaml
 chimera-ml eval --config-path config.yaml --checkpoint-path logs/.../checkpoints/last.pt
 ```
 
-Training обновляет параметры; evaluation не делает optimizer updates. Deployment inference — отдельный pipeline во вкладке Inference.
+Обучение обновляет параметры; оценка не выполняет шагов оптимизатора. Вывод для развёртывания — отдельный конвейер во вкладке «Вывод».

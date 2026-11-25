@@ -72,7 +72,7 @@ Fusion writes this artifact to InferenceContext.predictions:
   "emotion": {
     "label": "happy",
     "class_index": 1,
-    "probabilities": {"neutral": 0.10, "happy": 0.62, "sad": 0.04, "anger": 0.03, "surprise": 0.12, "disgust": 0.06, "fear": 0.08}
+    "probabilities": {"neutral": 0.10, "happy": 0.60, "sad": 0.04, "anger": 0.03, "surprise": 0.09, "disgust": 0.06, "fear": 0.08}
   },
   "sentiment": {
     "label": "positive",
@@ -93,7 +93,7 @@ Fusion writes this artifact to InferenceContext.predictions:
       "has_speech": true,
       "has_faces": true,
       "num_windows": 1,
-      "emotion": {"label": "happy", "class_index": 1, "probabilities": {"neutral": 0.10, "happy": 0.62, "sad": 0.04, "anger": 0.03, "surprise": 0.12, "disgust": 0.06, "fear": 0.08}},
+      "emotion": {"label": "happy", "class_index": 1, "probabilities": {"neutral": 0.10, "happy": 0.60, "sad": 0.04, "anger": 0.03, "surprise": 0.09, "disgust": 0.06, "fear": 0.08}},
       "sentiment": {"label": "positive", "class_index": 2, "probabilities": {"negative": 0.08, "neutral": 0.17, "positive": 0.75}}
     }
   ]
@@ -113,7 +113,7 @@ probabilities. They are softmax probabilities, not calibrated confidence.
 The JSON writer adds an outer envelope:
 
 ~~~json
-{"input": "path/to/input.mp4", "predictions": { "...": "the artifact above" }}
+{"input": "path/to/input.mp4", "predictions": {"emotion": null, "sentiment": null, "text": "", "segments": [], "status": "no_predictions"}}
 ~~~
 
 With no features, the predictions artifact is exactly:

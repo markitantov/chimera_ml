@@ -1,8 +1,8 @@
-# Hyperparameter sweeps
+# Гиперпараметрические переборы
 
-Sweep берёт valid training config и запускает обычный training для каждого trial. Сначала проверьте base config; sweep не исправляет datasets, plugin keys или missing monitors.
+Перебор принимает корректную конфигурацию обучения и запускает обычное обучение для каждого испытания. Сначала проверьте базовую конфигурацию: перебор не исправляет датасеты, ключи плагинов или отсутствующие мониторы.
 
-## Grid workflow
+## Сценарий полного перебора
 
 `sweep.yaml` содержит либо `parameters`, либо `trials`, но не оба:
 
@@ -20,9 +20,9 @@ chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-nam
 chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-name lr-search
 ```
 
-Dotted paths могут адресовать mappings и named list entries: `optimizer.params.lr`, `callbacks.checkpoint_callback.params.monitor`. `--max-trials` ограничивает grid, `--dry-run` не запускает training.
+Составные пути могут адресовать отображения и именованные элементы списков: `optimizer.params.lr`, `callbacks.checkpoint_callback.params.monitor`. `--max-trials` ограничивает перебор, `--dry-run` не запускает обучение.
 
-## Optuna workflow
+## Сценарий Optuna
 
 ```yaml
 method: optuna
@@ -47,16 +47,16 @@ parameters:
     choices: [small, large]
 ```
 
-Float требует `low`/`high`, использует `step` или `log`, но не оба. Int имеет `step` default `1`; log для int требует `step: 1`. Categorical требует non-empty `choices`. `target.mode` — `min`/`max` и aliases `minimize`/`maximize`; default objective — `val/loss`, `min`.
+Тип float требует `low`/`high` и использует `step` или `log`, но не оба параметра. Тип int имеет `step` по умолчанию `1`; логарифмическая шкала для int требует `step: 1`. Тип categorical требует непустой `choices`. `target.mode` — `min`/`max` и aliases `minimize`/`maximize`; default objective — `val/loss`, `min`.
 
 ```bash
 chimera-ml sweep -b config.yaml -s optuna.yaml --dry-run
 chimera-ml sweep -b config.yaml -s optuna.yaml --max-trials 3
 ```
 
-CLI добавляет `sweep_target_callback`, запускает normal train flow и записывает best value/epoch.
+CLI добавляет `sweep_target_callback`, запускает обычный цикл обучения и записывает лучшее значение и эпоху.
 
-## Artifacts
+## Артефакты
 
 ```text
 <log_path>/<experiment_name>/_sweeps/<sweep-id>/
@@ -66,4 +66,4 @@ CLI добавляет `sweep_target_callback`, запускает normal train 
 └── trial_configs/<label>-<short-id>-001.yaml
 ```
 
-`manifest.yaml` содержит status и trial records; Optuna дополнительно сохраняет study/objective/best trial. Каждый trial получает own run artifacts.
+`manifest.yaml` содержит status и trial records; Optuna дополнительно сохраняет study/objective/best trial. Каждое испытание получает собственные артефакты запуска.

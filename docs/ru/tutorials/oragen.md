@@ -75,6 +75,17 @@ num_windows. При include_windows он также содержит windows, п
       "age_pred": 33.8,
       "num_faces": 1,
       "num_frames": 4
+    },
+    {
+      "index": 1,
+      "start_sec": 4.0,
+      "end_sec": 8.0,
+      "gender_probs": {"female": 0.76, "male": 0.24},
+      "gender_pred_index": 0,
+      "gender_pred_label": "female",
+      "age_pred": 34.6,
+      "num_faces": 1,
+      "num_frames": 4
     }
   ],
   "debug": {

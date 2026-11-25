@@ -4,7 +4,7 @@
 
 CHIMERA-ML поддерживает Python `>=3.12,<3.13`. Core объявляет PyTorch `>=2.2,<3.0`, а также NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna и requests. CUDA wheel и driver PyTorch выбираются под машину; CHIMERA-ML не устанавливает CUDA driver.
 
-Установка published package в virtual environment:
+Установка опубликованного пакета в виртуальное окружение:
 
 ```bash
 python3.12 -m venv .venv
@@ -27,13 +27,13 @@ poetry install --with dev,docs
 poetry run chimera-ml doctor
 ```
 
-Группа `docs` нужна только для сборки документации. У example plugins свои зависимости; например:
+Группа `docs` нужна только для сборки документации. У плагинов-примеров есть собственные зависимости; например:
 
 ```bash
 python -m pip install -e examples/va_estimation
 ```
 
-Это устанавливает entry point `chimera_ml.plugins` и делает factories plugin доступными при старте процесса. Датасет и feature files не скачиваются. Их paths нужно подготовить отдельно.
+Это устанавливает точку входа `chimera_ml.plugins` и делает фабрики плагина доступными при запуске процесса. Датасет и файлы признаков не скачиваются; пути к ним нужно подготовить отдельно.
 
 ## Проверка окружения
 
@@ -53,7 +53,7 @@ chimera-ml registry list
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ```
 
-Для GPU нужны совместимые PyTorch CUDA wheel и driver. CPU режим подходит для проверки конфигурации и plugin registration.
+Для GPU нужны совместимые CUDA-сборка PyTorch и драйвер. Режим CPU подходит для проверки конфигурации и регистрации плагинов.
 
 ## Основные CLI entry points
 
@@ -68,4 +68,4 @@ chimera-ml registry list [--type TYPE]
 chimera-ml plugins list [--group chimera_ml.plugins]
 ```
 
-MLflow tracking требует MLflow и local/reachable tracking URI; Optuna нужен для `method: optuna`; Telegram callback дополнительно требует `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`.
+Для отслеживания MLflow нужны MLflow и локальный или доступный URI отслеживания; Optuna нужен для `method: optuna`; колбэк Telegram дополнительно требует `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`.
