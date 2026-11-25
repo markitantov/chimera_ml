@@ -1,5 +1,7 @@
 # Callbacks в training workflow
 
+Полный каталог callbacks и lifecycle находится в [Callbacks](../components/callbacks/index.md); эта страница описывает workflow setup.
+
 Callbacks получают lifecycle events Trainer: `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, `on_fit_end`. Монитор должен быть точным flat log key.
 
 ## Checkpoint, early stopping и snapshot

@@ -1,5 +1,7 @@
 # Подготовка datasets и loaders
 
+Контракты компонентов и зарегистрированные collates собраны в [каталоге Data](../components/data.md); здесь сохранено workflow-описание подготовки данных.
+
 ## Ответственность Dataset
 
 Task Dataset — PyTorch `Dataset` (или plugin equivalent), чей `__getitem__` возвращает mapping. Framework не определяет формат audio, video, text, cached features, labels и IDs.

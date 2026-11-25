@@ -1,5 +1,7 @@
 # Models
 
+Структурированный каталог находится на страницах [Models](../components/models.md) и [сравнение fusion](../components/fusion.md).
+
 Model наследует BaseModel и реализует forward(batch: Batch) -> ModelOutput.
 ModelOutput.preds — основной тензор предсказания, а ModelOutput.aux содержит
 объединённые представления, маски валидности, веса и диагностические данные

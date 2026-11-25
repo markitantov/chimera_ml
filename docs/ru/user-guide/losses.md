@@ -1,5 +1,7 @@
 # Losses
 
+Полный registry losses и таблица параметров находятся в [Training components](../components/training.md).
+
 Loss реализует BaseLoss.__call__(output, batch) и возвращает scalar tensor.
 Built-in keys: mse_loss/mae_loss для regression, cross_entropy_loss/focal_loss
 для class-index classification, bce_with_logits_loss для multi-label targets и

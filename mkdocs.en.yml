@@ -37,31 +37,43 @@ nav:
       - Explainable AI (XAI): user-guide/xai.md
       - Troubleshooting: inference/troubleshooting.md
   - Components:
-      - Overview: user-guide/models.md
-      - Core components: api/core.md
-      - Data and collates: user-guide/data.md
-      - Models: user-guide/models.md
-      - TFS: user-guide/tfs-fusion.md
-      - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
-      - RAAV: user-guide/raav-fusion.md
-      - TOMAR: user-guide/tomar-fusion.md
-      - Losses: user-guide/losses.md
-      - Metrics: user-guide/metrics.md
-      - Optimizers and schedulers: user-guide/optimizers-schedulers.md
-      - Callbacks: user-guide/callbacks.md
-      - Loggers: user-guide/logging.md
+      - Overview: components/index.md
+      - Core:
+          - Batch, ModelOutput, configuration: components/core.md
+      - Data:
+          - Datasets, DataModules, collates: components/data.md
+      - Models:
+          - Model interface and built-ins: components/models.md
+          - Fusion models overview: components/fusion.md
+          - TFS: user-guide/tfs-fusion.md
+          - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
+          - RAAV: user-guide/raav-fusion.md
+          - TOMAR: user-guide/tomar-fusion.md
+      - Training components:
+          - Losses, metrics, optimizers, schedulers: components/training.md
+      - Callbacks:
+          - Overview: components/callbacks/index.md
+          - Checkpointing: components/callbacks/checkpointing.md
+          - Early stopping: components/callbacks/early-stopping.md
+          - Snapshots, predictions, confusion matrices: components/callbacks/artifacts.md
+          - Sweep objectives: components/callbacks/sweeps.md
+          - Notifications: components/callbacks/notifications.md
+      - Loggers: components/logging.md
   - Examples:
       - Overview: tutorials/index.md
       - VA estimation: tutorials/va-estimation.md
       - ORAGEN: tutorials/oragen.md
       - Affective states recognition: tutorials/affective-states-recognition.md
   - Extending:
-      - Overview: concepts/plugins.md
-      - Configuration concepts: concepts/configuration.md
-      - Registries: concepts/registries.md
-      - BuildContext: concepts/build-context.md
-      - Plugins: user-guide/plugins.md
-      - Plugin authoring: development/plugins.md
+      - Overview: extending/index.md
+      - Registries: extending/registries.md
+      - BuildContext: extending/build-context.md
+      - Plugins: extending/plugins.md
+      - Custom datasets and DataModules: extending/data.md
+      - Custom models: extending/models.md
+      - Custom losses and metrics: extending/training.md
+      - Custom callbacks: extending/callbacks.md
+      - Custom inference steps: extending/inference.md
   - Reference:
       - Configuration: user-guide/configuration.md
       - CLI: cli/reference.md

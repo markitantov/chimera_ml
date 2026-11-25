@@ -1,5 +1,7 @@
 # Preparing datasets and loaders
 
+For the component contracts and registered collates, see the [Components data catalog](../components/data.md). This page keeps the workflow-oriented dataset preparation guidance.
+
 ## Dataset responsibility
 
 A task dataset is a PyTorch `Dataset` (or a plugin equivalent) whose `__getitem__` returns a mapping. The framework collates these mappings; it does not prescribe how audio, video, text, cached features, labels, or IDs are stored.

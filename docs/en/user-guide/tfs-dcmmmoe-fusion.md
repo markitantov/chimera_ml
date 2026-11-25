@@ -75,3 +75,19 @@ model:
 Use groups for an explicit grouped hierarchy. A non-default grouping or a
 configuration with fewer than three modality names uses the generalized TFS
 path while retaining adaptive masked pair weighting.
+
+## Synthetic forward
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import TFSDCMMOEFusionModel
+
+model = TFSDCMMOEFusionModel({"a": 4, "b": 5, "c": 6}, shared_dim=8, output_dim=2, gate_hidden=16).eval()
+batch = Batch(inputs={"a": torch.randn(2, 3, 4), "b": torch.randn(2, 3, 5), "c": torch.randn(2, 3, 6)}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 2)
+assert output.aux["pair_weights"].shape[0] == 2
+```
+
+The adaptive gate changes pair weights per sample; it does not make missing tensors available. Fewer than two available modality tensors raises `ValueError`.

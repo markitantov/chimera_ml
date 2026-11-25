@@ -89,3 +89,18 @@ groups задаётся как список групп, внутри котор�
 например [text, audio]. Пустые группы и повторяющиеся направленные пары
 недопустимы. Если один tensor целиком отсутствует, может использоваться
 обобщённый путь; при наличии всех трёх tensors включается иерархия по умолчанию.
+
+## Синтетический forward
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import TFSFusionModel
+model = TFSFusionModel({"a": 4, "b": 5, "c": 6}, shared_dim=8, output_dim=2).eval()
+batch = Batch(inputs={"a": torch.randn(2, 3, 4), "b": torch.randn(2, 3, 5), "c": torch.randn(2, 3, 6)}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 2)
+assert "pair_weights" in output.aux
+```
+
+При отсутствии менее двух tensors модальностей возникает `ValueError`; masks и `groups` должны использовать те же names.

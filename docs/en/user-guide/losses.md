@@ -1,5 +1,7 @@
 # Losses
 
+For the complete loss registry and parameter table, see [Training components](../components/training.md).
+
 A loss implements BaseLoss.__call__(output, batch) and returns a scalar tensor.
 Built-in keys are mse_loss and mae_loss for regression,
 cross_entropy_loss and focal_loss for class-index classification,

@@ -66,3 +66,21 @@ model:
 
 The anchor is a hard requirement. Other modalities may be absent from
 Batch.inputs, unavailable for individual samples, or empty.
+
+## Synthetic forward
+
+The anchor must be present and valid for every sample; other modalities may be omitted:
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import TOMARFusionModel
+
+model = TOMARFusionModel({"text": 4, "audio": 5}, shared_dim=8, anchor_modality="text", output_dim=2).eval()
+batch = Batch(inputs={"text": torch.randn(2, 3, 4), "audio": torch.randn(2, 3, 5)}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 2)
+assert output.aux["fused"].shape == (2, 8)
+```
+
+If the anchor is absent or fully masked for one sample, the forward raises `ValueError`; a missing non-anchor contributes no residual.

@@ -1,5 +1,7 @@
 # Logging и MLflow
 
+Полный registry loggers и defaults находится в [Loggers](../components/logging.md); здесь описан training workflow.
+
 ## Local console/file logger
 
 ```yaml

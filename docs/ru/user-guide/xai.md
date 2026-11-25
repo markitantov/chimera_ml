@@ -216,7 +216,21 @@ summary = summarize_explanations(raw, temporal_axis=1)
       "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1, "comparable_sample_count": 1, "evaluated_sample_count": 1},
       "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1, "comparable_sample_count": 1, "evaluated_sample_count": 1}
     },
-    "samples": []
+    "samples": [
+      {
+        "sample_id": "toy-0",
+        "status": "evaluated",
+        "ranking": ["audio", "video"],
+        "ties": [],
+        "dominant_modality": "audio",
+        "common_comparison_count": 1,
+        "sample_coverage": 1.0,
+        "modalities": {
+          "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1},
+          "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1}
+        }
+      }
+    ]
   }
 }
 ```
@@ -253,8 +267,10 @@ result = build_inference_pipeline(config).run(context)
 xai = result.get_artifact("xai")
 if xai is None:
     raise ValueError("The pipeline did not produce an xai artifact")
-Path("outputs/explanations.json").write_text(
-    json.dumps(xai, indent=2), encoding="utf-8"
+output_path = Path("outputs/explanations.json")
+output_path.parent.mkdir(parents=True, exist_ok=True)
+output_path.write_text(
+    json.dumps(xai, indent=2, allow_nan=False), encoding="utf-8"
 )
 ```
 
@@ -302,7 +318,6 @@ pipeline: {name: xai-dag, parallel: true}
 steps:
   - id: xai
     name: xai_step
-    after: [prediction]
     params: {step: {name: toy_prediction_step, params: {}}}
   - id: export
     name: write_xai_json_step
@@ -314,6 +329,6 @@ steps:
 
 ## Стоимость и ограничения
 
-Для каждого callback batch XAI выполняет один baseline forward и ещё один forward на каждую выбранную модальность. Для `M` модальностей это примерно `1 + M` forward на batch плюс обычная работа prediction step. На больших моделях и длинных последовательностях это дорого, поэтому выбирайте модальности и batches осознанно.
+Для каждого callback batch XAI выполняет один baseline forward и ещё один forward на каждую выбранную модальность. Для `M` модальностей nested prediction step уже выполняет один original forward, поэтому всего получается примерно `1 + M` forward на batch. На больших моделях и длинных последовательностях это дорого, поэтому выбирайте модальности и batches осознанно.
 
 Результат зависит от ablation policy, score function, masks, validity checks, режима модели и распределения данных. Ground truth не нужен, но измеряется чувствительность к выбранному вмешательству, а не причинный вклад и не качество модели. Разнородные score с несовместимыми шкалами нельзя бездумно агрегировать. Temporal summary описывает output positions, а не гарантированные input locations. Missing, unsupported и invalid comparisons должны оставаться видимыми при оценке coverage.

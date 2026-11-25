@@ -1,5 +1,7 @@
 # Optimizers и schedulers
 
+Полный каталог optimizer/scheduler factories находится в [Training components](../components/training.md).
+
 Built-in optimizers:
 
 - adamw_optimizer (direct builder default): lr=1e-3, weight_decay=0.0;

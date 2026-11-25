@@ -1,5 +1,7 @@
 # Training logging and MLflow
 
+For the complete logger registry and factory defaults, see [Loggers](../components/logging.md). This page focuses on training workflow setup.
+
 ## Local console and file logging
 
 `console_file_logger` is the local logger. It creates the run directory and writes the configured file while also sending messages to the console:

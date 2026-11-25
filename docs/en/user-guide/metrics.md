@@ -1,5 +1,7 @@
 # Metrics
 
+For the complete metric registry and state contract, see [Training components](../components/training.md).
+
 A metric implements the stateful BaseMetric interface:
 
 ~~~python

@@ -244,7 +244,21 @@ The selected score has `[B, T]`: axis 1 is time. If a score function instead ret
         "evaluated_sample_count": 1
       }
     },
-    "samples": []
+    "samples": [
+      {
+        "sample_id": "toy-0",
+        "status": "evaluated",
+        "ranking": ["audio", "video"],
+        "ties": [],
+        "dominant_modality": "audio",
+        "common_comparison_count": 1,
+        "sample_coverage": 1.0,
+        "modalities": {
+          "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1},
+          "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1}
+        }
+      }
+    ]
   }
 }
 ```
@@ -281,8 +295,10 @@ result = build_inference_pipeline(config).run(context)
 xai = result.get_artifact("xai")
 if xai is None:
     raise ValueError("The pipeline did not produce an xai artifact")
-Path("outputs/explanations.json").write_text(
-    json.dumps(xai, indent=2), encoding="utf-8"
+output_path = Path("outputs/explanations.json")
+output_path.parent.mkdir(parents=True, exist_ok=True)
+output_path.write_text(
+    json.dumps(xai, indent=2, allow_nan=False), encoding="utf-8"
 )
 ```
 
@@ -330,7 +346,6 @@ pipeline: {name: xai-dag, parallel: true}
 steps:
   - id: xai
     name: xai_step
-    after: [prediction]
     params: {step: {name: toy_prediction_step, params: {}}}
   - id: export
     name: write_xai_json_step

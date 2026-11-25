@@ -78,3 +78,18 @@ model:
 groups позволяет задать явную иерархию групп. При нестандартных groups или
 менее чем трёх именах используется обобщённый путь TFS, но адаптивное
 взвешивание пар с учётом масок сохраняется.
+
+## Синтетический forward
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import TFSDCMMOEFusionModel
+model = TFSDCMMOEFusionModel({"a": 4, "b": 5, "c": 6}, shared_dim=8, output_dim=2, gate_hidden=16).eval()
+batch = Batch(inputs={"a": torch.randn(2, 3, 4), "b": torch.randn(2, 3, 5), "c": torch.randn(2, 3, 6)}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 2)
+assert output.aux["pair_weights"].shape[0] == 2
+```
+
+Gate выбирает pair weights отдельно для sample, но не восстанавливает отсутствующий tensor; менее двух доступных модальностей дают `ValueError`.

@@ -1,5 +1,7 @@
 # Metrics
 
+Полный registry metrics и state contract находятся в [Training components](../components/training.md).
+
 Metric реализует stateful interface BaseMetric:
 
 ~~~python

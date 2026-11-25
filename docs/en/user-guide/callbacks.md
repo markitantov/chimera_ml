@@ -1,5 +1,7 @@
 # Training callbacks in practice
 
+For the complete callback catalog and lifecycle details, see [Callbacks](../components/callbacks/index.md). This page focuses on workflow setup.
+
 Callbacks observe the Trainer lifecycle: `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, and `on_fit_end`. Configure them as a list. A callback that monitors a metric needs the exact flat key emitted at epoch end.
 
 ## A practical callback set
