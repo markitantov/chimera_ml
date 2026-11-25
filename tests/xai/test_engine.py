@@ -522,6 +522,67 @@ def test_summary_requires_common_support_for_global_ranking():
     assert summary["dominant_modality"] is None
 
 
+def test_summary_keeps_individual_and_common_comparison_counts():
+    artifact = make_explanation(
+        [
+            explanation_sample(
+                "partial",
+                audio=evaluated([0.8, 0.5, 0.3]),
+                video=evaluated([0.2, None, 0.1]),
+            )
+        ]
+    )
+    summary = summarize_explanations(artifact)
+    assert summary["modalities"]["audio"]["valid_comparison_count"] == 3
+    assert summary["modalities"]["video"]["valid_comparison_count"] == 2
+    assert summary["modalities"]["audio"]["common_comparison_count"] == 2
+    assert summary["modalities"]["video"]["common_comparison_count"] == 2
+    assert summary["common_comparison_count"] == 2
+    assert summary["ranking"] == ["audio", "video"]
+
+
+def test_temporal_summary_allows_unavailable_samples():
+    artifact = make_explanation(
+        [
+            explanation_sample(
+                "missing",
+                audio=evaluated([None, None]),
+                video={"status": "unsupported", "delta": None},
+            )
+        ]
+    )
+    summary = summarize_explanations(artifact, temporal_axis=1)
+    assert summary["status"] == "unavailable"
+    assert summary["temporal"] == []
+    assert summary["ranking"] == []
+    assert summary["ties"] == []
+
+
+def test_summary_has_no_singleton_ties_and_consistent_ranks():
+    artifact = make_explanation([explanation_sample("one", audio=evaluated([2.0]), video=evaluated([1.0]))])
+    summary = summarize_explanations(artifact)
+    assert summary["ties"] == []
+    assert summary["modalities"]["audio"]["rank"] == 1
+    assert summary["modalities"]["video"]["rank"] == 2
+    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(2 / 3)
+    assert summary["modalities"]["video"]["relative_influence"] == pytest.approx(1 / 3)
+    assert summary["dominant_modality"] == "audio"
+    assert summary["dominant_modalities"] == ["audio"]
+
+
+def test_mask_intervention_disables_nested_batch_masks_without_mutating_original():
+    batch = Batch(
+        {"audio": torch.ones(1, 1), "video": torch.ones(1, 1)},
+        None,
+        {"mask": {"audio": torch.ones(1), "video": torch.ones(1)}},
+        {},
+    )
+    changed = _intervene(batch, "audio", "mask")
+    assert torch.equal(changed.get_masks("audio_mask"), torch.zeros(1, dtype=torch.bool))
+    assert torch.equal(changed.get_masks("video_mask"), torch.ones(1, dtype=torch.bool))
+    assert torch.equal(batch.get_masks("audio_mask"), torch.ones(1))
+
+
 def test_quality_evaluation_is_no_longer_public():
     import chimera_ml.inference as inference
 

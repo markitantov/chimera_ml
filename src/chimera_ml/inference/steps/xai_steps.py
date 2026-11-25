@@ -89,6 +89,23 @@ def _drop_modality_masks(masks: dict[str, Any], modality: str) -> None:
         masks["mask"] = nested
 
 
+def _disable_modality_masks(masks: dict[str, Any], modality: str) -> bool:
+    changed = False
+    for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
+        if key in masks:
+            masks[key] = torch.zeros_like(torch.as_tensor(masks[key]).bool())
+            changed = True
+    nested = masks.get("mask")
+    if isinstance(nested, Mapping):
+        nested = dict(nested)
+        for key in (modality, f"{modality}_mask", f"{modality}_temporal_mask"):
+            if key in nested:
+                nested[key] = torch.zeros_like(torch.as_tensor(nested[key]).bool())
+                changed = True
+        masks["mask"] = nested
+    return changed
+
+
 def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
     if modality not in batch.inputs:
         raise ValueError(f"Modality '{modality}' is not present in the batch.")
@@ -105,11 +122,7 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
         del inputs[modality]
         _drop_modality_masks(masks, modality)
     elif policy == "mask":
-        changed = False
-        for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
-            if key in masks:
-                masks[key] = torch.zeros_like(torch.as_tensor(masks[key]).bool())
-                changed = True
+        changed = _disable_modality_masks(masks, modality)
         if not changed:
             masks[f"{modality}_mask"] = torch.zeros(value.shape[0], dtype=torch.bool, device=value.device)
     else:
@@ -396,9 +409,11 @@ def _rank_details(
             if details[name]["mean_absolute_delta"] == details[current[0]]["mean_absolute_delta"]:
                 current.append(name)
             else:
-                ties.append(current)
+                if len(current) > 1:
+                    ties.append(current)
                 current = [name]
-        ties.append(current)
+        if len(current) > 1:
+            ties.append(current)
 
     total_abs = sum(details[name]["mean_absolute_delta"] for name in ordered)
     if total_abs > 0:
@@ -410,7 +425,11 @@ def _rank_details(
                 else index + 1
             )
             details[name]["relative_influence"] = details[name]["mean_absolute_delta"] / total_abs
-        dominant_modalities = ties[0]
+        dominant_modalities = [
+            name
+            for name in ordered
+            if details[name]["mean_absolute_delta"] == details[ordered[0]]["mean_absolute_delta"]
+        ]
         dominant = dominant_modalities[0] if len(dominant_modalities) == 1 else None
         status = "evaluated"
     elif ordered:
@@ -420,7 +439,9 @@ def _rank_details(
     else:
         dominant_modalities = []
         dominant = None
-        status = "no_common_comparison"
+        status = (
+            "no_common_comparison" if any(item["status"] == "evaluated" for item in details.values()) else "unavailable"
+        )
 
     return ordered, ties, dominant, dominant_modalities, status
 
@@ -495,6 +516,16 @@ def _temporal_paths(
     return positions
 
 
+def _has_score_axis(value: Any, axis: int, depth: int = 0) -> bool:
+    if isinstance(value, list):
+        if depth == axis:
+            return True
+        return any(_has_score_axis(item, axis, depth + 1) for item in value)
+    if isinstance(value, Mapping):
+        return any(_has_score_axis(item, axis, depth) for item in value.values())
+    return False
+
+
 def _sample_summary(sample: Mapping[str, Any], modalities: list[str], temporal_axis: int | None) -> dict[str, Any]:
     entries = sample.get("modalities") or {}
     statuses = {name: str((entries.get(name) or {}).get("status", "already_missing")) for name in modalities}
@@ -505,7 +536,10 @@ def _sample_summary(sample: Mapping[str, Any], modalities: list[str], temporal_a
 
     if temporal_axis is not None:
         temporal = _temporal_paths(paths, temporal_axis)
-        if paths and not temporal:
+        deltas = [(entries.get(name) or {}).get("delta") for name in modalities if entries.get(name)]
+        if any(delta is not None for delta in deltas) and not all(
+            _has_score_axis(delta, temporal_axis - 1) for delta in deltas if delta is not None
+        ):
             raise ValueError("temporal_axis does not identify a list-like score dimension.")
         result["temporal"] = [
             {
@@ -581,6 +615,12 @@ def summarize_explanations(
 
     global_paths: dict[str, dict[tuple[Any, ...], float]] = {name: {} for name in modalities}
     sample_contributions: dict[str, list[tuple[float, float]]] = {name: [] for name in candidates}
+    valid_counts = dict.fromkeys(modalities, 0)
+    common_counts = dict.fromkeys(modalities, 0)
+    for index, statuses in enumerate(statuses_by_sample):
+        for name in modalities:
+            if statuses[name] == "evaluated":
+                valid_counts[name] += len(paths_by_sample[index][name])
     common_sample_count = 0
     for index in joint_indices:
         selected = {name: paths_by_sample[index][name] for name in candidates}
@@ -589,6 +629,7 @@ def summarize_explanations(
             continue
         common_sample_count += 1
         for name in candidates:
+            common_counts[name] += len(common)
             values = [selected[name][position] for position in common]
             sample_contributions[name].append(
                 (sum(values) / len(values), sum(abs(value) for value in values) / len(values))
@@ -610,23 +651,16 @@ def summarize_explanations(
             item = global_result["modalities"][name]
             item["mean_signed_delta"] = sum(value[0] for value in contributions) / len(contributions)
             item["mean_absolute_delta"] = sum(value[1] for value in contributions) / len(contributions)
-            item["common_comparison_count"] = sum(
-                len(
-                    set(paths_by_sample[index][name])
-                    & set.intersection(*(set(paths_by_sample[index][candidate]) for candidate in candidates))
-                )
-                for index in joint_indices
-                if all(paths_by_sample[index][candidate] for candidate in candidates)
-                for _ in [0]
-            )
-    if candidates and common_sample_count:
-        (
-            global_result["ranking"],
-            global_result["ties"],
-            global_result["dominant_modality"],
-            global_result["dominant_modalities"],
-            global_result["status"],
-        ) = _rank_details(global_result["modalities"])
+    for name in modalities:
+        global_result["modalities"][name]["valid_comparison_count"] = valid_counts[name]
+        global_result["modalities"][name]["common_comparison_count"] = common_counts[name]
+    (
+        global_result["ranking"],
+        global_result["ties"],
+        global_result["dominant_modality"],
+        global_result["dominant_modalities"],
+        global_result["status"],
+    ) = _rank_details(global_result["modalities"])
     for name in modalities:
         availability[name].update(global_result["modalities"][name])
         availability[name]["comparable_sample_count"] = common_sample_count if name in candidates else 0
