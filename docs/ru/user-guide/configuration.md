@@ -4,7 +4,7 @@ Training/evaluation YAML содержит framework sections и plugin-specific 
 
 ## Полный plugin-backed пример
 
-Ниже — полный `examples/va_estimation/configs/multimodal_train.yaml` из репозитория. После установки VA plugin и подготовки paths он внутренне согласован. Keys `fusion_va_datamodule`, `fusion_model`, `fusion_ccc_mse_loss`, `va_ccc_metric` и `fusion_framewise_callback` регистрируются plugin, не core.
+Ниже приведён адаптированный plugin-backed пример, а не точная копия shipped VA YAML. После установки plugin и замены внешних путей его нужно сверить с текущим файлом.
 
 ```yaml
 seed: 0
