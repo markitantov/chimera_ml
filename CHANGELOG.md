@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and held-out modality quality evaluation.
+
 ## [0.3.1] - 2026-11-24
 
 ### Added

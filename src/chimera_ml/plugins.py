@@ -28,6 +28,7 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "chimera_ml.data.multimodal_sequence_collate",
     "chimera_ml.inference.steps.checkpoint_steps",
     "chimera_ml.inference.steps.output_steps",
+    "chimera_ml.inference.steps.xai_steps",
 )
 
 
