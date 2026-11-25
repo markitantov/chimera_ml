@@ -10,11 +10,10 @@
       - name: xai_step
         params:
           step:
-            name: fusion_step
-            params:
-              batch_size: 8
+            name: my_prediction_step
+            params: {}
           ablation_policy: zero
-          modalities: [audio, image]
+          modalities: [x]
 
 Вложенный шаг строится через 'INFERENCE_STEPS'. Чтобы подключить собственный prediction step, добавьте необязательный callback и вызовите его сразу после forward модели:
 
@@ -24,28 +23,34 @@
     if self.on_prediction is not None:
         self.on_prediction(model, batch, output)
 
-Минимальный зарегистрированный пользовательский шаг сохраняет тот же callback-контракт:
+Минимальный зарегистрированный шаг, который можно построить из YAML выше:
 
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
     from dataclasses import dataclass, field
-    import torch.nn as nn
+    import torch
+    from torch import nn
 
     from chimera_ml.core.batch import Batch
     from chimera_ml.core.registry import INFERENCE_STEPS
     from chimera_ml.core.types import ModelOutput
 
+    class ToyModel(nn.Module):
+        def forward(self, batch):
+            return ModelOutput(batch.inputs["x"])
+
     @dataclass
     class MyPredictionStep:
-        model: nn.Module
-        loader: Iterable[Batch]
+        value: float = 1.0
         on_prediction: Callable[[nn.Module, Batch, ModelOutput], None] | None = field(default=None, repr=False)
 
         def run(self, ctx):
-            self.model.eval()
-            for batch in self.loader:
-                output = self.model(batch)
+            model = ToyModel().eval()
+            batch = Batch({"x": torch.tensor([[self.value]])}, None)
+            with torch.inference_mode():
+                output = model(batch)
                 if self.on_prediction is not None:
-                    self.on_prediction(self.model, batch, output)
+                    self.on_prediction(model, batch, output)
+            ctx.set_artifact("predictions", output.preds.tolist())
             return ctx
 
     @INFERENCE_STEPS.register("my_prediction_step")
@@ -66,7 +71,7 @@
           step:
             name: my_prediction_step
             params: {}
-          modalities: [audio, video]
+          modalities: [x]
 
 Без XAI существующая конфигурация шагов работает как раньше.
 
@@ -78,6 +83,6 @@
 - 'mask' — отключить presence/temporal masks;
 - 'remove' — удалить ключ модальности из 'Batch.inputs'.
 
-По умолчанию сравниваются исходные 'ModelOutput.preds' без softmax и догадок о типе задачи. Для преобразования используется 'score_fn(model_output)'; функция должна вернуть tensor с тем же batch dimension. Результат содержит baseline, ablated, delta = baseline - ablated и absolute delta. Необязательные diagnostics передаются через 'diagnostic_keys'.
+По умолчанию сравниваются исходные 'ModelOutput.preds' без softmax и догадок о типе задачи. Для преобразования используется 'score_fn(model_output)'; функция должна вернуть tensor с тем же batch dimension. Результат содержит baseline, ablated, delta = baseline - ablated и absolute delta. Необязательные diagnostics передаются через 'diagnostic_keys'. 'validity_fn' выполняется после ablated forward: она может пометить результат как unsupported, но не может предотвратить этот forward.
 
 Дельты измеряют локальную чувствительность предсказания, но не являются причинными эффектами, SHAP-значениями или калиброванной надёжностью. Оценка качества на отложенной выборке остаётся отдельной функцией 'evaluate_modality_quality'.

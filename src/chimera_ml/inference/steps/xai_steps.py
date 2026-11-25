@@ -27,19 +27,64 @@ def _batch_size(batch: Batch) -> int:
 
 
 def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
+    device = next(iter(batch.inputs.values())).device if batch.inputs else torch.device("cpu")
     if modality not in batch.inputs:
-        return torch.zeros(batch_size, dtype=torch.bool)
+        return torch.zeros(batch_size, dtype=torch.bool, device=device)
 
-    available = torch.ones(batch_size, dtype=torch.bool)
-    for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
-        value = batch.get_masks(key)
-        if value is None:
-            continue
-        value = torch.as_tensor(value).bool()
-        if value.ndim == 0 or value.shape[0] != batch_size:
-            raise ValueError(f"Mask '{key}' must have batch dimension {batch_size}, got {tuple(value.shape)}.")
-        available &= value if value.ndim == 1 else value.flatten(1).any(dim=1)
-    return available
+    value = batch.inputs[modality]
+    temporal_width = value.shape[1] if value.ndim >= 3 else 1
+    dedicated = batch.get_masks(f"{modality}_temporal_mask")
+    if dedicated is not None:
+        mask = torch.as_tensor(dedicated, device=device).bool()
+        if mask.shape != (batch_size, temporal_width):
+            raise ValueError(
+                f"Mask '{modality}_temporal_mask' must have shape "
+                f"({batch_size}, {temporal_width}), got {tuple(mask.shape)}."
+            )
+        return mask.any(dim=1)
+
+    presence = batch.get_masks(f"{modality}_mask")
+    if presence is None:
+        resolved = torch.ones((batch_size, temporal_width), dtype=torch.bool, device=device)
+    else:
+        resolved = torch.as_tensor(presence, device=device).bool()
+        if resolved.ndim == 0 or resolved.shape[0] != batch_size:
+            raise ValueError(
+                f"Mask '{modality}_mask' must have batch dimension {batch_size}, got {tuple(resolved.shape)}."
+            )
+        if resolved.ndim == 1:
+            resolved = resolved[:, None].expand(-1, temporal_width)
+        elif resolved.ndim != 2:
+            raise ValueError(f"Mask '{modality}_mask' must have shape (B,) or (B, T), got {tuple(resolved.shape)}.")
+        elif resolved.shape[1] != temporal_width:
+            raise ValueError(
+                f"Mask '{modality}_mask' must have temporal width {temporal_width}, got {resolved.shape[1]}."
+            )
+
+    shared = batch.get_masks("sequence_mask")
+    if shared is not None:
+        shared = torch.as_tensor(shared, device=device).bool()
+        if shared.ndim == 0 or shared.shape[0] != batch_size:
+            raise ValueError(f"Mask 'sequence_mask' must have batch dimension {batch_size}, got {tuple(shared.shape)}.")
+        if shared.ndim == 1:
+            shared = shared[:, None]
+        elif shared.ndim != 2:
+            raise ValueError(f"Mask 'sequence_mask' must have shape (B,) or (B, T), got {tuple(shared.shape)}.")
+        if shared.shape == resolved.shape:
+            resolved = resolved & shared
+
+    return resolved.flatten(1).any(dim=1)
+
+
+def _drop_modality_masks(masks: dict[str, Any], modality: str) -> None:
+    for key in (modality, f"{modality}_mask", f"{modality}_temporal_mask"):
+        masks.pop(key, None)
+    nested = masks.get("mask")
+    if isinstance(nested, Mapping):
+        nested = dict(nested)
+        for key in (modality, f"{modality}_mask", f"{modality}_temporal_mask"):
+            nested.pop(key, None)
+        masks["mask"] = nested
 
 
 def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
@@ -55,8 +100,7 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
         inputs[modality] = torch.zeros_like(value)
     elif policy == "remove":
         del inputs[modality]
-        for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
-            masks.pop(key, None)
+        _drop_modality_masks(masks, modality)
     elif policy == "mask":
         changed = False
         for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
@@ -70,9 +114,7 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
 
     if policy == "remove" and isinstance(meta, dict) and isinstance(meta.get("masks"), Mapping):
         legacy = dict(meta["masks"])
-        legacy.pop(modality, None)
-        legacy.pop(f"{modality}_mask", None)
-        legacy.pop(f"{modality}_temporal_mask", None)
+        _drop_modality_masks(legacy, modality)
         meta["masks"] = legacy
 
     return Batch(inputs, batch.targets, masks or None, meta)
@@ -240,15 +282,20 @@ def explain_batch(
                 )
             changed_valid = _validity(intervened, output, changed, output_mask_key)
             common_valid = baseline_valid & changed_valid
+            rejected = torch.zeros(size, dtype=torch.bool, device=common_valid.device)
             if validity_fn is not None:
                 valid = validity_fn(name, intervened, output)
                 if torch.is_tensor(valid):
                     if valid.ndim == 0 or valid.shape[0] != size:
                         raise ValueError("validity_fn result must be batch-aligned.")
+                    valid = valid.to(common_valid.device).bool()
                     while valid.ndim < common_valid.ndim:
                         valid = valid.unsqueeze(-1)
-                    common_valid &= valid.to(common_valid.device).bool().expand_as(common_valid)
+                    valid = valid.expand_as(common_valid)
+                    rejected = ~valid.flatten(1).any(dim=1)
+                    common_valid &= valid
                 elif not valid:
+                    rejected.fill_(True)
                     common_valid.zero_()
             delta = original - changed
             results[name] = []
@@ -256,7 +303,13 @@ def explain_batch(
                 if not bool(present[index]):
                     results[name].append(_missing("modality is unavailable for this sample"))
                     continue
+                if bool(rejected[index]):
+                    results[name].append(_unsupported("validity_fn rejected the ablated sample"))
+                    continue
                 valid = common_valid[index]
+                if not bool(valid.any()):
+                    results[name].append(_unsupported("no common valid output positions remain"))
+                    continue
                 results[name].append(
                     {
                         "status": "evaluated",

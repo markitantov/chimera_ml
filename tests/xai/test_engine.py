@@ -11,7 +11,7 @@ from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, InferencePipeline, build_inference_step
 from chimera_ml.inference.pipeline import InferenceGraphNode
-from chimera_ml.inference.steps.xai_steps import XAIStep, _intervene, explain_batch
+from chimera_ml.inference.steps.xai_steps import XAIStep, _availability, _intervene, explain_batch
 
 
 class CountingModel(nn.Module):
@@ -272,3 +272,112 @@ def test_registered_wrapper_preserves_predictions_and_sequential_dag(tmp_path: P
     )
     result = pipeline.run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
     assert result.get_artifact("predictions") == {"ok": True}
+
+
+def test_availability_uses_dedicated_temporal_precedence_and_shared_sequence_mask():
+    batch = Batch(
+        {"audio": torch.ones(2, 2, 1)},
+        None,
+        {
+            "audio_mask": torch.ones(2, 2, dtype=torch.bool),
+            "audio_temporal_mask": torch.zeros(2, 2, dtype=torch.bool),
+            "sequence_mask": torch.ones(2, 2, dtype=torch.bool),
+        },
+    )
+    assert not _availability(batch, "audio", 2).any()
+
+    batch.masks.pop("audio_temporal_mask")
+    batch.masks["sequence_mask"] = torch.tensor([[True, False], [False, False]])
+    assert torch.equal(_availability(batch, "audio", 2), torch.tensor([True, False]))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_availability_handles_cpu_and_cuda_masks():
+    cpu_input = Batch(
+        {"audio": torch.ones(2, 1)},
+        None,
+        {"audio_mask": torch.tensor([True, False], device="cuda")},
+    )
+    assert torch.equal(_availability(cpu_input, "audio", 2), torch.tensor([True, False]))
+
+    cuda_input = Batch(
+        {"audio": torch.ones(2, 1, device="cuda")},
+        None,
+        {"audio_mask": torch.tensor([True, False])},
+    )
+    result = _availability(cuda_input, "audio", 2)
+    assert result.device.type == "cuda"
+    assert torch.equal(result.cpu(), torch.tensor([True, False]))
+
+
+def test_validity_rejection_and_no_common_positions_are_unsupported():
+    model = eval_model(CountingModel())
+    batch = make_batch(mixed=False)
+    rejected = explain_batch(model, batch, modalities=("audio",), validity_fn=lambda name, b, output: False)
+    assert rejected["samples"][0]["modalities"]["audio"]["status"] == "unsupported"
+    assert "validity_fn" in rejected["samples"][0]["modalities"]["audio"]["reason"]
+
+    batch.masks["sequence_mask"] = torch.zeros(2, 2, dtype=torch.bool)
+    no_common = explain_batch(model, batch, modalities=("audio",), output_mask_key="sequence_mask")
+    assert no_common["samples"][0]["modalities"]["audio"]["status"] == "unsupported"
+    assert "common valid" in no_common["samples"][0]["modalities"]["audio"]["reason"]
+
+
+def test_remove_intervention_clears_nested_legacy_metadata_masks():
+    batch = Batch(
+        {"audio": torch.ones(1, 1), "video": torch.ones(1, 1)},
+        None,
+        None,
+        {"masks": {"mask": {"audio": torch.ones(1), "video": torch.ones(1)}}},
+    )
+    changed = _intervene(batch, "audio", "remove")
+    assert changed.get_masks("audio_mask") is None
+    assert changed.get_masks("video_mask") is not None
+    assert changed.meta["masks"]["mask"].get("audio") is None
+
+
+def test_predictions_are_unchanged_with_xai(tmp_path: Path):
+    batch = make_batch(mixed=False)
+    expected = eval_model(CountingModel())(batch).preds.tolist()
+    seen = []
+
+    def callback(model, batch_arg, output):
+        seen.append(output.preds.detach().clone())
+
+    model = eval_model(CountingModel())
+    XAIStep(CallbackStep(model, [batch], callback)).run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
+    assert seen[0].tolist() == expected
+
+
+@dataclass
+class ArtifactStep:
+    key: str
+    on_prediction: object = None
+
+    def run(self, ctx: InferenceContext) -> InferenceContext:
+        ctx.set_artifact(self.key, True)
+        return ctx
+
+
+def test_xai_step_runs_inside_sequential_and_parallel_dags(tmp_path: Path):
+    model = eval_model(CountingModel())
+    sequential = InferencePipeline(
+        [
+            InferenceGraphNode("xai", XAIStep(CallbackStep(model, [make_batch(mixed=False)]))),
+            InferenceGraphNode("after", ArtifactStep("after"), ("xai",)),
+        ]
+    )
+    result = sequential.run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
+    assert result.get_artifact("xai")["samples"]
+    assert result.get_artifact("after") is True
+
+    parallel = InferencePipeline(
+        [
+            InferenceGraphNode("xai", XAIStep(CallbackStep(model, [make_batch(mixed=False)]))),
+            InferenceGraphNode("other", ArtifactStep("other")),
+        ],
+        parallel_mode=True,
+    )
+    result = parallel.run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
+    assert result.get_artifact("xai")["samples"]
+    assert result.get_artifact("other") is True
