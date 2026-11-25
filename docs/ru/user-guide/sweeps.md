@@ -12,7 +12,7 @@ parameters:
   train.params.epochs: [3, 5]
 ```
 
-Это даёт четыре Cartesian trials:
+Это даёт четыре комбинации полного перебора:
 
 ```bash
 chimera-ml validate-config --config-path config.yaml
@@ -20,7 +20,7 @@ chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-nam
 chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-name lr-search
 ```
 
-Составные пути могут адресовать отображения и именованные элементы списков: `optimizer.params.lr`, `callbacks.checkpoint_callback.params.monitor`. `--max-trials` ограничивает перебор, `--dry-run` не запускает обучение.
+Составные пути могут адресовать отображения и именованные элементы списков: `optimizer.params.lr`, `callbacks.checkpoint_callback.params.monitor`. `--max-trials` ограничивает число испытаний, `--dry-run` не запускает обучение.
 
 ## Сценарий Optuna
 
@@ -47,7 +47,7 @@ parameters:
     choices: [small, large]
 ```
 
-Тип float требует `low`/`high` и использует `step` или `log`, но не оба параметра. Тип int имеет `step` по умолчанию `1`; логарифмическая шкала для int требует `step: 1`. Тип categorical требует непустой `choices`. `target.mode` — `min`/`max` и aliases `minimize`/`maximize`; default objective — `val/loss`, `min`.
+Тип `float` требует `low`/`high` и использует `step` или `log`, но не оба параметра. Тип `int` имеет `step` по умолчанию `1`; логарифмическая шкала для `int` требует `step: 1`. Тип `categorical` требует непустого `choices`. `target.mode` — `min`/`max`, а также псевдонимы `minimize`/`maximize`; цель по умолчанию — `val/loss`, `min`.
 
 ```bash
 chimera-ml sweep -b config.yaml -s optuna.yaml --dry-run
@@ -66,4 +66,4 @@ CLI добавляет `sweep_target_callback`, запускает обычны�
 └── trial_configs/<label>-<short-id>-001.yaml
 ```
 
-`manifest.yaml` содержит status и trial records; Optuna дополнительно сохраняет study/objective/best trial. Каждое испытание получает собственные артефакты запуска.
+`manifest.yaml` содержит статус и записи испытаний; Optuna дополнительно сохраняет исследование, целевую функцию и лучшее испытание. Каждое испытание получает собственные артефакты запуска.

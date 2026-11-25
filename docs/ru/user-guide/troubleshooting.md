@@ -2,30 +2,30 @@
 
 ## Конфигурация и реестры
 
-- **Раздел должен быть отображением или списком**: `data`, `model`, `loss`, `optimizer` — mappings; `metrics`, `callbacks`, `logging` — lists.
-- **Нет experiment name**: добавьте `experiment_info.params.experiment_name` для `train`/`sweep`.
-- **Неизвестный ключ реестра**: установите plugin, проверьте `chimera-ml plugins list` и `registry list --type ...`.
-- **Collate conflict**: не задавайте одновременно top-level `collate` и `data.params.collate_fn`.
+- **Раздел должен быть отображением или списком**: `data`, `model`, `loss`, `optimizer` — отображения; `metrics`, `callbacks`, `logging` — списки.
+- **Нет имени эксперимента**: добавьте `experiment_info.params.experiment_name` для `train`/`sweep`.
+- **Неизвестный ключ реестра**: установите плагин, проверьте `chimera-ml plugins list` и `registry list --type ...`.
+- **Конфликт collate**: не задавайте одновременно верхнеуровневый `collate` и `data.params.collate_fn`.
 
 ## Данные и формы
 
-- **Путь к датасету не найден**: `validate-config` не проверяет filesystem. Проверьте paths и current working directory.
-- **Нет targets**: training требует `Batch.targets`; исправьте Dataset/collate.
-- **Несовпадение формы**: сравните feature/target dimensions с model contract. `multimodal_sequence_collate` принимает rank-one `[D]` или rank-two `[T,D]` и consistent feature dimension для каждой modality.
-- **Несовпадение маски**: temporal masks должны быть `[B,T]`, explicit sample masks — длина unpadded sequence. Missing inputs zero-filled, но presence masks должны отмечать unavailable data.
+- **Путь к датасету не найден**: `validate-config` не проверяет файловую систему. Проверьте пути и текущий рабочий каталог.
+- **Нет целевых значений**: обучение требует `Batch.targets`; исправьте Dataset или collate-функцию.
+- **Несовпадение формы**: сравните размерности признаков и целевых значений с контрактом модели. `multimodal_sequence_collate` принимает тензоры размерности 1 `[D]` или размерности 2 `[T,D]` и одинаковую ширину признаков для каждой модальности.
+- **Несовпадение маски**: временные маски должны иметь форму `[B,T]`, явные маски образца — длину исходной последовательности без дополнения. Отсутствующие входы заполняются нулями, но маски наличия должны отмечать недоступные данные.
 
 ## Устройство и численные ошибки
 
-- **CUDA unavailable**: `doctor` показывает `cuda_available`; Trainer использует CPU. Для GPU нужны совместимые PyTorch wheel/driver.
-- **NaN/Inf**: проверьте normalization, targets, loss scale, learning rate и masks.
-- **Mixed precision как CPU**: AMP включается только на resolved CUDA device.
+- **CUDA недоступна**: `doctor` показывает `cuda_available`; Trainer использует CPU. Для GPU нужны совместимая сборка PyTorch с поддержкой CUDA и драйвер.
+- **NaN/Inf**: проверьте нормализацию, целевые значения, масштаб функции потерь, скорость обучения и маски.
+- **Смешанная точность на CPU**: AMP включается только на выбранном устройстве CUDA.
 
 ## Мониторы, колбэки и результаты
 
-- **Monitor missing**: используйте точный key `val/loss`, `val/mae` или plugin key `val_framewise/va_ccc_metric`.
-- **Нет prediction/figure artifacts**: callbacks требуют MLflow logger и cached labeled outputs; проверьте split selector и `collect_cache`.
-- **Telegram fail**: экспортируйте configured token/chat ID env vars; credentials не храните в YAML.
+- **Монитор отсутствует**: используйте точный ключ `val/loss`, `val/mae` или ключ плагина `val_framewise/va_ccc_metric`.
+- **Нет артефактов предсказаний или графиков**: колбэкам требуются журналировщик MLflow и кэшированные результаты для размеченных данных; проверьте выборку и `collect_cache`.
+- **Ошибка Telegram**: экспортируйте настроенные переменные окружения с токеном и идентификатором чата; учётные данные не храните в YAML.
 
 ## Совместимость контрольных точек
 
-Evaluation делает strict load `model_state_dict`. Нужны тот же model key, constructor params, modality names и feature dimensions. Raw state dict допускается, но не содержит optimizer/scheduler metadata.
+Оценка выполняет строгую загрузку `model_state_dict`. Нужны те же ключ модели, параметры конструктора, имена модальностей и размерности признаков. Необёрнутый словарь состояния допускается, но не содержит метаданных оптимизатора и планировщика.

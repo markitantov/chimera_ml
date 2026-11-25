@@ -4,9 +4,9 @@
 
 ## Ответственность Dataset
 
-Датасет задачи — PyTorch `Dataset` (или эквивалент плагина), чей `__getitem__` возвращает отображение. Фреймворк не определяет формат аудио, видео, текста, кэшированных признаков, меток и идентификаторов.
+Набор данных задачи — PyTorch `Dataset` (или эквивалент плагина), чей `__getitem__` возвращает отображение. Фреймворк не определяет формат аудио, видео, текста, кэшированных признаков, меток и идентификаторов.
 
-Практический sample:
+Пример образца:
 
 ```python
 {
@@ -19,11 +19,11 @@
 }
 ```
 
-Разрешён alias `target`. Modality может отсутствовать в sample. `targets=None` допустим для unlabeled data, но `Trainer.fit` отвергает train batch без targets.
+Разрешён псевдоним `target`. Модальность может отсутствовать в образце. `targets=None` допустим для данных без меток, но `Trainer.fit` отклоняет обучающий батч без целевых значений.
 
-## DataModule и разделы данных
+## DataModule и выборки
 
-Core `DataModule` принимает один dataset, mapping named datasets или sequence для каждого split и строит DataLoaders с `batch_size`, `num_workers`, `pin_memory`, `persistent_workers`, `shuffle_train` и `drop_last_train`:
+Ядро `DataModule` принимает один набор данных, отображение именованных наборов или последовательность для каждой выборки и строит DataLoader с `batch_size`, `num_workers`, `pin_memory`, `persistent_workers`, `shuffle_train` и `drop_last_train`:
 
 ```python
 from chimera_ml.data import DataModule, multimodal_sequence_collate
@@ -39,17 +39,17 @@ module = DataModule(
 )
 ```
 
-DataModule плагина обычно создаёт датасеты и возвращает тот же интерфейс. Core не регистрирует универсальный ключ DataModule, поэтому `data.name` в YAML должен быть предоставлен плагином.
+DataModule плагина обычно создаёт наборы данных и возвращает тот же интерфейс. Ядро не регистрирует универсальный ключ DataModule, поэтому `data.name` в YAML должен быть предоставлен плагином.
 
-Mapping сохраняет names; sequence получает names вроде `train0`. Multiple train loaders планируются через `train_loader_mode`.
+Отображение сохраняет имена; последовательность получает имена вроде `train0`. Несколько обучающих загрузчиков планируются через `train_loader_mode`.
 
 ## Batch и канонические маски
 
-`Batch.inputs` — mapping modality к tensors, `targets` — target или `None`, `masks` — canonical flat mapping. `Batch.get_masks()` также понимает legacy `masks["mask"]` и `meta["masks"]`.
+`Batch.inputs` — отображение модальности на тензоры, `targets` — целевое значение или `None`, `masks` — каноническое плоское отображение. `Batch.get_masks()` также понимает вложенные маски обратной совместимости `masks["mask"]` и `meta["masks"]`.
 
-- `<modality>_mask` — sample presence; built-in multimodal collate создаёт float32 `[B]`.
-- `<modality>_temporal_mask` — valid temporal positions, bool `[B, T]`.
-- `sequence_mask` от `masking_collate` — valid padded positions, bool `[B, T_max]`.
+- `<modality>_mask` — наличие модальности в образце; встроенная мультимодальная collate-функция создаёт float32 `[B]`.
+- `<modality>_temporal_mask` — допустимые временные позиции, bool `[B, T]`.
+- `sequence_mask` от `masking_collate` — допустимые позиции после дополнения, bool `[B, T_max]`.
 - Отсутствующие входы заполняются нулями, но маски отличают отсутствующие данные от настоящего нуля.
 
 ## Выбор collate-функции
@@ -67,11 +67,11 @@ collate:
     include_legacy_meta_masks: false
 ```
 
-Sequences `audio` длины 3 и 1 дают `audio.shape == [2, 3, D]`, `audio_mask.shape == [2]`, `sequence_mask.shape == [2, 3]`.
+Последовательности `audio` длины 3 и 1 дают `audio.shape == [2, 3, D]`, `audio_mask.shape == [2]`, `sequence_mask.shape == [2, 3]`.
 
 ### `multimodal_sequence_collate`
 
-Используйте для независимых временных шкал признаков. `[D]` становится `[B, D]` с temporal mask `[B, 1]`; `[T, D]` отдельно для каждой modality дополняется до `[B, T_max, D]`.
+Используйте для независимых временных шкал признаков. `[D]` становится `[B, D]` с временной маской `[B, 1]`; `[T, D]` отдельно для каждой модальности дополняется до `[B, T_max, D]`.
 
 ```python
 import torch
@@ -88,6 +88,6 @@ assert batch.get_masks("audio_temporal_mask").shape == (2, 2)
 assert batch.get_masks("video_temporal_mask").shape == (2, 3)
 ```
 
-Explicit `<modality>_temporal_mask` может быть в `meta`, `meta["masks"]` или sample-level `masks`; длина должна совпадать с sequence. Поддерживаются `pad_value`, `pad_sequences`, `include_legacy_meta_masks`. Временные шкалы автоматически не выравниваются.
+Явная `<modality>_temporal_mask` может находиться в `meta`, `meta["masks"]` или масках уровня образца `masks`; длина должна совпадать с последовательностью. Поддерживаются `pad_value`, `pad_sequences`, `include_legacy_meta_masks`. Временные шкалы автоматически не выравниваются.
 
-Top-level `collate` используется CLI `train` и `eval`; DataModule factory должна явно принимать keyword `collate_fn`. Одновременные `collate:` и `data.params.collate_fn` запрещены.
+Верхнеуровневый `collate` используется CLI `train` и `eval`; фабрика DataModule должна явно принимать именованный параметр `collate_fn`. Одновременная настройка `collate:` и `data.params.collate_fn` запрещена.

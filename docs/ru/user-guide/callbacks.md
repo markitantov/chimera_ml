@@ -1,8 +1,8 @@
 # Колбэки в сценарии обучения
 
-Полный каталог callbacks и lifecycle находится в [Callbacks](../components/callbacks/index.md); эта страница описывает workflow setup.
+Полный каталог колбэков и жизненного цикла находится в разделе [Колбэки](../components/callbacks/index.md); эта страница описывает настройку сценария работы.
 
-Callbacks получают lifecycle events Trainer: `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, `on_fit_end`. Монитор должен быть точным flat log key.
+Колбэки получают события жизненного цикла Trainer: `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, `on_fit_end`. Монитор должен быть точным плоским ключом журнала.
 
 ## Контрольная точка, ранняя остановка и снимок
 
@@ -30,11 +30,11 @@ callbacks:
       save_config: true
 ```
 
-Пример предполагает metric `mae` на split `val`. Checkpoint создаёт `logs/<experiment>/<run>/checkpoints`; snapshot создаёт `code.zip` и копию config. CLI inject-ит experiment/run names и config path.
+Пример предполагает метрику качества `mae` на выборке `val`. Контрольная точка создаётся в `logs/<experiment>/<run>/checkpoints`; снимок создаёт `code.zip` и копию конфигурации. CLI внедряет имена эксперимента и запуска, а также путь к конфигурации.
 
 ## Предсказания и матрица ошибок
 
-Оба callback требуют MLflow logger и включают evaluation cache:
+Оба колбэка требуют журналировщик MLflow и включают кэш результатов оценки:
 
 ```yaml
 logging:
@@ -56,7 +56,7 @@ callbacks:
       filename_template: confusion_matrix_epoch_{epoch}.pdf
 ```
 
-Prediction callback пишет CSV в `predictions/<split>`: для regression — `pred_*`/`target_*`, для classification — `pred_class`, probabilities и target. Confusion callback требует classification-compatible outputs и пишет PDF в `figures/<split>`. Нужен `matplotlib`.
+Колбэк предсказаний записывает CSV в `predictions/<split>`: для регрессии — `pred_*`/`target_*`, для классификации — `pred_class`, вероятности и целевое значение. Колбэк матрицы ошибок требует результатов, совместимых с классификацией, и записывает PDF в `figures/<split>`. Требуется `matplotlib`.
 
 ## Telegram и цель перебора
 
@@ -77,6 +77,6 @@ export TELEGRAM_CHAT_ID='...'
     request_timeout_sec: 15
 ```
 
-Notifier отправляет сообщение на `on_fit_end`, требует network и requests. Tokens не записывайте в YAML. `sweep_target_callback` обычно добавляется автоматически для Optuna и отслеживает best scalar, но не останавливает training и не сохраняет files.
+Notifier отправляет сообщение на `on_fit_end`, требует сетевого доступа и `requests`. Не записывайте токены в YAML. `sweep_target_callback` обычно автоматически добавляется для Optuna и отслеживает лучшее скалярное значение, но не останавливает обучение и не сохраняет файлы.
 
-Dependency checklist: monitored key должен существовать; prediction/figure callbacks требуют cached labeled outputs и MLflow; snapshot copy config требует CLI config path или explicit `config_path` при direct API use.
+Контрольный список зависимостей: ключ мониторинга должен существовать; колбэкам предсказаний и графиков нужны кэшированные результаты для размеченных данных и MLflow; копирование конфигурации колбэком снимка требует пути к конфигурации CLI или явного `config_path` при прямом вызове API.

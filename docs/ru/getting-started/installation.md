@@ -2,7 +2,7 @@
 
 ## Требования и варианты установки
 
-CHIMERA-ML поддерживает Python `>=3.12,<3.13`. Core объявляет PyTorch `>=2.2,<3.0`, а также NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna и requests. CUDA wheel и driver PyTorch выбираются под машину; CHIMERA-ML не устанавливает CUDA driver.
+CHIMERA-ML поддерживает Python `>=3.12,<3.13`. Ядро объявляет зависимости PyTorch `>=2.2,<3.0`, NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna и requests. CUDA-сборка и драйвер PyTorch выбираются под конкретную машину; CHIMERA-ML не устанавливает драйвер CUDA.
 
 Установка опубликованного пакета в виртуальное окружение:
 
@@ -13,7 +13,7 @@ python -m pip install --upgrade pip
 python -m pip install chimera-ml
 ```
 
-Доступны два равнозначных entry points:
+Доступны две равнозначные точки входа:
 
 ```bash
 chimera-ml --help
@@ -27,7 +27,7 @@ poetry install --with dev,docs
 poetry run chimera-ml doctor
 ```
 
-Группа `docs` нужна только для сборки документации. У плагинов-примеров есть собственные зависимости; например:
+Группа `docs` нужна только для сборки документации. У плагинов из примеров есть собственные зависимости; например:
 
 ```bash
 python -m pip install -e examples/va_estimation
@@ -43,11 +43,11 @@ chimera-ml plugins list
 chimera-ml registry list
 ```
 
-`doctor` показывает Python, PyTorch, доступность CUDA, MLflow, количество registries и plugins. `plugins list` показывает entry points, а `registry list` — реально загруженные keys.
+`doctor` показывает версии Python и PyTorch, доступность CUDA, наличие MLflow, количество реестров и плагинов. `plugins list` показывает точки входа, а `registry list` — реально загруженные ключи.
 
 ## CPU и CUDA
 
-`train.params.device` обычно принимает `cuda` или `cpu`. Trainer переходит на CPU, если CUDA недоступна. `mixed_precision: true` включает AMP и gradient scaling только на CUDA; на CPU остаётся full precision.
+`train.params.device` обычно принимает `cuda` или `cpu`. Trainer переходит на CPU, если CUDA недоступна. `mixed_precision: true` включает AMP и масштабирование градиентов только на CUDA; на CPU сохраняется полная точность.
 
 ```bash
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
@@ -55,7 +55,7 @@ python -c "import torch; print(torch.__version__); print(torch.cuda.is_available
 
 Для GPU нужны совместимые CUDA-сборка PyTorch и драйвер. Режим CPU подходит для проверки конфигурации и регистрации плагинов.
 
-## Основные CLI entry points
+## Основные точки входа CLI
 
 ```text
 chimera-ml validate-config --config-path CONFIG.yaml

@@ -1,7 +1,6 @@
 # MLflow
 
-mlflow_logger лениво импортирует MLflow, задаёт tracking_uri и experiment,
-запускает run, пишет params/metrics и завершает run после training.
+`mlflow_logger` отложенно импортирует MLflow, задаёт `tracking_uri` и эксперимент, запускает выполнение, записывает параметры и метрики и завершает его после обучения.
 
 ~~~yaml
 logging:
@@ -11,10 +10,6 @@ logging:
       experiment_name: chimera
 ~~~
 
-Trainer пишет training params, optimizer learning rates, epoch metrics и
-batch loss с интервалом log_every_steps. Callbacks могут отправлять files,
-bytes и text через logger interface. Если MLflow отсутствует, возникает
-понятный ModuleNotFoundError.
+Trainer записывает параметры обучения, скорости обучения оптимизатора, метрики эпох и функцию потерь батча с интервалом `log_every_steps`. Колбэки могут отправлять файлы, байты и текст через интерфейс журналировщика. Если MLflow отсутствует, возникает понятная ошибка `ModuleNotFoundError`.
 
-URI sqlite:///logs/mlflow.db использует local tracking store. Secrets
-храните в backend authentication, не в configs.
+URI `sqlite:///logs/mlflow.db` использует локальное хранилище отслеживания. Секреты храните в аутентификации серверной части, а не в конфигурациях.

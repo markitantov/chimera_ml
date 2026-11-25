@@ -1,10 +1,10 @@
 # Конфигурация эксперимента
 
-Training/evaluation YAML содержит framework sections и plugin-specific params. Core проверяет форму sections, а factory отвечает за собственные params. Для `train`/`eval` обязательны `data`, `model`, `train`, `loss` и `optimizer`; для `train`/`sweep` нужен `experiment_info.params.experiment_name`.
+YAML обучения и оценки содержит разделы фреймворка и параметры, специфичные для плагина. Ядро проверяет структуру разделов, а фабрика отвечает за собственные параметры. Для `train`/`eval` обязательны `data`, `model`, `train`, `loss` и `optimizer`; для `train`/`sweep` требуется `experiment_info.params.experiment_name`.
 
-## Полный plugin-backed пример
+## Полный пример с плагином
 
-Ниже приведён адаптированный plugin-backed пример, а не точная копия shipped VA YAML. После установки plugin и замены внешних путей его нужно сверить с текущим файлом.
+Ниже приведён адаптированный пример с плагином, а не точная копия поставляемого VA YAML. После установки плагина и замены внешних путей его нужно сверить с актуальным файлом.
 
 ```yaml
 seed: 0
@@ -118,7 +118,7 @@ callbacks:
       request_timeout_sec: 15
 ```
 
-Для этого файла нужны editable plugin install, feature/annotation paths из `data.params` и Telegram credentials, если callback оставлен. Иначе удалите notifier. Проверка:
+Для этого файла нужны установка плагина в editable-режиме, пути к признакам и аннотациям из `data.params`, а также учётные данные Telegram, если колбэк оставлен. Иначе удалите notifier. Проверка:
 
 ```bash
 python -m pip install -e examples/va_estimation
@@ -127,22 +127,22 @@ chimera-ml validate-config --config-path examples/va_estimation/configs/multimod
 
 ## Секции
 
-| Section | Required | Значение |
+| Раздел | Обязателен | Значение |
 | --- | --- | --- |
-| `seed` | нет, default `0` | Передаётся seed helper. |
-| `experiment_info.params.experiment_name` | для `train`/`sweep` | Identity experiment и output paths. |
-| `data` | да для train/eval | `name` и `params` registered DataModule factory. |
-| `collate` | нет | Top-level registered collate, injected как `collate_fn`. |
-| `model` | да | Registered model и constructor params. |
-| `train.params` | да | `TrainConfig`: epochs, device, precision, clipping, loader mode, scheduler и cache. |
-| `loss` | да | Registered loss factory. |
-| `metrics` | нет | Список registered metrics. |
-| `optimizer` | да | Registered optimizer. |
-| `scheduler` | нет | Registered scheduler и его PyTorch params. |
-| `callbacks` | нет | Lifecycle callbacks. |
-| `logging` | нет | `console_file_logger`, `mlflow_logger` или plugin loggers. |
+| `seed` | нет, по умолчанию `0` | Передаётся вспомогательной функции инициализации. |
+| `experiment_info.params.experiment_name` | для `train`/`sweep` | Идентификатор эксперимента и пути к результатам. |
+| `data` | да для train/eval | `name` и `params` зарегистрированной фабрики DataModule. |
+| `collate` | нет | Зарегистрированная верхнеуровневая collate-функция, внедряемая как `collate_fn`. |
+| `model` | да | Зарегистрированная модель и параметры конструктора. |
+| `train.params` | да | `TrainConfig`: число эпох, устройство, точность, ограничение градиентов, режим загрузчиков, планировщик и кэш. |
+| `loss` | да | Зарегистрированная фабрика функции потерь. |
+| `metrics` | нет | Список зарегистрированных метрик. |
+| `optimizer` | да | Зарегистрированный оптимизатор. |
+| `scheduler` | нет | Зарегистрированный планировщик и его параметры PyTorch. |
+| `callbacks` | нет | Колбэки жизненного цикла. |
+| `logging` | нет | `console_file_logger`, `mlflow_logger` или журналировщики плагина. |
 
-Named item имеет вид:
+Именованный элемент имеет вид:
 
 ```yaml
 name: registry_key
@@ -150,6 +150,6 @@ params:
   option: value
 ```
 
-Core не проверяет plugin paths, feature dimensions и labels. Не называйте config self-contained, если нужны external data.
+Ядро не проверяет пути плагина, размерности признаков и метки. Не считайте конфигурацию самодостаточной, если ей нужны внешние данные.
 
-`device` обычно `cuda`/`cpu`; `mixed_precision` действует только на CUDA. `log_path` задаётся logger/callback params, а не `train.params`. Logger создаёт `<log_path>/<experiment>/<run>/<log_file>`, checkpoint/snapshot используют ту же experiment/run directory.
+`device` обычно имеет значение `cuda` или `cpu`; `mixed_precision` действует только на CUDA. `log_path` задаётся параметрами журналировщика или колбэка, а не `train.params`. Журналировщик создаёт `<log_path>/<experiment>/<run>/<log_file>`, а контрольная точка и снимок используют тот же каталог эксперимента и запуска.

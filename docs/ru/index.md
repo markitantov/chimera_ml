@@ -14,9 +14,9 @@ CHIMERA-ML — конфигурационный фреймворк на PyTorch 
 
 ## Основная схема
 
-Обучение: `Dataset -> DataModule/DataLoader -> Batch -> Model -> ModelOutput -> loss/metrics -> Trainer -> checkpoints`. Инференс отделён: `input -> InferencePipeline -> registered steps -> artifacts/predictions`. YAML выбирает компоненты по ключу реестра, а `params` передаются их фабрике.
+Обучение проходит по цепочке `Dataset -> DataModule/DataLoader -> Batch -> Model -> ModelOutput -> loss/metrics -> Trainer -> checkpoints`. Инференс отделён от неё: `input -> InferencePipeline -> registered steps -> artifacts/predictions`. YAML выбирает компоненты по ключу реестра, а `params` передаются соответствующей фабрике.
 
-Ядро не содержит датасеты задач и не подставляет пути автоматически. Установите плагин, нужный для примера или конфигурации, измените пути к ресурсам и сначала запустите `validate-config`.
+Ядро не содержит датасеты задач и не подставляет пути автоматически. Установите плагин, необходимый для примера или конфигурации, укажите пути к ресурсам и сначала запустите `validate-config`.
 
 ~~~bash
 pip install chimera-ml

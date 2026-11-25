@@ -11,20 +11,20 @@ chimera-ml doctor
 chimera-ml plugins list
 ```
 
-Plugin регистрирует `fusion_va_datamodule`, `fusion_model`, `fusion_ccc_mse_loss`, `va_ccc_metric` и `fusion_framewise_callback`. Проверяйте keys своей среды через `chimera-ml registry list`.
+Плагин регистрирует `fusion_va_datamodule`, `fusion_model`, `fusion_ccc_mse_loss`, `va_ccc_metric` и `fusion_framewise_callback`. Проверяйте ключи своей среды через `chimera-ml registry list`.
 
 ## 2. Подготовить данные и пути
 
-Измените `examples/va_estimation/configs/multimodal_train.yaml`: feature и annotation paths находятся в `data.params`. Плагин ожидает файлы признаков VA и метки; фреймворк их не создаёт. Если оставляете `telegram_notifier_callback`, задайте переменные или удалите callback:
+Измените `examples/va_estimation/configs/multimodal_train.yaml`: пути к признакам и аннотациям находятся в `data.params`. Плагин ожидает файлы признаков VA и метки; фреймворк их не создаёт. Если оставляете `telegram_notifier_callback`, задайте переменные или удалите колбэк:
 
 ```bash
 export TELEGRAM_BOT_TOKEN='your-token'
 export TELEGRAM_CHAT_ID='your-chat-id'
 ```
 
-Не помещайте credentials в YAML или git.
+Не помещайте учётные данные в YAML или git.
 
-## 3. Validate и train
+## 3. Проверить конфигурацию и запустить обучение
 
 ```bash
 chimera-ml validate-config   --config-path examples/va_estimation/configs/multimodal_train.yaml
@@ -33,7 +33,7 @@ chimera-ml train   --config-path examples/va_estimation/configs/multimodal_train
 
 Проверка имеет структурный характер. Обучение дополнительно требует ключи плагина, пути к датасету, формы признаков и существующий монитор колбэка. Пример просит CUDA и mixed precision; при недоступной CUDA Trainer перейдёт на CPU.
 
-## 4. Найти logs и checkpoints
+## 4. Найти журналы и контрольные точки
 
 В примере `log_path: logs`, `experiment_name: va_estimation_fusion`. CLI передаёт сгенерированное имя запуска колбэкам:
 
@@ -49,16 +49,16 @@ logs/
         └── code.zip
 ```
 
-Конфигурацию и `code.zip` создаёт колбэк снимка при включённых параметрах. Checkpoint содержит model/optimizer state, epoch, global step и scheduler state, если scheduler есть. Журналировщик MLflow записывает метрики и артефакты в tracking store.
+Конфигурацию и `code.zip` создаёт колбэк снимка при включённых параметрах. Контрольная точка содержит состояния модели и оптимизатора, эпоху, глобальный шаг и состояние планировщика, если он задан. Журналировщик MLflow записывает метрики и артефакты в хранилище отслеживания.
 
-## 5. Оценить checkpoint
+## 5. Оценить контрольную точку
 
 ```bash
 chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/your_run/checkpoints/last.pt
 ```
 
-Оценка заново строит datamodule, model, loss, metrics и callbacks, загружает `model_state_dict` из payload или raw state dict и требует точного совпадения архитектуры. Это не инференс развёртывания.
+Оценка заново строит DataModule, модель, функцию потерь, метрики и колбэки, загружает `model_state_dict` из полезной нагрузки или необёрнутого словаря состояния и требует точного совпадения архитектуры. Это не инференс развёртывания.
 
 ## Для своего проекта
 
-Сохраните структуру YAML фреймворка, но замените plugin-specific `data`, `model`, `loss`, `metrics` и callbacks своими зарегистрированными components. См. [Основные понятия](essential-concepts.md), [подготовку datasets](../user-guide/data.md) и [конфигурацию](../user-guide/configuration.md).
+Сохраните структуру YAML фреймворка, но замените специфичные для плагина `data`, `model`, `loss`, `metrics` и колбэки своими зарегистрированными компонентами. См. [Основные понятия](essential-concepts.md), [подготовку наборов данных](../user-guide/data.md) и [конфигурацию](../user-guide/configuration.md).

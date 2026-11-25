@@ -1,6 +1,6 @@
 # Журналирование и MLflow
 
-Полный registry loggers и defaults находится в [Loggers](../components/logging.md); здесь описан training workflow.
+Полный реестр журналировщиков и значения по умолчанию приведены в разделе [Журналирование](../components/logging.md); здесь описан сценарий журналирования обучения.
 
 ## Локальный журнал в консоль и файл
 
@@ -16,7 +16,7 @@ logging:
       encoding: utf-8
 ```
 
-Logger создаёт `logs/<experiment_name>/<run_name>/train.log`; CLI inject-ит experiment и generated run names. Epoch logs содержат loss, sample count и metrics. `train.params.log_every_steps` задаёт interval step metrics для MLflow; callbacks получают `train_step/loss` на каждом train batch.
+Журналировщик создаёт `logs/<experiment_name>/<run_name>/train.log`; CLI внедряет имя эксперимента и сгенерированное имя запуска. Журналы эпох содержат функцию потерь, число образцов и метрики. `train.params.log_every_steps` задаёт интервал записи пошаговых метрик в MLflow; колбэки получают `train_step/loss` на каждом обучающем батче.
 
 ## Журнал MLflow
 
@@ -29,14 +29,14 @@ logging:
       run_name: fusion
 ```
 
-Logger создаёт MLflow run, пишет params/metrics и принимает artifacts от callbacks. `tracking_uri` может быть local SQLite или reachable tracking service. MLflow импортируется при создании logger; при отсутствии dependency установите её или удалите logger. Local file и MLflow могут работать вместе.
+Журналировщик создаёт запуск MLflow, записывает параметры и метрики и принимает артефакты от колбэков. `tracking_uri` может указывать на локальную SQLite-базу или доступный сервис отслеживания. MLflow импортируется при создании журналировщика; при отсутствии зависимости установите её или удалите журналировщик. Локальный файл и MLflow могут работать вместе.
 
-Metrics имеют keys `train/loss`, `val/loss`, `val/mae`; step loss — `train_step/loss`. Artifacts используют `snapshots`/`configs`, `predictions/<split>`, `figures/<split>`.
+Метрики имеют ключи `train/loss`, `val/loss`, `val/mae`; пошаговая функция потерь — `train_step/loss`. Артефакты используют `snapshots`/`configs`, `predictions/<split>`, `figures/<split>`.
 
-Для local UI используйте optional command:
+Для локального интерфейса используйте необязательную команду:
 
 ```bash
 mlflow ui --backend-store-uri sqlite:///logs/mlflow.db
 ```
 
-Tracking URI сам по себе не запускает browser UI и remote server.
+Один только URI отслеживания не запускает веб-интерфейс и удалённый сервер.
