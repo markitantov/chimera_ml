@@ -15,63 +15,72 @@ nav:
       - Установка: getting-started/installation.md
       - Быстрый старт: getting-started/quickstart.md
       - Первый эксперимент: getting-started/first-experiment.md
-  - Основные концепции:
-      - Обзор: concepts/index.md
-      - Архитектура: concepts/architecture.md
-      - Конфигурация: concepts/configuration.md
-      - Registries: concepts/registries.md
-      - BuildContext: concepts/build-context.md
-      - Plugins: concepts/plugins.md
-  - Руководство пользователя:
+      - Основные понятия: concepts/index.md
+  - Обучение:
       - Обзор: user-guide/index.md
-      - Configuration reference: user-guide/configuration.md
-      - Data: user-guide/data.md
-      - Models: user-guide/models.md
+      - Подготовка данных: user-guide/data.md
+      - Конфигурация эксперимента: user-guide/configuration.md
+      - Обучение модели: user-guide/training.md
+      - Оценка checkpoint: user-guide/evaluation.md
+      - Callbacks: user-guide/callbacks.md
+      - Logging и MLflow: user-guide/logging.md
+      - MLflow: user-guide/mlflow.md
+      - Hyperparameter sweeps: user-guide/sweeps.md
+      - Диагностика: user-guide/troubleshooting.md
+  - Inference:
+      - Обзор: user-guide/inference.md
+      - Запуск inference: user-guide/cli.md
+      - Объяснимый AI (XAI): user-guide/xai.md
+      - API inference: api/inference.md
+  - Компоненты:
+      - Обзор: user-guide/models.md
+      - Core-компоненты: api/core.md
+      - Данные и collate: user-guide/data.md
+      - Модели: user-guide/models.md
       - TFS: user-guide/tfs-fusion.md
       - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
       - RAAV: user-guide/raav-fusion.md
       - TOMAR: user-guide/tomar-fusion.md
-      - Training: user-guide/training.md
-      - Evaluation: user-guide/evaluation.md
       - Losses: user-guide/losses.md
       - Metrics: user-guide/metrics.md
-      - Optimizers and schedulers: user-guide/optimizers-schedulers.md
+      - Optimizers и schedulers: user-guide/optimizers-schedulers.md
       - Callbacks: user-guide/callbacks.md
-      - Logging: user-guide/logging.md
-      - MLflow: user-guide/mlflow.md
-      - Inference: user-guide/inference.md
-      - Исследовательский XAI: user-guide/xai.md
-      - Sweeps: user-guide/sweeps.md
-      - Plugins: user-guide/plugins.md
-      - CLI workflows: user-guide/cli.md
-      - Troubleshooting: user-guide/troubleshooting.md
-  - Практические примеры:
+      - Loggers: user-guide/logging.md
+  - Примеры:
       - Обзор: tutorials/index.md
       - VA estimation: tutorials/va-estimation.md
       - ORAGEN: tutorials/oragen.md
       - Affective states recognition: tutorials/affective-states-recognition.md
-  - API Reference:
+  - Расширение:
+      - Обзор: concepts/plugins.md
+      - Архитектура: concepts/architecture.md
+      - Конфигурация: concepts/configuration.md
+      - Конфигурация: concepts/configuration.md
+      - Registries: concepts/registries.md
+      - BuildContext: concepts/build-context.md
+      - Plugins: user-guide/plugins.md
+      - Авторизация plugin: development/plugins.md
+  - Справочник:
       - Обзор: api/index.md
-      - Core: api/core.md
-      - Data: api/data.md
-      - Models: api/models.md
-      - Training: api/training.md
-      - Inference: api/inference.md
-      - Callbacks: api/callbacks.md
-      - Losses: api/losses.md
-      - Metrics: api/metrics.md
-      - Logging: api/logging.md
-      - Plugins: api/plugins.md
-  - CLI Reference: cli/reference.md
+      - Конфигурация: user-guide/configuration.md
+      - CLI: cli/reference.md
+      - Core API: api/core.md
+      - Data API: api/data.md
+      - Models API: api/models.md
+      - Training API: api/training.md
+      - Inference API: api/inference.md
+      - Callbacks API: api/callbacks.md
+      - Losses API: api/losses.md
+      - Metrics API: api/metrics.md
+      - Logging API: api/logging.md
+      - Plugins API: api/plugins.md
   - Разработка:
       - Обзор: development/index.md
-      - Setup: development/setup.md
       - Архитектура: development/architecture.md
+      - Setup: development/setup.md
       - Testing: development/testing.md
       - Documentation: development/documentation.md
-      - Plugin authoring: development/plugins.md
-      - Releasing: development/releasing.md
-  - Релизы:
-      - Обзор: releases/index.md
       - Changelog: releases/changelog.md
       - Migration guide: releases/migration.md
+      - Releasing: development/releasing.md
+      - Релизы: releases/index.md

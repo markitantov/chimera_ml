@@ -10,3 +10,15 @@ Follow these pages in order if Chimera ML is new to you:
 
 After onboarding, read [Configuration](../concepts/configuration.md) and the
 [User guide](../user-guide/index.md).
+
+
+## Before you start
+
+The core package supplies runtime infrastructure, not task data. Install a
+plugin when your configuration refers to plugin datamodules, models, metrics,
+callbacks, or inference steps. `validate-config` checks the framework shape; it
+does not download a dataset, checkpoint, or optional plugin dependency.
+
+For a first pass, use a repository example and follow its documented path
+changes. Then replace its `data`, `model`, and task-specific component entries
+with your own registered components.

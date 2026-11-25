@@ -1,45 +1,26 @@
 # Chimera ML
 
-Chimera ML — configuration-driven Python framework для построения, обучения,
-оценки и запуска одномодальных и мультимодальных PyTorch experiments. Runtime
-предоставляет trainer, registries, callbacks, loggers и inference pipeline;
-task-specific components могут находиться в установленном plugin package.
+CHIMERA-ML — конфигурационный PyTorch framework для построения, обучения, оценки и запуска uni-modal и multi-modal экспериментов. Он предоставляет YAML-конфигурацию, registries, Trainer, callbacks, loggers, checkpoints и inference pipelines; task-specific datasets и модели могут находиться в plugins.
 
 ## С чего начать
 
-1. [Начало работы](getting-started/index.md) — установите Chimera ML и
-   проверьте первую configuration.
-2. [Основные концепции](concepts/index.md) — configuration, registries,
-   BuildContext и plugins.
-3. [Руководство пользователя](user-guide/index.md) — training, evaluation,
-   logging, inference, sweeps и CLI workflows.
-4. [Практические примеры](tutorials/index.md) — реальные VA, ORAGEN и
-   affective states projects.
-5. [API Reference](api/index.md) и [CLI Reference](cli/reference.md) — точные
-   interfaces и command options.
-6. [Разработка](development/index.md) — contribution, tests, docs и release.
-7. [Релизы](releases/index.md) — changelog и migration notes.
+- [Начало работы](getting-started/index.md): установка, проверка окружения и первый конфигурационный check.
+- [Обучение](user-guide/index.md): данные, конфигурация, обучение, evaluation и artifacts.
+- [Inference](user-guide/inference.md): запуск sequential или DAG pipeline по входному файлу.
+- [Компоненты](user-guide/models.md): контракты Batch/ModelOutput, fusion-модели и остальные built-in components.
+- [Примеры](tutorials/index.md): VA, ORAGEN и affective-states проекты репозитория.
+- [Расширение](concepts/plugins.md): регистрация собственных datasets, моделей, losses, metrics, callbacks и inference steps.
+- [Справочник](api/index.md): Python API и точные CLI/configuration references.
 
-## Граница core API
+## Основная схема
 
-Dataloader выдаёт Batch, model принимает Batch и возвращает ModelOutput, а
-losses и metrics используют эти objects. Experiments описываются в YAML, а
-components выбираются по registry key.
+Обучение: `Dataset -> DataModule/DataLoader -> Batch -> Model -> ModelOutput -> loss/metrics -> Trainer -> checkpoints`. Inference отделён: `input -> InferencePipeline -> registered steps -> artifacts/predictions`. YAML выбирает компоненты по registry key, а `params` передаются их factory.
 
-## Примеры репозитория
-
-Это реальные plugin packages; для них нужны собственные data или model
-artifacts:
-
-- [VA estimation](https://github.com/markitantov/chimera_ml/tree/main/examples/va_estimation)
-- [ORAGEN](https://github.com/markitantov/chimera_ml/tree/main/examples/oragen)
-- [Affective states recognition](https://github.com/markitantov/chimera_ml/tree/main/examples/affective_states_recognition)
-
-Установка published package:
+Core не содержит датасеты задач и не подставляет пути автоматически. Установите plugin, нужный для примера или конфигурации, измените пути к ресурсам и сначала запустите `validate-config`.
 
 ~~~bash
-python -m pip install chimera-ml
+pip install chimera-ml
+chimera-ml doctor
+chimera-ml plugins list
+chimera-ml registry list
 ~~~
-
-Текущий package поддерживает Python >=3.12,<3.13. Начните со страницы
-[Установка](getting-started/installation.md).

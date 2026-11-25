@@ -1,60 +1,54 @@
 # Inference
 
-Inference — отдельный YAML-driven pipeline:
+Inference — отдельный конфигурируемый execution pipeline. Он не вызывает `Trainer.evaluate`: создаёт `InferenceContext`, запускает registered steps и передаёт между ними именованные artifacts.
 
 ~~~bash
-chimera-ml inference \
-  --input video.mp4 \
-  --output prediction.json \
-  --config-path examples/oragen/configs/inference.yaml \
-  --device auto \
-  --work-dir work
+chimera-ml inference -i input.mp4 -o prediction.json -c inference.yaml --device auto --work-dir work
 ~~~
 
-CLI принимает device auto, cpu или cuda. auto выбирает CUDA при доступности,
-иначе CPU. Без work-dir создаётся temporary directory.
+`--input` и `--config-path` обязательны. `--device`: `auto`, `cpu` или `cuda`; `auto` выбирает CUDA при наличии. Если `--work-dir` не задан, CLI создаёт временную папку.
 
-## Config shape
+## Конфигурация
 
 ~~~yaml
 pipeline:
   name: demo
   parallel: false
-
 runtime:
   device: auto
-
 steps:
-  - name: extract_audio_step
+  - name: resolve_checkpoints_step
     params:
-      sample_rate: 16000
-  - name: print_json_predictions_step
+      cache_dir: checkpoints
+      checkpoints:
+        model: /absolute/path/to/model.pt
+  - name: my_prediction_step
+    params:
+      checkpoint_key: model
+  - name: write_json_predictions_step
+    params:
+      output_path: prediction.json
 ~~~
 
-Каждый step строится из INFERENCE_STEPS и реализует
-run(ctx: InferenceContext) -> InferenceContext. Context содержит input_path,
-work_dir, device, raw config и shared artifacts; используйте set_artifact и
-get_artifact.
+Каждый шаг содержит registry `name`, необязательные `id`, `after` и `params`. Контракт шага: `run(ctx: InferenceContext) -> InferenceContext`. Шаг читает `input_path`, `device` и artifacts, а результаты публикует через `ctx.set_artifact`.
 
-## Sequential и DAG modes
+## Встроенные steps
 
-При parallel false или отсутствии поля steps выполняются в config order и
-зависят от предыдущего. При parallel true authoritative является after:
-steps без dependencies — root nodes и могут стартовать одновременно. Step id
-по умолчанию равен name; повторяющимся names нужны explicit id. Unknown
-dependencies, cycles, duplicate ids и self-dependencies дают ValueError.
+| Key | Параметры | Входы и выходы |
+| --- | --- | --- |
+| `resolve_checkpoints_step` | `checkpoints`, `cache_dir="checkpoints"`, `force_download=false`, `chunk_size=8192` | Использует local или HTTP(S) references; пишет абсолютные пути в `artifacts["checkpoints"]` и cache в `artifacts["cache_dir"]`. |
+| `write_json_predictions_step` | `output_path=null` | Требует `predictions`, записывает `input` и `predictions` в JSON и публикует `output_path`. |
+| `print_json_predictions_step` | нет | Требует `predictions` и печатает тот же JSON без файла. |
+| `xai_step` | вложенный `step`, `modalities`, `ablation_policy` и optional score/diagnostics | Оборачивает совместимый prediction step и публикует `xai`; см. [XAI](xai.md). |
 
-Каждый parallel step получает copy текущих artifacts. Merge учитывает keys,
-записанные через set_artifact. Unrelated branches не могут записать один key;
-зависимая downstream branch может переопределить upstream artifact.
+Prediction, feature-extraction и model-specific steps из examples являются plugin components. Проверьте текущие регистрации командой `chimera-ml registry list --type inference_steps`.
 
-## Checkpoints и output
+## Sequential и parallel режимы
 
-resolve_checkpoints_step принимает local files или http/https refs, сохраняет
-remote files в work-dir-relative cache и публикует absolute paths в
-artifacts["checkpoints"]. Cache переиспользуется без force_download; partial
-files удаляются при ошибке.
+При `parallel: false` или без этого поля шаги выполняются по порядку. CLI `--output` может создать или заменить `write_json_predictions_step` только в этом режиме. При `parallel: true` шаги становятся DAG nodes, а `after` задаёт зависимости. Шаги без `after` — roots; для повторяющихся names нужны явные `id`.
 
-write_json_predictions_step пишет input/predictions JSON, print step печатает
-тот же payload. CLI --output создаёт/переопределяет write step только в
-sequential mode; в parallel mode step нужно объявить явно и задать after.
+Unknown dependencies, duplicate IDs, cycles и конфликты записи одного artifact являются ошибками. В parallel mode output step нужно объявить в YAML и указать его dependencies.
+
+## Checkpoints и artifacts
+
+`resolve_checkpoints_step` повторно использует cache, если `force_download: true` не задан. Неполные downloads удаляются. Downstream plugin steps должны использовать тот же checkpoint key в `artifacts["checkpoints"]`. JSON создаётся только явным output step.
