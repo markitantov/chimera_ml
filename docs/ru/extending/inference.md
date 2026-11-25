@@ -1,5 +1,5 @@
 # Пользовательские шаги инференса
 
-Inference step реализует `run(ctx: InferenceContext) -> InferenceContext`, читает input/device/upstream artifacts и публикует values через `ctx.set_artifact`. Полный deterministic implementation, pipeline/DAG и XAI callback находятся в [Custom prediction steps](../inference/custom-steps.md) и [XAI](../user-guide/xai.md).
+Шаг инференса реализует `run(ctx: InferenceContext) -> InferenceContext`, читает вход, устройство и артефакты предыдущих шагов, а значения публикует через `ctx.set_artifact`. Полная детерминированная реализация, конвейер/DAG и колбэк XAI описаны в разделах [Пользовательские шаги предсказания](../inference/custom-steps.md) и [XAI](../user-guide/xai.md).
 
-Для plugin используйте entry point `chimera_ml.plugins`, описанный в [Plugins](plugins.md). После установки key доступен отдельному CLI process; in-process decorator недостаточен.
+Для плагина используйте точку входа `chimera_ml.plugins`, описанную в разделе [Плагины](plugins.md). После установки ключ становится доступен отдельному процессу CLI; декоратора, сработавшего только в текущем процессе, недостаточно.

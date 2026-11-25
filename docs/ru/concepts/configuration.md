@@ -1,8 +1,8 @@
 # Архитектура на основе конфигурации
 
-Train и eval используют YAML mapping. Framework проверяет верхнеуровневую
-структуру, затем builders находят каждый name в registry и передают params
-factory.
+Команды `train` и `eval` используют отображение YAML. Фреймворк проверяет
+верхнеуровневую структуру, затем функции построения находят каждое имя в реестре
+и передают параметры соответствующей функции построения.
 
 Минимальная структура:
 
@@ -36,10 +36,10 @@ optimizer:
 ~~~
 
 
-## Пример fusion и sequence-collate
+## Пример слияния и collate-функции для последовательностей
 
-Через тот же registry contract можно собрать feature-only fusion model и
-collate для независимых sequences:
+С помощью того же контракта реестра можно собрать модель слияния только по признакам
+и collate-функцию для независимых последовательностей:
 
 ~~~yaml
 model:
@@ -57,30 +57,27 @@ collate:
     pad_sequences: true
 ~~~
 
-Collate создаёт отдельные presence и temporal masks для каждой modality.
-Fusion-модели читают эти masks из Batch и не выравнивают независимые timelines
-автоматически.
+Collate-функция создаёт отдельные маски наличия и времени для каждой модальности.
+Модели слияния читают эти маски из Batch и не выравнивают независимые временные
+оси автоматически.
 
 Если эта верхнеуровневая секция присутствует, CLI `train` и `eval` разрешают её
-через `build_collate()` и передают callable в factory datamodule как
-`collate_fn`. Factory должна явно объявить этот keyword-параметр. Без секции
-`collate:` CLI сохраняет существующий default datamodule и ничего не внедряет;
+через `build_collate()` и передают вызываемый объект функции построения DataModule как
+`collate_fn`. Функция построения должна явно объявить этот именованный параметр. Без секции
+`collate:` CLI сохраняет существующий DataModule по умолчанию и ничего не внедряет;
 одновременная настройка верхнеуровневого `collate:` и
 `data.params.collate_fn` считается ошибкой.
 
 ## Структурные правила
 
-data, model, loss и optimizer должны быть mappings с непустым name. train
-должен быть mapping, а его params передаются в TrainConfig. scheduler
-необязателен, но при наличии должен иметь name. metrics, callbacks и logging
-являются необязательными списками; каждый элемент должен иметь name.
+Разделы `data`, `model`, `loss` и `optimizer` должны быть отображениями с непустым `name`. Раздел `train` должен быть отображением, а его `params` передаются в TrainConfig. `scheduler` необязателен, но при наличии должен иметь `name`. `metrics`, `callbacks` и `logging` являются необязательными списками; каждый элемент должен иметь `name`.
 
-experiment_info.params.experiment_name требуется для train и для
-validate-config, если не указать --no-require-experiment-name.
+`experiment_info.params.experiment_name` требуется для `train` и для
+`validate-config`, если не указать `--no-require-experiment-name`.
 
 ## Именованные списки и внедрение во время выполнения
 
-Секции принимают mapping или list. logging обычно является списком:
+Секции принимают отображение или список. `logging` обычно является списком:
 
 ~~~yaml
 logging:
@@ -92,15 +89,15 @@ logging:
       tracking_uri: sqlite:///logs/mlflow.db
 ~~~
 
-Builders могут inject runtime objects: optimizer получает model, scheduler —
-optimizer, а factory с явно объявленным context — текущий BuildContext.
-При smart_inject=True передаются только явно объявленные параметры; одного
-**kwargs недостаточно.
+Функции построения могут внедрять объекты выполнения: оптимизатор получает модель,
+планировщик — оптимизатор, а функция построения с явно объявленным `context` — текущий BuildContext.
+При `smart_inject=True` передаются только явно объявленные параметры; одного
+`**kwargs` недостаточно.
 
 ## Проверка и выполнение
 
-validate-config проверяет только framework-level structure. Unknown registry
-keys, отсутствующие файлы, несовместимые plugin params и ошибки dataset
-появляются при построении или запуске соответствующего workflow.
+`validate-config` проверяет только структуру уровня фреймворка. Неизвестные ключи
+реестра, отсутствующие файлы, несовместимые параметры плагина и ошибки набора данных
+выявляются при построении или запуске соответствующего сценария.
 
-Поля и defaults описаны в [Configuration reference](../user-guide/configuration.md).
+Поля и значения по умолчанию описаны в [справочнике конфигурации](../user-guide/configuration.md).

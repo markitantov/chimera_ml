@@ -1,8 +1,8 @@
 # Пользовательские Dataset и DataModule
 
-Custom Dataset возвращает mapping, который принимает зарегистрированный
-collate. Функции load_index, load_features и load_target в первом примере —
-application-specific placeholders.
+Пользовательский Dataset возвращает отображение, которое принимает зарегистрированная
+collate-функция. Функции `load_index`, `load_features` и `load_target` в первом
+примере являются заполнителями, зависящими от приложения.
 
 ~~~python
 import torch
@@ -29,12 +29,12 @@ def my_datamodule(*, data_root: str, batch_size: int = 32, collate_fn=None,
                       **loader_kwargs)
 ~~~
 
-Эти три функции должен реализовать plugin. В YAML укажите data.name:
-my_datamodule и выберите collate через top-level section collate.
+Эти три функции должен реализовать плагин. В YAML укажите `data.name:
+my_datamodule` и выберите collate-функцию через верхнеуровневую секцию `collate`.
 
-## Полный synthetic batch inspection
+## Полная проверка синтетического батча
 
-Пример детерминированный и не обучает model.
+Пример детерминированный и не обучает модель.
 
 ~~~python
 import torch
@@ -65,8 +65,8 @@ assert batch.inputs["features"].shape == (2, 3)
 assert batch.targets.shape == (2, 1)
 ~~~
 
-Запустите этот Python-файл после установки core package. Decorator должен
-выполниться до построения config, обычно через установленный plugin entry point.
+Запустите этот Python-файл после установки пакета ядра. Декоратор должен
+сработать до построения конфигурации, обычно через установленную точку входа плагина.
 
 ~~~yaml
 data:
@@ -77,5 +77,6 @@ collate:
   params: {pad_sequences: false}
 ~~~
 
-Это matching YAML fragment, а не команда обучения. CLI передаёт выбранный
-top-level collate как collate_fn, если factory принимает этот keyword.
+Это соответствующий фрагмент YAML, а не команда обучения. CLI передаёт выбранную
+верхнеуровневую collate-функцию как `collate_fn`, если функция построения принимает
+этот именованный параметр.

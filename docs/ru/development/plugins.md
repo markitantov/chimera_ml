@@ -1,6 +1,6 @@
 # Руководство по созданию плагина
 
-Это contributor-версия [Writing a plugin](../user-guide/plugins.md).
+Это версия для разработчиков раздела [Создание плагина](../user-guide/plugins.md).
 
 ## Минимальный пакет
 
@@ -22,7 +22,7 @@ def register():
     import components
 ~~~
 
-Factory регистрируется decorator-ом:
+Функция построения регистрируется декоратором:
 
 ~~~python
 from chimera_ml.core import MODELS
@@ -33,9 +33,9 @@ def my_model(*, hidden_dim=128, context=None):
     return MyModel(hidden_dim=hidden_dim)
 ~~~
 
-Inference component регистрируется в INFERENCE_STEPS, возвращает object с
-run(ctx) и пишет outputs через ctx.set_artifact. Для context используйте
-только declared runtime metadata.
+Компонент инференса регистрируется в `INFERENCE_STEPS`, возвращает объект с
+`run(ctx)` и записывает результаты через `ctx.set_artifact`. Для контекста используйте
+только объявленные метаданные выполнения.
 
 ## Тестирование и установка
 
@@ -45,5 +45,5 @@ chimera-ml plugins list
 chimera-ml registry list --type models
 ~~~
 
-Пишите tests для registration, factory parameters и runtime boundary. Reference
-implementations находятся в examples/.
+Пишите тесты для регистрации, параметров функции построения и границы выполнения.
+Эталонные реализации находятся в `examples/`.

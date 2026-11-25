@@ -1,11 +1,11 @@
 # Реестры
 
-Registry сопоставляет стабильный строковый key с callable factory. В Chimera ML
-есть типы datamodules, models, losses, metrics, optimizers, schedulers,
-callbacks, collates, loggers и inference_steps.
+Реестр сопоставляет стабильный строковый ключ с вызываемой функцией построения. В CHIMERA-ML
+есть типы `datamodules`, `models`, `losses`, `metrics`, `optimizers`, `schedulers`,
+`callbacks`, `collates`, `loggers` и `inference_steps`.
 
-Built-ins регистрируются в register_all(). Plugins добавляют keys импортом
-модулей с registry decorators.
+Встроенные компоненты регистрируются в `register_all()`. Плагины добавляют ключи
+импортом модулей с декораторами реестра.
 
 ## Просмотр компонентов
 
@@ -15,10 +15,10 @@ chimera-ml registry list --type models
 chimera-ml registry list --type inference_steps
 ~~~
 
-Generic builder приводит keys к lowercase. Duplicate key — ошибка, поэтому
-plugin не может молча заменить чужой component.
+Общая функция построения приводит ключи к нижнему регистру. Повторяющийся ключ —
+ошибка, поэтому плагин не может молча заменить чужой компонент.
 
-## Регистрация factory
+## Регистрация функции построения
 
 ~~~python
 from chimera_ml.core import MODELS
@@ -29,7 +29,7 @@ def my_model(*, hidden_dim: int = 128):
     return MyModel(hidden_dim=hidden_dim)
 ~~~
 
-В YAML указывается key, а не Python import path:
+В YAML указывается ключ реестра, а не путь импорта Python:
 
 ~~~yaml
 model:
@@ -38,4 +38,4 @@ model:
     hidden_dim: 256
 ~~~
 
-См. [plugin guide](../user-guide/plugins.md).
+См. [руководство по плагинам](../user-guide/plugins.md).

@@ -1,27 +1,27 @@
 # Справочник API
 
-Этот справочник объясняет контракты, которые используют подсистемы framework.
+Этот справочник объясняет контракты, которые используют подсистемы фреймворка.
 Документация объектов генерируется из установленного пакета через mkdocstrings,
-а каждая страница дополнительно содержит contextual описание, связи между
-configuration и objects и ссылки на task-oriented инструкции.
+а каждая страница дополнительно содержит пояснение, связи между конфигурацией и
+объектами и ссылки на инструкции для конкретных задач.
 
-Начните с [Core](core.md), где описаны Batch, ModelOutput, ExperimentConfig и
+Начните с [ядра](core.md), где описаны Batch, ModelOutput, ExperimentConfig и
 Registry. Затем выберите страницу подсистемы, компонент которой вы создаёте
 или настраиваете.
 
 ## Подсистемы
 
-- [Core](core.md): общие containers, configuration и registry primitives.
-- [Data](data.md): DataModule, collation, masks и loader normalization.
-- [Models](models.md): model contract и multimodal fusion implementations.
-- [Training](training.md): Trainer, builders, BuildContext и sweeps.
-- [Inference](inference.md): contexts, DAG pipelines, steps и builders.
-- [Callbacks](callbacks.md): lifecycle extensions и artifact callbacks.
-- [Losses](losses.md): optimization objectives и registry factories.
-- [Metrics](metrics.md): stateful epoch metrics и aggregation.
-- [Logging](logging.md): console/file и MLflow logger contracts.
-- [Plugins](plugins.md): built-in и entry-point registration.
+- [Ядро](core.md): общие контейнеры, конфигурация и примитивы реестров.
+- [Данные](data.md): DataModule, объединение образцов, маски и нормализация загрузчиков.
+- [Модели](models.md): контракт модели и реализации мультимодального слияния.
+- [Обучение](training.md): Trainer, функции построения, BuildContext и переборы.
+- [Инференс](inference.md): контексты, конвейеры DAG, шаги и функции построения.
+- [Колбэки](callbacks.md): расширения жизненного цикла и колбэки артефактов.
+- [Функции потерь](losses.md): цели оптимизации и функции построения реестра.
+- [Метрики](metrics.md): метрики с состоянием на эпоху и агрегация.
+- [Журналирование](logging.md): контракты консольного/файлового и MLflow-логгера.
+- [Плагины](plugins.md): регистрация встроенных компонентов и точек входа.
 
-Используйте [User Guide](../user-guide/index.md), когда нужно выполнить
-задачу; этот раздел нужен для точных signatures, полей, return values и
-extension contracts.
+Используйте [руководство пользователя](../user-guide/index.md), когда нужно выполнить
+задачу; этот раздел предназначен для точных сигнатур, полей, возвращаемых значений и
+контрактов расширения.

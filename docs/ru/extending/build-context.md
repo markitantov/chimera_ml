@@ -1,6 +1,6 @@
 # BuildContext
 
-`BuildContext` — metadata одного experiment construction, не inference artifact store. Он содержит optional `config`, `stage` и nested `values`.
+`BuildContext` — хранилище метаданных построения одного эксперимента, а не хранилище артефактов инференса. Он содержит необязательные `config`, `stage` и вложенное `values`.
 
 ```python
 class MyDataModule:
@@ -12,6 +12,6 @@ def my_model(*, context=None):
     return MyModel(context.get("data.feature_dim"), context.get("data.num_classes"))
 ```
 
-`get(path, default=None)` читает dotted value, `set` создаёт intermediate dictionaries. `register(component)` вызывает `describe_context`, если он есть, и возвращает component; `register_many` делает это по порядку. CLI регистрирует DataModule до model/loss/metrics/optimizer/scheduler/callbacks.
+`get(path, default=None)` читает значение по составному пути, а `set` создаёт промежуточные словари. `register(component)` вызывает `describe_context`, если этот метод есть, и возвращает компонент; `register_many` делает то же по порядку. CLI регистрирует DataModule до модели, функции потерь, метрик, оптимизатора, планировщика и колбэков.
 
-Используйте BuildContext для construction-time metadata. Для runtime inference outputs используйте `InferenceContext.get_artifact/set_artifact`; это разные контракты.
+Используйте BuildContext для метаданных на этапе построения. Для результатов инференса во время выполнения используйте `InferenceContext.get_artifact/set_artifact`; это разные контракты.

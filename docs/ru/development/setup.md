@@ -1,6 +1,6 @@
 # Настройка разработки
 
-Для contributor setup используйте Python 3.12 и Poetry:
+Для настройки среды разработчика используйте Python 3.12 и Poetry:
 
 ~~~bash
 git clone https://github.com/markitantov/chimera_ml.git
@@ -9,8 +9,8 @@ poetry install --with dev,docs
 poetry run pre-commit install
 ~~~
 
-Dev group содержит pytest, coverage, Ruff, pre-commit и scikit-learn; docs group
-— MkDocs, Material for MkDocs, mkdocstrings и Python handler.
+Группа `dev` содержит pytest, coverage, Ruff, pre-commit и scikit-learn; группа `docs`
+— MkDocs, Material for MkDocs, mkdocstrings и обработчик Python.
 
 ~~~bash
 poetry check
@@ -18,5 +18,5 @@ poetry run pre-commit run --all-files
 poetry run pytest -q
 ~~~
 
-Не добавляйте generated sites, local logs, credentials или model artifacts
-без явной необходимости.
+Не добавляйте сгенерированные сайты, локальные журналы, учётные данные или артефакты
+моделей без явной необходимости.

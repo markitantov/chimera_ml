@@ -1,6 +1,6 @@
-# Реестры и строители
+# Реестры и функции построения
 
-Публичные registries: `MODELS`, `LOSSES`, `METRICS`, `OPTIMIZERS`, `SCHEDULERS`, `CALLBACKS`, `DATAMODULES`, `COLLATES`, `LOGGERS`, `INFERENCE_STEPS`.
+Публичные реестры: `MODELS`, `LOSSES`, `METRICS`, `OPTIMIZERS`, `SCHEDULERS`, `CALLBACKS`, `DATAMODULES`, `COLLATES`, `LOGGERS`, `INFERENCE_STEPS`.
 
 ```python
 from chimera_ml.core import MODELS
@@ -10,7 +10,7 @@ def my_model(*, hidden_dim: int = 128):
     return MyModel(hidden_dim=hidden_dim)
 ```
 
-`register(key)` возвращает decorator и выдаёт `KeyError` при duplicate. `get` выдаёт unknown-key error с известными keys, `create` вызывает factory, `keys` возвращает sorted list. Builder lowercases names, требует mapping `params` и вызывает `factory(**kwargs)`.
+`register(key)` возвращает декоратор и выдаёт `KeyError` при повторяющемся ключе. `get` выдаёт ошибку неизвестного ключа с перечнем известных ключей, `create` вызывает функцию построения, а `keys` возвращает отсортированный список. Функция построения приводит имена к нижнему регистру, требует отображение `params` и вызывает `factory(**kwargs)`.
 
 ```yaml
 model:
@@ -18,7 +18,7 @@ model:
   params: {hidden_dim: 256}
 ```
 
-Runtime injection: optimizer получает `model`, scheduler — `optimizer`, builders могут передать `context`, если factory явно его принимает. Built-ins импортируются через `chimera_ml.plugins.register_all`; installed entry point загружается в каждом CLI process. In-process decorator не виден отдельному CLI.
+Внедрение во время выполнения: оптимизатор получает `model`, планировщик — `optimizer`, а функции построения могут получить `context`, если явно принимают его. Встроенные компоненты импортируются через `chimera_ml.plugins.register_all`; установленная точка входа загружается в каждом процессе CLI. Декоратор, сработавший в одном процессе, не виден отдельному CLI.
 
 ```bash
 chimera-ml plugins list

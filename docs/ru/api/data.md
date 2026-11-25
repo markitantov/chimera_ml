@@ -1,10 +1,10 @@
 # API данных
 
-Data subsystem превращает datasets в DataLoader containers для Trainer.
-DataModule строит train/validation/test. Доступны два встроенных collate:
-legacy MaskingCollate с key masking_collate и
-MultimodalSequenceCollate с key multimodal_sequence_collate. Формы, masks и
-YAML examples описаны в [Data](../user-guide/data.md).
+Подсистема данных превращает наборы данных в контейнеры DataLoader для Trainer.
+DataModule строит обучающую, валидационную и тестовую выборки. Доступны две встроенные
+collate-функции: устаревшая MaskingCollate с ключом `masking_collate` и
+MultimodalSequenceCollate с ключом `multimodal_sequence_collate`. Формы, маски и
+примеры YAML описаны в разделе [Данные](../user-guide/data.md).
 
 ## Модуль данных
 

@@ -1,6 +1,6 @@
 # Пользовательские модели
 
-Наследуйте `BaseModel`, принимайте YAML-compatible constructor params, читайте `Batch`, возвращайте `ModelOutput` и явно проверяйте missing modality/width.
+Наследуйте `BaseModel`, принимайте параметры конструктора, совместимые с YAML, читайте `Batch`, возвращайте `ModelOutput` и явно проверяйте отсутствие модальности и ширину признаков.
 
 ```python
 import torch
@@ -28,4 +28,4 @@ model:
   params: {input_dim: 16, output_dim: 2}
 ```
 
-В YAML используется registry key, а не имя Python class. Additional tensors можно поместить в `ModelOutput.aux`; Trainer loss/metrics используют `preds`, если custom component специально не читает aux.
+В YAML указывается ключ реестра, а не имя класса Python. Дополнительные тензоры можно поместить в `ModelOutput.aux`; функция потерь и метрики Trainer используют `preds`, если пользовательский компонент специально не читает `aux`.

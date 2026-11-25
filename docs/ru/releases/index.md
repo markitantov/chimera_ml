@@ -1,8 +1,8 @@
 # Релизы
 
-- [Changelog](changelog.md) — canonical Keep a Changelog history.
-- [Migration guide](migration.md) — действия после подтверждённых behavior
-  changes.
+- [Журнал изменений](changelog.md) — каноническая история в формате Keep a Changelog.
+- [Руководство по миграции](migration.md) — действия после подтверждённых изменений
+  поведения.
 
-Проект следует Semantic Versioning. Этот сайт не ведёт независимую release
-history.
+Проект следует Semantic Versioning. Этот сайт не ведёт независимую историю
+релизов.

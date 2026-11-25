@@ -118,7 +118,7 @@ callbacks:
       request_timeout_sec: 15
 ```
 
-Для этого файла нужны установка плагина в editable-режиме, пути к признакам и аннотациям из `data.params`, а также учётные данные Telegram, если колбэк оставлен. Иначе удалите notifier. Проверка:
+Для этого файла нужны установка плагина в editable-режиме, пути к признакам из `data.params`, пути к аннотациям `ann_root` и `ann_split_dir` внутри параметров `fusion_framewise_callback`, а также учётные данные Telegram, если колбэк оставлен. Иначе удалите notifier. Проверка:
 
 ```bash
 python -m pip install -e examples/va_estimation

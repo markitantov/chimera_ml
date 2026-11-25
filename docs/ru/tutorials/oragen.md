@@ -52,7 +52,7 @@ chimera-ml inference --input examples/oragen/samples/f_25.mp4 \
   --work-dir runs/oragen
 ~~~
 
-`resolve_checkpoints_step` кэширует веса аудио, изображения и слияния в `model_cache`; `YOLO yolo26n.pt` разрешается отдельно. CPU используется как резервный вариант. Нужны читаемый видеофайл, доступный для записи рабочий каталог, а также речь и лица, чтобы получить полезные окна. Итог содержит `gender`, `age`, `num_windows`, `windows` и `debug`; `gender` содержит `label`, `class_index` и `probabilities`, а каждое окно — `start_sec`/`end_sec`, поля пола, `age_pred`, `num_faces` и `num_frames`. При отсутствии окон `gender` и `age` равны `null`, а `status` — `no_predictions`.
+`resolve_checkpoints_step` использует значение `cache_dir: checkpoints` по умолчанию, разрешаемое относительно `--work-dir`, поэтому эта команда кэширует веса аудио, изображения и слияния в `runs/oragen/checkpoints/`. `YOLO yolo26n.pt` разрешается отдельно. CPU используется как резервный вариант. Нужны читаемый видеофайл, доступный для записи рабочий каталог, а также речь и лица, чтобы получить полезные окна. Итог содержит `gender`, `age`, `num_windows`, `windows` и `debug`; `gender` содержит `label`, `class_index` и `probabilities`, а каждое окно — `start_sec`/`end_sec`, поля пола, `age_pred`, `num_faces` и `num_frames`. При отсутствии окон `gender` и `age` равны `null`, а `status` — `no_predictions`.
 
 ## XAI и диагностика
 

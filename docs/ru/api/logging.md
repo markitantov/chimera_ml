@@ -1,9 +1,9 @@
 # API журналирования
 
-Loggers предоставляют lifecycle, который использует \`Trainer\`: \`start\`,
-scalar \`log_metrics\` и \`end\`. Artifact methods — optional capabilities для
-callbacks. Logger выбирается через \`LOGGERS\` registry; см. [Logging](../user-guide/logging.md)
-и [MLflow](../user-guide/mlflow.md).
+Логгеры предоставляют жизненный цикл, который использует `Trainer`: `start`,
+скалярный `log_metrics` и `end`. Методы работы с артефактами являются необязательными
+возможностями для колбэков. Логгер выбирается через реестр `LOGGERS`; см.
+[Журналирование](../user-guide/logging.md) и [MLflow](../user-guide/mlflow.md).
 
 ## Контракт журналирования
 
@@ -11,9 +11,9 @@ callbacks. Logger выбирается через \`LOGGERS\` registry; см. [L
 
 ## Журналирование в консоль и файл
 
-\`ConsoleFileLogger\` создаёт timestamped console/file logger, удаляет stale
-handlers для предотвращения duplicate output и предоставляет standard logging
-methods. Registry key: \`console_file_logger\`.
+`ConsoleFileLogger` создаёт консольный/файловый логгер с меткой времени, удаляет
+устаревшие обработчики во избежание дублирования вывода и предоставляет стандартные
+методы журналирования. Ключ реестра: `console_file_logger`.
 
 ::: chimera_ml.logging.console_file_logger.ConsoleFileLogger
 
@@ -21,9 +21,9 @@ methods. Registry key: \`console_file_logger\`.
 
 ## Журналирование в MLflow
 
-\`MLflowLogger\` запускает MLflow run, optional logs source config, отправляет
-metrics с explicit step и загружает file, text или byte artifacts. Registry key:
-\`mlflow_logger\`.
+`MLflowLogger` запускает MLflow run, при необходимости записывает исходную конфигурацию,
+отправляет метрики с явно заданным шагом и загружает файловые, текстовые или байтовые
+артефакты. Ключ реестра: `mlflow_logger`.
 
 ::: chimera_ml.logging.mlflow_logger.MLflowLogger
 
@@ -31,8 +31,8 @@ metrics с explicit step и загружает file, text или byte artifacts.
 
 ## Утилиты именования
 
-Helpers создают local timestamp tags, short hashes и human-readable run names
-для experiment directories и MLflow.
+Вспомогательные функции создают локальные метки времени, короткие хэши и
+понятные имена запусков для каталогов экспериментов и MLflow.
 
 ::: chimera_ml.logging.utils.local_datetime_tag
 

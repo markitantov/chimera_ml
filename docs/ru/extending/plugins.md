@@ -1,6 +1,6 @@
-# Создание plugin
+# Создание плагина
 
-Discovery group — `chimera_ml.plugins`. Минимальный model plugin:
+Группа обнаружения — `chimera_ml.plugins`. Минимальный плагин модели:
 
 ```text
 my_chimera_plugin/
@@ -54,4 +54,4 @@ chimera-ml plugins list
 chimera-ml registry list --type models
 ```
 
-После установки YAML может использовать `model: {name: plugin_model, params: {input_dim: 16, output_dim: 2}}`. Entry point загружается в новом CLI process; decorator в interactive session недостаточен.
+После установки YAML может использовать `model: {name: plugin_model, params: {input_dim: 16, output_dim: 2}}`. Точка входа загружается в новом процессе CLI; декоратора в интерактивной сессии недостаточно.

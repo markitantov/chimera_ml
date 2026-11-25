@@ -26,4 +26,4 @@ loss:
     loss: {name: focal_loss, params: {gamma: 2.0, alpha: 0.25, reduction: mean, label_smoothing: 0.0}}
     loss: {name: bce_with_logits_loss, params: {reduction: mean}}
 
-MSE, MAE и CCC используют вещественные предсказания и целевые значения; cross entropy и focal используют целевые значения с индексами классов и логиты; BCE-with-logits — мультиметочные или multi-hot целевые значения. Ключи: `mse_loss`, `mae_loss`, `ccc_loss`, `cross_entropy_loss`, `focal_loss` и `bce_with_logits_loss`.
+MSE, MAE и CCC используют вещественные предсказания и целевые значения; cross entropy и focal используют целевые значения с индексами классов и логиты; BCE-with-logits — многометочные целевые значения в формате multi-hot. Ключи: `mse_loss`, `mae_loss`, `ccc_loss`, `cross_entropy_loss`, `focal_loss` и `bce_with_logits_loss`.

@@ -1,10 +1,10 @@
 # API моделей
 
-Models реализуют BaseModel.forward(Batch) -> ModelOutput. Четыре встроенные
-fusion-модели получают feature-only tensors из Batch.inputs. Их constructors
-объявляют input_dims, shared_dim и output_dim; modality projections и
-prediction layers создаются внутри. Модели можно создавать напрямую в Python
-или через MODELS registry и YAML. См. [Models](../user-guide/models.md).
+Модели реализуют `BaseModel.forward(Batch) -> ModelOutput`. Четыре встроенные
+модели слияния получают из `Batch.inputs` только тензоры признаков. Их конструкторы
+объявляют `input_dims`, `shared_dim` и `output_dim`; проекции модальностей и слои
+предсказания создаются внутри. Модели можно создавать напрямую в Python или через
+реестр `MODELS` и YAML. См. [Модели](../user-guide/models.md).
 
 ## Контракт модели
 

@@ -13,14 +13,15 @@ chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.y
 
 ## What `Trainer.fit` does
 
-For each epoch, the Trainer:
+Before the training loop, the Trainer invokes `on_fit_start` once. For each epoch, it:
 
-1. invokes `on_fit_start` once and `on_epoch_start` for callbacks;
-2. iterates training batches, moves them to the resolved device, calls the model, computes the loss, checks finite values, backpropagates, optionally clips gradients, steps the optimizer, and updates metrics;
+1. invokes `on_epoch_start`;
+2. iterates training batches, moves them to the resolved device, calls the model, computes the loss, checks finite values, backpropagates, optionally clips gradients, steps the optimizer, invokes applicable batch hooks, and updates metrics;
 3. optionally steps a batch scheduler after every optimizer update;
 4. runs each validation loader with gradients disabled and updates validation metrics/cache;
-5. logs train/validation metrics and learning rates, invokes `on_epoch_end`, then steps an epoch scheduler when configured;
-6. stops early if a callback sets `trainer.stop_training`, and finally invokes `on_fit_end`.
+5. logs train/validation metrics and learning rates, invokes `on_epoch_end`, then steps an epoch scheduler when configured.
+
+If a callback sets `trainer.stop_training`, the Trainer exits the loop and invokes `on_fit_end` after normal or early-stopped training completion.
 
 Training requires `batch.targets`. An unlabeled batch raises a clear error; use evaluation or an inference step for unlabeled data.
 

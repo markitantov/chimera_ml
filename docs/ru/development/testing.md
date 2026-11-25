@@ -1,14 +1,14 @@
 # Тестирование
 
-Все tests:
+Все тесты:
 
 ~~~bash
 poetry run pytest -q
 ~~~
 
-Набор покрывает registry/config, loaders/masks, trainer integrations,
-non-finite guards, callbacks, logging, inference graphs/checkpoint resolution,
-CLI, plugin discovery и grid/Optuna sweeps.
+Набор покрывает реестры и конфигурацию, загрузчики и маски, интеграцию Trainer,
+проверки конечности, колбэки, журналирование, графы инференса и разрешение контрольных
+точек, CLI, обнаружение плагинов и переборы Grid/Optuna.
 
 Для сфокусированного изменения:
 
@@ -17,5 +17,5 @@ poetry run pytest tests/inference tests/cli -q
 poetry run pytest tests/training/test_sweep.py -q
 ~~~
 
-Даже documentation-only changes должны проходить оба strict MkDocs builds:
-mkdocstrings импортирует package и разрешает API references.
+Даже изменения только документации должны проходить обе строгие сборки MkDocs:
+mkdocstrings импортирует пакет и разрешает ссылки на API.

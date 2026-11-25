@@ -1,10 +1,10 @@
 # API ядра
 
-Core types — общий vocabulary для data modules, models, losses, metrics и
-builders. \`Batch\` содержит modality tensors, optional targets, masks и metadata;
-\`ModelOutput\` содержит predictions и auxiliary tensors. \`ExperimentConfig\`
-оборачивает YAML и поддерживает validation и dotted overrides. Практические
-примеры находятся в [configuration guide](../user-guide/configuration.md).
+Типы ядра — общий словарь для модулей данных, моделей, функций потерь, метрик и
+функций построения. `Batch` содержит тензоры модальностей, необязательные целевые
+значения, маски и метаданные; `ModelOutput` содержит предсказания и вспомогательные
+тензоры. `ExperimentConfig` оборачивает YAML и поддерживает проверку и переопределения
+по составным путям. Практические примеры находятся в [руководстве по конфигурации](../user-guide/configuration.md).
 
 ## Batch и результат модели
 
@@ -20,8 +20,8 @@ builders. \`Batch\` содержит modality tensors, optional targets, masks �
 
 ## Реестры
 
-\`Registry\` связывает stable configuration key с factory или class. Все
-training, data, logging и inference registries используют этот API; обычно
-components создаются соответствующим builder.
+`Registry` связывает стабильный ключ конфигурации с функцией построения или классом. Все
+реестры обучения, данных, журналирования и инференса используют этот API; обычно
+компоненты создаются соответствующей функцией построения.
 
 ::: chimera_ml.core.registry.Registry

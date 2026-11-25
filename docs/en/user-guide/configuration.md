@@ -127,7 +127,7 @@ callbacks:
       request_timeout_sec: 15
 ```
 
-Prerequisites for this exact file are the editable plugin install, the feature and annotation paths under `data.params`, and any Telegram credentials if the notification callback is retained. Remove that callback if notifications are not required. Validate it with:
+Prerequisites for this exact file are the editable plugin install, feature paths configured under `data.params`, annotation paths configured as `ann_root` and `ann_split_dir` inside `fusion_framewise_callback.params`, and any Telegram credentials if the notification callback is retained. Remove that callback if notifications are not required. Validate it with:
 
 ```bash
 python -m pip install -e examples/va_estimation

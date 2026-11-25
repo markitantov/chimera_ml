@@ -62,7 +62,7 @@ chimera-ml inference \
   --work-dir runs/oragen
 ~~~
 
-resolve_checkpoints_step caches audio, image, and fusion weights under model_cache. YOLO resolves yolo26n.pt separately. CPU is a fallback when CUDA is unavailable. A representative final object uses gender (label, class_index, probabilities), age (value), num_windows, windows (index, start_sec, end_sec, gender fields, age_pred, num_faces, num_frames), and debug. No windows produces null gender/age, num_windows 0, windows [], and status no_predictions. Probabilities are softmax probabilities and age is a scaled sigmoid output, not calibrated uncertainty.
+`resolve_checkpoints_step` uses its default `cache_dir: checkpoints`, resolved relative to `--work-dir`, so this command caches audio, image, and fusion weights under `runs/oragen/checkpoints/`. YOLO resolves `yolo26n.pt` separately. CPU is a fallback when CUDA is unavailable. A representative final object uses `gender` (`label`, `class_index`, `probabilities`), `age` (`value`), `num_windows`, `windows` (`index`, `start_sec`, `end_sec`, gender fields, `age_pred`, `num_faces`, `num_frames`), and `debug`. No windows produces null `gender`/`age`, `num_windows` 0, `windows` [], and status `no_predictions`. Probabilities are softmax probabilities and age is a scaled sigmoid output, not calibrated uncertainty.
 
 ## XAI and troubleshooting
 

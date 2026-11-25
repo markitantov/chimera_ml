@@ -1,9 +1,9 @@
 # BuildContext
 
-BuildContext — объект одного запуска, общий для CLI build stages. Он содержит
-loaded config, stage (train или eval) и вложенное values для runtime metadata.
+BuildContext — объект одного запуска, общий для этапов построения CLI. Он содержит
+загруженную конфигурацию, stage (`train` или `eval`) и вложенное `values` для метаданных выполнения.
 
-Компонент может публиковать metadata, не изменяя YAML:
+Компонент может публиковать метаданные, не изменяя YAML:
 
 ~~~python
 class MyDataModule:
@@ -17,13 +17,13 @@ def my_model(*, context=None):
     return MyModel(num_classes=num_classes)
 ~~~
 
-После построения вызовите context.register(component). Если у component есть
-describe_context(context), метод вызовет его и вернёт component.
-register_many(components) делает то же для списка по порядку.
+После построения вызовите `context.register(component)`. Если у компонента есть
+`describe_context(context)`, метод вызовет его и вернёт компонент.
+`register_many(components)` делает то же для списка по порядку.
 
-get(path, default) читает dotted paths, а set(path, value) создаёт
-промежуточные dictionaries. CLI регистрирует datamodule до model, затем model,
-loss, metrics, optimizer, scheduler и callbacks. Поэтому следующие компоненты
-могут использовать metadata предыдущих.
+`get(path, default)` читает значения по составным путям, а `set(path, value)` создаёт
+промежуточные словари. CLI регистрирует DataModule до модели, затем модель, функцию
+потерь, метрики, оптимизатор, планировщик и колбэки. Поэтому следующие компоненты
+могут использовать метаданные предыдущих.
 
-Публичный contract — describe_context, get и set; не опирайтесь на private CLI state.
+Публичный контракт — `describe_context`, `get` и `set`; не опирайтесь на внутреннее состояние CLI.

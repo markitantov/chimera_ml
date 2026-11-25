@@ -31,4 +31,4 @@ class MeanBiasMetric(BaseMetric):
 def mean_bias_metric(): return MeanBiasMetric()
 ```
 
-Настройте `loss: {name: my_l2_loss, params: {reduction: mean}}` и `metrics: [{name: mean_bias_metric, params: {}}]`. Trainer сбрасывает метрику, обновляет её на размеченных пакетах и добавляет split prefix: `bias` становится `val/bias`; этот ключ используется колбэками, планировщиком и перебором.
+Настройте `loss: {name: my_l2_loss, params: {reduction: mean}}` и `metrics: [{name: mean_bias_metric, params: {}}]`. Trainer сбрасывает метрику, обновляет её на размеченных батчах и добавляет префикс выборки: `bias` становится `val/bias`; этот ключ используется колбэками, планировщиком и перебором.
