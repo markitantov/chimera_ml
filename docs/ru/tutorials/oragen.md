@@ -111,7 +111,14 @@ chimera-ml inference --input examples/oragen/samples/f_25.mp4 \
 вероятности и оценки возраста по окнам, затем выбирает класс пола с
 максимальной средней вероятностью. Это не является калиброванной уверенностью.
 
-Встроенное средство записи JSON оборачивает артефакт так:
-{"input": "path/to/video.mp4", "predictions": {artifact}}. При отсутствии
-окон `predictions` равен {"gender": null, "age": null, "num_windows": 0,
-"windows": [], "status": "no_predictions"}.
+Встроенное средство записи JSON добавляет внешнюю оболочку с входным путём и
+артефактом предсказаний. Схематично:
+
+~~~text
+{"input": "path/to/video.mp4", "predictions": <полный объект predictions>}
+~~~
+
+Здесь `<полный объект predictions>` — обозначение объекта, описанного выше,
+а не литерал JSON. При отсутствии окон `predictions` равен {"gender": null,
+"age": null, "num_windows": 0, "windows": [],
+"status": "no_predictions"}.

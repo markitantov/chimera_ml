@@ -10,7 +10,7 @@ metric.update(output, batch)
 values = metric.compute()
 ~~~
 
-Trainer сбрасывает метрики для каждого раздела и эпохи, обновляет их на пакетах с целевыми значениями и добавляет отображение результатов в журналы.
+Trainer сбрасывает метрики для каждой выборки и эпохи, обновляет их на батчах с целевыми значениями и добавляет отображение результатов в журналы.
 
 Встроенные ключи: `mae_metric`, `mse_metric`, `rmse_metric`, `r2_metric` для регрессии; `prf_micro_metric`, `prf_macro_metric`, `prf_weighted_metric` для классификации; `confusion_matrix_metric` для матрицы и `cm_acc`.
 

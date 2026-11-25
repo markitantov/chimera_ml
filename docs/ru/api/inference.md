@@ -9,7 +9,7 @@
 ## Конфигурация
 
 `InferenceConfig` предоставляет имя конвейера, параллельный режим, шаги и
-запрошенное устройство выполнения из отображения YAML инференса.
+запрошенное устройство выполнения из словаря YAML-конфигурации инференса.
 
 ::: chimera_ml.inference.config.InferenceConfig
 
@@ -31,7 +31,7 @@
 
 ::: chimera_ml.inference.pipeline.InferencePipeline
 
-## Строители и утилиты
+## Функции построения и вспомогательные функции
 
 Используйте `build_inference_step` для одного шага, построенного через реестр, и
 `build_inference_pipeline` для полного `InferenceConfig`. Выбор устройства
@@ -42,6 +42,24 @@
 ::: chimera_ml.inference.builders.build_inference_pipeline
 
 ::: chimera_ml.inference.utils.resolve_inference_device
+
+## Объяснимый ИИ (XAI)
+
+Компоненты XAI измеряют чувствительность зарегистрированного шага предсказания
+к исключению одной модальности. `XAIStep` оборачивает шаг, `explain_batch`
+выполняет исходный прогон и вмешательства по модальностям,
+`summarize_explanations` строит сводки для образцов, всего набора или временных
+позиций, а `xai_step` — фабрика из реестра для конфигурации инференса. Подробности
+о контракте колбэка, политиках вмешательства и схемах артефактов приведены в
+[руководстве по XAI](../user-guide/xai.md).
+
+::: chimera_ml.inference.steps.xai_steps.XAIStep
+
+::: chimera_ml.inference.steps.xai_steps.explain_batch
+
+::: chimera_ml.inference.steps.xai_steps.summarize_explanations
+
+::: chimera_ml.inference.steps.xai_steps.xai_step
 
 ## Протокол шагов и встроенные компоненты
 

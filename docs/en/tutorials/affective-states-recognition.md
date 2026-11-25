@@ -40,18 +40,40 @@ dependencies:
 
 ~~~text
 extract_audio_step
-  -> vad_step -> build_segments_step -> transcribe_segments_step
-                                      resolve_checkpoints_step ----------------> face_detection_step
-                                           -> extract_features_step
-                                           -> fusion_step
-                                           -> write_json_predictions_step
-                                           -> print_json_predictions_step
+        |
+        v
+vad_step
+        |
+        v
+build_segments_step
+        |
+        v
+transcribe_segments_step    resolve_checkpoints_step
+        |                            |
+        +------------+---------------+
+                     |
+                     v
+             face_detection_step
+                     |
+                     v
+             extract_features_step
+                     |
+                     v
+                 fusion_step
+                     |
+                     v
+         write_json_predictions_step
+                     |
+                     v
+         print_json_predictions_step
 ~~~
 
-In the configuration, face detection explicitly waits for both
-resolve_checkpoints_step and transcribe_segments_step. Feature extraction waits
-for face detection; fusion waits for feature extraction; the writer waits for
-fusion; printing waits for the writer. The implemented stages are audio
+Audio extraction and checkpoint resolution are independent root steps. In the
+configuration, face detection explicitly waits for both
+resolve_checkpoints_step and transcribe_segments_step. Subsequent steps follow
+their declared dependencies: feature extraction waits for face detection; fusion
+waits for feature extraction; the writer waits for fusion; printing waits for the
+writer. The implemented stages are audio
 decoding, Silero VAD, fixed segment construction, Whisper transcription, YOLO
 face detection, audio/video/text feature extraction, checkpoint-backed fusion,
 and JSON output.
@@ -60,7 +82,7 @@ and JSON output.
 chimera-ml inference   --input examples/affective_states_recognition/samples/01_neutral_neutral_cmumosei.mp4   --output prediction.json   --config-path examples/affective_states_recognition/configs/inference.yaml   --work-dir runs/affective
 ~~~
 
-The pipeline resolves emoaffectnet and lefsa into model_cache. Whisper and YOLO
+The configured pipeline resolves emoaffectnet and lefsa into `model_cache`. Whisper and YOLO
 also need their external weights. CPU is supported but can be slow.
 
 ## Prediction artifact

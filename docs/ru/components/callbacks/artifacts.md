@@ -22,4 +22,4 @@ CLI внедряет в колбэк снимка `experiment_name`, `run_name` 
 
 ## `plot_confusion_matrix_callback` — `PlotConfusionMatrixCallback`
 
-Колбэк включает кэширование результатов и требует наличия журналировщика MLflow, библиотеки `matplotlib`, а также предсказаний и целевых значений, соответствующих задаче классификации. Параметры: `splits=["val"]`, `class_names=None`, `artifact_path="figures"`, `filename_template="confusion_matrix_epoch_{epoch}.pdf"`, `title_template="{split} Confusion Matrix (epoch {epoch})"`. Он создаёт график для каждого раздела; регрессия не поддерживается.
+Колбэк включает кэширование результатов и требует наличия журналировщика MLflow, библиотеки `matplotlib`, а также предсказаний и целевых значений, соответствующих задаче классификации. Параметры: `splits=["val"]`, `class_names=None`, `artifact_path="figures"`, `filename_template="confusion_matrix_epoch_{epoch}.pdf"`, `title_template="{split} Confusion Matrix (epoch {epoch})"`. Он создаёт график для каждой выборки; регрессия не поддерживается.

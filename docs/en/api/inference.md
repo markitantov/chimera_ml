@@ -43,6 +43,23 @@ accepts \`auto\`, \`cpu\`, or \`cuda\` through \`resolve_inference_device\`.
 
 ::: chimera_ml.inference.utils.resolve_inference_device
 
+## Explainable AI
+
+The XAI components measure leave-one-modality-out sensitivity for a registered
+prediction step. `XAIStep` wraps the step, `explain_batch` performs the baseline
+and modality interventions, `summarize_explanations` builds sample/global or
+temporal summaries, and `xai_step` is the registry factory used in inference
+configuration. See the [XAI guide](../user-guide/xai.md) for the callback
+contract, intervention policies, and artifact schemas.
+
+::: chimera_ml.inference.steps.xai_steps.XAIStep
+
+::: chimera_ml.inference.steps.xai_steps.explain_batch
+
+::: chimera_ml.inference.steps.xai_steps.summarize_explanations
+
+::: chimera_ml.inference.steps.xai_steps.xai_step
+
 ## Step protocol and built-ins
 
 Custom steps implement the small \`run(ctx) -> ctx\` protocol. The built-in

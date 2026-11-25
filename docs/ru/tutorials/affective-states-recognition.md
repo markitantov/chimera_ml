@@ -40,17 +40,39 @@ chimera-ml eval --config-path examples/affective_states_recognition/configs/mult
 
 ~~~text
 extract_audio_step
-  -> vad_step -> build_segments_step -> transcribe_segments_step
-                                      resolve_checkpoints_step ----------------> face_detection_step
-                                           -> extract_features_step
-                                           -> fusion_step
-                                           -> write_json_predictions_step
-                                           -> print_json_predictions_step
+        |
+        v
+vad_step
+        |
+        v
+build_segments_step
+        |
+        v
+transcribe_segments_step    resolve_checkpoints_step
+        |                            |
+        +------------+---------------+
+                     |
+                     v
+             face_detection_step
+                     |
+                     v
+             extract_features_step
+                     |
+                     v
+                 fusion_step
+                     |
+                     v
+         write_json_predictions_step
+                     |
+                     v
+         print_json_predictions_step
 ~~~
 
-В конфигурации обнаружение лиц зависит от `resolve_checkpoints_step` и
-`transcribe_segments_step`; извлечение признаков зависит от обнаружения лиц;
-слияние — от признаков; средство записи — от слияния; печать — от средства
+Извлечение аудио и разрешение контрольных точек — независимые корневые шаги.
+В конфигурации обнаружение лиц зависит одновременно от
+`resolve_checkpoints_step` и `transcribe_segments_step`. Последующие шаги
+следуют объявленным зависимостям: извлечение признаков зависит от обнаружения
+лиц; слияние — от признаков; средство записи — от слияния; печать — от средства
 записи. Фактические этапы: декодирование аудио, Silero VAD, построение
 сегментов, транскрибация Whisper, обнаружение лиц YOLO, извлечение аудио-,
 видео- и текстовых признаков, слияние с использованием контрольной точки и
@@ -60,7 +82,7 @@ extract_audio_step
 chimera-ml inference   --input examples/affective_states_recognition/samples/01_neutral_neutral_cmumosei.mp4   --output prediction.json   --config-path examples/affective_states_recognition/configs/inference.yaml   --work-dir runs/affective
 ~~~
 
-`emoaffectnet` и `lefsa` кэшируются в `model_cache`; Whisper и YOLO требуют
+Настроенный конвейер кэширует `emoaffectnet` и `lefsa` в `model_cache`; Whisper и YOLO требуют
 внешние веса. CPU поддерживается, но выполнение может быть медленным.
 
 ## Артефакт предсказаний

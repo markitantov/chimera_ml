@@ -1,6 +1,6 @@
 # Сценарии CLI
 
-Точный syntax находится в [CLI reference](../cli/reference.md).
+Точный синтаксис приведён в [справочнике CLI](../cli/reference.md).
 
 ~~~bash
 chimera-ml validate-config -c config.yaml
@@ -10,5 +10,6 @@ chimera-ml inference -i input.mp4 -o prediction.json -c inference.yaml
 chimera-ml sweep -b config.yaml -s sweep.yaml --dry-run
 ~~~
 
-Используйте doctor для environment problems, plugins list для entry-point
-discovery и registry list для registration. Доступен alias chimera_ml.
+Используйте `doctor` для диагностики проблем окружения, `plugins list` — для
+поиска плагинов через точки входа, а `registry list` — для проверки регистрации
+компонентов. Также доступен псевдоним `chimera_ml`.
