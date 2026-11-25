@@ -20,11 +20,13 @@ from chimera_ml.inference.context import InferenceContext
 def _batch_size(batch: Batch) -> int:
     for value in batch.inputs.values():
         return int(value.shape[0])
+
     masks = batch.get_masks() or {}
     for value in masks.values():
         value = torch.as_tensor(value)
         if value.ndim:
             return int(value.shape[0])
+
     raise ValueError("Cannot determine batch size from an empty batch.")
 
 
@@ -43,6 +45,7 @@ def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
                 f"Mask '{modality}_temporal_mask' must have shape "
                 f"({batch_size}, {temporal_width}), got {tuple(mask.shape)}."
             )
+
         return mask.any(dim=1)
 
     presence = batch.get_masks(f"{modality}_mask")
@@ -54,6 +57,7 @@ def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
             raise ValueError(
                 f"Mask '{modality}_mask' must have batch dimension {batch_size}, got {tuple(resolved.shape)}."
             )
+
         if resolved.ndim == 1:
             resolved = resolved[:, None].expand(-1, temporal_width)
         elif resolved.ndim != 2:
@@ -68,10 +72,12 @@ def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
         shared = torch.as_tensor(shared, device=device).bool()
         if shared.ndim == 0 or shared.shape[0] != batch_size:
             raise ValueError(f"Mask 'sequence_mask' must have batch dimension {batch_size}, got {tuple(shared.shape)}.")
+
         if shared.ndim == 1:
             shared = shared[:, None]
         elif shared.ndim != 2:
             raise ValueError(f"Mask 'sequence_mask' must have shape (B,) or (B, T), got {tuple(shared.shape)}.")
+
         if shared.shape == resolved.shape:
             resolved = resolved & shared
 
@@ -81,11 +87,13 @@ def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
 def _drop_modality_masks(masks: dict[str, Any], modality: str) -> None:
     for key in (modality, f"{modality}_mask", f"{modality}_temporal_mask"):
         masks.pop(key, None)
+
     nested = masks.get("mask")
     if isinstance(nested, Mapping):
         nested = dict(nested)
         for key in (modality, f"{modality}_mask", f"{modality}_temporal_mask"):
             nested.pop(key, None)
+
         masks["mask"] = nested
 
 
@@ -95,6 +103,7 @@ def _disable_modality_masks(masks: dict[str, Any], modality: str) -> bool:
         if key in masks:
             masks[key] = torch.zeros_like(torch.as_tensor(masks[key]).bool())
             changed = True
+
     nested = masks.get("mask")
     if isinstance(nested, Mapping):
         nested = dict(nested)
@@ -102,7 +111,9 @@ def _disable_modality_masks(masks: dict[str, Any], modality: str) -> bool:
             if key in nested:
                 nested[key] = torch.zeros_like(torch.as_tensor(nested[key]).bool())
                 changed = True
+
         masks["mask"] = nested
+
     return changed
 
 
@@ -139,10 +150,13 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
 def _json(value: Any) -> Any:
     if torch.is_tensor(value):
         return _json(value.detach().cpu().tolist())
+
     if isinstance(value, Mapping):
         return {str(key): _json(item) for key, item in value.items()}
+
     if isinstance(value, (list, tuple)):
         return [_json(item) for item in value]
+
     return value
 
 
@@ -150,11 +164,15 @@ def _sample(value: Any, index: int) -> Any:
     if torch.is_tensor(value):
         if value.ndim == 0:
             return value
+
         return value[index]
+
     if isinstance(value, Mapping):
         return {key: _sample(item, index) for key, item in value.items()}
+
     if isinstance(value, (list, tuple)):
         return value[index]
+
     return value
 
 
@@ -162,15 +180,20 @@ def _validate_batch_aligned(value: Any, batch_size: int, name: str) -> None:
     if torch.is_tensor(value):
         if value.ndim == 0 or value.shape[0] != batch_size:
             raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
+
         return
+
     if isinstance(value, Mapping):
         for key, item in value.items():
             _validate_batch_aligned(item, batch_size, f"{name}.{key}")
+
         return
     if isinstance(value, (list, tuple)):
         if len(value) != batch_size:
             raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
+
         return
+
     raise ValueError(f"Diagnostic '{name}' must be a batch-aligned tensor, mapping, or sequence.")
 
 
@@ -180,10 +203,12 @@ def _masked_json(value: Any, valid: Any) -> Any:
     if isinstance(valid, list):
         if not isinstance(value, list) or len(value) != len(valid):
             raise ValueError("Output validity shape does not match score shape.")
+
         return [
             None if not item_valid else _masked_json(item, item_valid)
             for item, item_valid in zip(value, valid, strict=True)
         ]
+
     return value if bool(valid) else None
 
 
@@ -191,8 +216,10 @@ def _score(output: ModelOutput, batch_size: int, score_fn: Callable[[ModelOutput
     score = output.preds if score_fn is None else score_fn(output)
     if not torch.is_tensor(score):
         raise TypeError("score_fn must return a torch.Tensor.")
+
     if score.ndim == 0 or score.shape[0] != batch_size:
         raise ValueError(f"Scores must be batch-aligned with size {batch_size}, got {tuple(score.shape)}.")
+
     return score
 
 
@@ -204,14 +231,18 @@ def _validity(
 ) -> Tensor:
     if output_mask_key is None:
         return torch.ones_like(score, dtype=torch.bool)
+
     value = output_mask_key(batch, output) if callable(output_mask_key) else batch.get_masks(output_mask_key)
     if value is None:
         raise ValueError(f"Output validity mask '{output_mask_key}' is missing.")
+
     mask = torch.as_tensor(value, device=score.device).bool()
     if mask.ndim == 0 or mask.shape[0] != score.shape[0]:
         raise ValueError(f"Output validity mask must have batch dimension {score.shape[0]}, got {tuple(mask.shape)}.")
+
     while mask.ndim < score.ndim:
         mask = mask.unsqueeze(-1)
+
     try:
         return mask.expand_as(score)
     except RuntimeError as error:
@@ -226,11 +257,14 @@ def _sample_ids(batch: Batch, batch_index: int | None) -> list[str]:
     if raw is None:
         prefix = "sample" if batch_index is None else f"batch-{batch_index}"
         return [f"{prefix}-{index}" for index in range(size)]
+
     if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
         raise ValueError("batch.meta['sample_ids'] must be an iterable with one value per sample.")
+
     values = list(raw)
     if len(values) != size:
         raise ValueError(f"batch.meta['sample_ids'] has {len(values)} values, expected {size}.")
+
     return [str(value) for value in values]
 
 
@@ -253,9 +287,11 @@ def _sample_metadata(batch: Batch, index: int, batch_size: int) -> dict[str, Any
     sample_meta = meta.get("sample_meta")
     if isinstance(sample_meta, list) and len(sample_meta) == batch_size and isinstance(sample_meta[index], Mapping):
         result.update(_json(sample_meta[index]))
+
     for key in ("window_id", "start", "end", "timestamp", "duration", "start_time", "end_time"):
         if key not in meta:
             continue
+
         value = meta[key]
         if torch.is_tensor(value):
             if value.ndim and value.shape[0] == batch_size:
@@ -264,6 +300,7 @@ def _sample_metadata(batch: Batch, index: int, batch_size: int) -> dict[str, Any
             result[key] = _json(_sample(value, index))
         else:
             result[key] = _json(value)
+
     return result
 
 
@@ -283,6 +320,7 @@ def explain_batch(
     """Compare a baseline ModelOutput with one intervention per modality."""
     if ablation_policy not in {"zero", "mask", "remove"}:
         raise ValueError("ablation_policy must be zero, mask, or remove.")
+
     _require_eval(model)
     size = _batch_size(batch)
     names = tuple(modalities if modalities is not None else batch.inputs)
@@ -294,6 +332,7 @@ def explain_batch(
         for key in sorted(diagnostic_keys or ()):
             if not baseline.aux or key not in baseline.aux:
                 continue
+
             _validate_batch_aligned(baseline.aux[key], size, key)
             diagnostics[key] = baseline.aux[key]
 
@@ -316,6 +355,7 @@ def explain_batch(
                 raise ValueError(
                     f"Baseline and ablated scores differ: {tuple(original.shape)} vs {tuple(changed.shape)}."
                 )
+
             changed_valid = _validity(intervened, output, changed, output_mask_key)
             common_valid = baseline_valid & changed_valid
             rejected = torch.zeros(size, dtype=torch.bool, device=common_valid.device)
@@ -324,28 +364,34 @@ def explain_batch(
                 if torch.is_tensor(valid):
                     if valid.ndim == 0 or valid.shape[0] != size:
                         raise ValueError("validity_fn result must be batch-aligned.")
+
                     valid = valid.to(common_valid.device).bool()
                     rejected = ~valid if valid.ndim == 1 else ~valid.flatten(1).any(dim=1)
                     while valid.ndim < common_valid.ndim:
                         valid = valid.unsqueeze(-1)
+
                     valid = valid.expand_as(common_valid)
                     common_valid &= valid
                 elif not valid:
                     rejected.fill_(True)
                     common_valid.zero_()
+
             delta = original - changed
             results[name] = []
             for index in range(size):
                 if not bool(present[index]):
                     results[name].append(_missing("modality is unavailable for this sample"))
                     continue
+
                 if bool(rejected[index]):
                     results[name].append(_unsupported("validity_fn rejected the ablated sample"))
                     continue
+
                 valid = common_valid[index]
                 if not bool(valid.any()):
                     results[name].append(_unsupported("no common valid output positions remain"))
                     continue
+
                 results[name].append(
                     {
                         "status": "evaluated",
@@ -382,14 +428,17 @@ def _numeric_paths(value: Any, path: tuple[Any, ...] = ()) -> dict[tuple[Any, ..
         result: dict[tuple[Any, ...], float] = {}
         for key, item in value.items():
             result.update(_numeric_paths(item, (*path, str(key))))
+
         return result
     if isinstance(value, list):
         result = {}
         for index, item in enumerate(value):
             result.update(_numeric_paths(item, (*path, index)))
+
         return result
     if isinstance(value, numbers.Real) and not isinstance(value, bool) and math.isfinite(float(value)):
         return {path: float(value)}
+
     return {}
 
 
@@ -469,8 +518,10 @@ def _comparison_summary(
             "valid_comparison_count": len(paths),
             "common_comparison_count": 0,
         }
+
         if status == "evaluated" and not paths:
             item["status"] = "insufficient_data"
+
         if status == "evaluated" and common:
             values = [paths[position] for position in common if position in paths]
             item["common_comparison_count"] = len(values)
@@ -511,8 +562,10 @@ def _temporal_paths(
         for path, value in paths.items():
             if len(path) <= position_index or not isinstance(path[position_index], int):
                 continue
+
             position = path[position_index]
             positions.setdefault(position, {}).setdefault(name, {})[path] = value
+
     return positions
 
 
@@ -520,9 +573,11 @@ def _has_score_axis(value: Any, axis: int, depth: int = 0) -> bool:
     if isinstance(value, list):
         if depth == axis:
             return True
+
         return any(_has_score_axis(item, axis, depth + 1) for item in value)
     if isinstance(value, Mapping):
         return any(_has_score_axis(item, axis, depth) for item in value.values())
+
     return False
 
 
@@ -541,6 +596,7 @@ def _sample_summary(sample: Mapping[str, Any], modalities: list[str], temporal_a
             _has_score_axis(delta, temporal_axis - 1) for delta in deltas if delta is not None
         ):
             raise ValueError("temporal_axis does not identify a list-like score dimension.")
+
         result["temporal"] = [
             {
                 "position": position,
@@ -563,6 +619,7 @@ def summarize_explanations(
     samples = explanations.get("samples")
     if not isinstance(samples, list):
         raise ValueError("explanations['samples'] must be a list.")
+
     modalities = list(explanations.get("modalities") or [])
     for sample in samples:
         for name in sample.get("modalities") or {}:
@@ -582,6 +639,7 @@ def summarize_explanations(
         }
         for sample in samples
     ]
+
     availability = {
         name: {
             "availability_count": sum(status != "already_missing" for status in statuses),
@@ -591,6 +649,7 @@ def summarize_explanations(
         }
         for name, statuses in ((name, [row[name] for row in statuses_by_sample]) for name in modalities)
     }
+
     candidates = [
         name
         for name in modalities
@@ -621,12 +680,14 @@ def summarize_explanations(
         for name in modalities:
             if statuses[name] == "evaluated":
                 valid_counts[name] += len(paths_by_sample[index][name])
+
     common_sample_count = 0
     for index in joint_indices:
         selected = {name: paths_by_sample[index][name] for name in candidates}
         common = set.intersection(*(set(paths) for paths in selected.values()))
         if not common:
             continue
+
         common_sample_count += 1
         for name in candidates:
             common_counts[name] += len(common)
@@ -651,6 +712,7 @@ def summarize_explanations(
             item = global_result["modalities"][name]
             item["mean_signed_delta"] = sum(value[0] for value in contributions) / len(contributions)
             item["mean_absolute_delta"] = sum(value[1] for value in contributions) / len(contributions)
+
     for name in modalities:
         global_result["modalities"][name]["valid_comparison_count"] = valid_counts[name]
         global_result["modalities"][name]["common_comparison_count"] = common_counts[name]
@@ -661,6 +723,7 @@ def summarize_explanations(
         global_result["dominant_modalities"],
         global_result["status"],
     ) = _rank_details(global_result["modalities"])
+
     for name in modalities:
         availability[name].update(global_result["modalities"][name])
         availability[name]["comparable_sample_count"] = common_sample_count if name in candidates else 0
@@ -696,6 +759,7 @@ def summarize_explanations(
                     temporal_groups.setdefault(position, {}).setdefault(name, {}).update(
                         {(sample_index, *path): value for path, value in values.items()}
                     )
+
         global_result["temporal"] = [
             {
                 "position": position,
@@ -727,6 +791,7 @@ class XAIStep:
             raise TypeError(
                 f"Wrapped step '{type(self.step).__name__}' must expose an 'on_prediction' callback attribute."
             )
+
         previous = self.step.on_prediction
         if previous is not None and not callable(previous):
             raise TypeError("Wrapped step 'on_prediction' must be callable or None.")
@@ -736,6 +801,7 @@ class XAIStep:
         def collect(model: nn.Module, batch: Batch, output: ModelOutput) -> None:
             if previous is not None:
                 previous(model, batch, output)
+
             self._results.append(
                 explain_batch(
                     model,
@@ -766,12 +832,14 @@ class XAIStep:
             for name in item["modalities"]:
                 if name not in modalities:
                     modalities.append(name)
+
             samples.extend(item["samples"])
         for sample in samples:
             sample["modalities"] = {
                 name: sample["modalities"].get(name, _missing("modality was not present in this batch"))
                 for name in modalities
             }
+
         result = {
             "schema_version": 2,
             "method": "leave_one_modality_out",
@@ -792,4 +860,5 @@ def xai_step(step: Mapping[str, Any] | Any, **params: Any) -> XAIStep:
         from chimera_ml.inference.builders import build_inference_step
 
         step = build_inference_step(dict(step))
+
     return XAIStep(step=step, **params)
