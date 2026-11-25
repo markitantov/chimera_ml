@@ -21,3 +21,18 @@ Regression metrics принимают multioutput raw_values, uniform_average и
 variance_weighted. PRF metrics принимают zero_division. Confusion matrix
 поддерживает normalize true, pred, all или отсутствие normalization и отдаёт
 matrix через value().
+
+
+## Примеры всех встроенных metrics
+
+    metrics:
+      - {name: mae_metric, params: {multioutput: uniform_average}}
+      - {name: mse_metric, params: {multioutput: uniform_average}}
+      - {name: rmse_metric, params: {multioutput: uniform_average}}
+      - {name: r2_metric, params: {multioutput: uniform_average}}
+      - {name: prf_macro_metric, params: {zero_division: 0}}
+      - {name: confusion_matrix_metric, params: {normalize: true}}
+
+Первые четыре ключа предназначены для regression, последние два и
+prf_micro_metric/prf_weighted_metric — для class-index classification.
+Confusion matrix не является метрикой VA regression.

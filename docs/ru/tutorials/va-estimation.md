@@ -1,42 +1,32 @@
 # VA estimation
 
-## Goal
+## Задача и plugin
 
-Запустить audio или multimodal valence/arousal plugin из репозитория.
+Plugin оценивает непрерывные valence и arousal. Доступны audio и multimodal training/evaluation: audio_train.yaml/audio_test.yaml и multimodal_train.yaml/multimodal_test.yaml. Готовой inference YAML нет. fusion_model, audio_*, fusion_* и va_* — plugin keys, а не TFS/RAAV/TOMAR.
 
-## What you will learn
+## Установка и данные
 
-Пример показывает регистрацию datamodules, models, losses, metrics, callbacks,
-optimizer, scheduler и custom collates, после чего они используются командами
-train/eval.
+    python -m pip install -e .
+    python -m pip install -e examples/va_estimation
+    chimera-ml plugins list
+    chimera-ml registry list --type datamodules
+    chimera-ml registry list --type models
+    chimera-ml registry list --type losses
 
-## Prerequisites
+Entry point: va_estimation = chimera_plugin:register, group chimera_ml.plugins. Audio dataset читает waveform при sr 16000, режет окна win_max_length/win_shift/win_min_length, использует VAD и создаёт cache в features_root. Labels должны содержать audio path и VA targets.
 
-~~~bash
-python -m pip install chimera-ml
-python -m pip install -e examples/va_estimation
-~~~
+Multimodal DataModule использует modalities с feature path и emb_size: face 256, qwen_mm 256, qwen_v 128; audio задаётся отдельно. mask_audio позволяет учитывать отсутствие audio. Framewise callback читает callbacks[].params.ann_root и ann_split_dir — это annotation paths, не feature paths. Внешних corpus, challenge annotations и feature extraction command нет.
 
-Нужны VA datasets, extracted features, annotations и machine-specific paths.
-Некоторые configs содержат Telegram callback; удалите его или задайте
-TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.
+Перед запуском измените data.params.audio.path, data.params.modalities.*.path и emb_size, callback annotation paths, logging/callback log_path. Telegram callback требует TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID или должен быть удалён.
 
-## Project structure и configuration
+## Training и evaluation
 
-Entry point — va_estimation = chimera_plugin:register. В configs находятся
-audio_train/test и multimodal_train/test. Обновите data.params и annotation/
-output paths.
+    chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
+    chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
+    chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
 
-~~~bash
-chimera-ml validate-config -c examples/va_estimation/configs/multimodal_train.yaml
-~~~
+    chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
+    chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
+    chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
 
-## Run
-
-~~~bash
-chimera-ml train -c examples/va_estimation/configs/multimodal_train.yaml
-chimera-ml eval -c examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path path/to/checkpoint.pt
-~~~
-
-Для audio-only используйте audio_* configs. Подробности — в
-[example source и README](https://github.com/markitantov/chimera_ml/tree/main/examples/va_estimation).
+Checkpoint callback пишет last.pt и monitored .pt, loggers/snapshot/framewise добавляют настроенные artifacts. Dataset-dependent training не запускался.

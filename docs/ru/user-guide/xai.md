@@ -292,7 +292,7 @@ class WriteXAIJsonStep:
             raise ValueError("Expected xai artifact")
         path = Path(self.output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+        path.write_text(json.dumps(artifact, indent=2, allow_nan=False), encoding="utf-8")
         ctx.set_artifact("xai_output_path", path)
         return ctx
 
@@ -329,6 +329,6 @@ steps:
 
 ## Стоимость и ограничения
 
-Для каждого callback batch XAI выполняет один baseline forward и ещё один forward на каждую выбранную модальность. Для `M` модальностей nested prediction step уже выполняет один original forward, поэтому всего получается примерно `1 + M` forward на batch. На больших моделях и длинных последовательностях это дорого, поэтому выбирайте модальности и batches осознанно.
+Для каждого callback batch обёрнутый prediction step выполняет один original forward и использует его output как XAI baseline. XAI выполняет не более M дополнительных intervention forward для M выбранных модальностей; отсутствующие модальности могут уменьшить число. Summary не выполняет forward. Обычный вызов с M оценёнными модальностями стоит один original forward плюс M intervention forward.
 
 Результат зависит от ablation policy, score function, masks, validity checks, режима модели и распределения данных. Ground truth не нужен, но измеряется чувствительность к выбранному вмешательству, а не причинный вклад и не качество модели. Разнородные score с несовместимыми шкалами нельзя бездумно агрегировать. Temporal summary описывает output positions, а не гарантированные input locations. Missing, unsupported и invalid comparisons должны оставаться видимыми при оценке coverage.

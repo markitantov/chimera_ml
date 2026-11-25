@@ -1,52 +1,61 @@
 # ORAGEN
 
-## Goal
+## Task and architecture
 
-Run the real ORAGEN example for audio-visual occlusion-robust gender
-recognition and age estimation, including video inference.
+ORAGEN demonstrates audio-visual gender recognition and age estimation with occlusion-robust multimodal fusion. Audio and multimodal training/evaluation are separate workflows. The shipped video inference uses the plugin model agender_multimodal_model_v3, not a core built-in fusion model.
 
-## What you will learn
+Fusion returns gender logits followed by one age logit. Inference applies softmax to gender and sigmoid(age_logit) * 100 to age, then averages probabilities and age over windows.
 
-This example combines plugin models with a registry-driven inference pipeline,
-remote/local checkpoint resolution, and optional DAG execution.
+## Install and inspect
 
-## Prerequisites
+    python -m pip install -e .
+    python -m pip install -e examples/oragen
+    chimera-ml plugins list
+    chimera-ml registry list --type inference_steps
+    chimera-ml registry list --type models
 
-Install the plugin and its dependencies:
+The plugin entry point is oragen = chimera_plugin:register. Relevant files are configs/audio_{train,test}.yaml, configs/multimodal_{train,test}.yaml, configs/inference.yaml, scripts/export_inference_checkpoint.py, and the audio/, fusion/, common/, and inference/ source packages.
 
-~~~bash
-python -m pip install -e examples/oragen
-~~~
+Inference uses torchcodec or the plugin ffmpeg fallback, Silero VAD, Ultralytics YOLO, and remote/local Hugging Face weights. The first run needs network access unless all weights are cached.
 
-Training requires ORAGEN-style cached features, labels, VAD files, corpora, and
-the paths in the selected config. Inference additionally requires a readable
-video, example dependencies, a torchcodec runtime or ffmpeg fallback, network
-access on first checkpoint download (or local/cached weights), and writable
-work space. Ultralytics resolves yolo26n.pt separately.
+## Data, caches, and training
 
-## Run inference
+Audio configs require features_root, each corpus data_root, labels_file_path, and vad_path. Labels provide gender and age. The dataset reads 16 kHz audio and uses 4-second windows with 2-second shift.
 
-~~~bash
-chimera-ml inference \
-  --input examples/oragen/samples/f_25.mp4 \
-  --output prediction.json \
-  --config-path examples/oragen/configs/inference.yaml
-~~~
+Multimodal configs use VOXCELEB2 and BRAVE-MASKS. Their labels include gender and age and may include mask_type. VAD and media files build windows. features_root contains ORAGEN-style cached records with acoustic_features and visual_features. If absent, configured audio/image feature-extractor checkpoints are needed to create them. The project does not download corpora.
 
-The pipeline extracts mono 16 kHz audio, runs Silero VAD, samples video,
-detects a face, builds fixed windows, resolves audio/image/fusion checkpoints,
-extracts features, fuses predictions, and aggregates windows. The output step
-writes JSON with input and predictions.
+Change features_root, corpora.*.data_root, labels_file_path, vad_path, audio_feature_extractor.checkpoint_path, image_feature_extractor.checkpoint_path, and train_subsets/val_subsets before use. Validate and run paired configs:
 
-## Run training/evaluation
+    chimera-ml validate-config --config-path examples/oragen/configs/audio_train.yaml
+    chimera-ml train --config-path examples/oragen/configs/audio_train.yaml
+    chimera-ml eval --config-path examples/oragen/configs/audio_test.yaml \\
+      --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
 
-~~~bash
-chimera-ml validate-config -c examples/oragen/configs/multimodal_train.yaml
-chimera-ml train -c examples/oragen/configs/multimodal_train.yaml
-chimera-ml eval -c examples/oragen/configs/multimodal_test.yaml --checkpoint-path path/to/checkpoint.pt
-~~~
+    chimera-ml validate-config --config-path examples/oragen/configs/multimodal_train.yaml
+    chimera-ml train --config-path examples/oragen/configs/multimodal_train.yaml
+    chimera-ml eval --config-path examples/oragen/configs/multimodal_test.yaml \\
+      --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
 
-Audio configs use the same commands with audio_train.yaml and audio_test.yaml.
+Expected artifacts are logs, checkpoints, grouped metrics, optional confusion figures, and snapshots beneath the configured run directory.
 
-The authoritative paths, component keys, and model preparation steps remain in
-the [ORAGEN example](https://github.com/markitantov/chimera_ml/tree/main/examples/oragen).
+## Video inference
+
+The shipped config is sequential:
+
+    input video -> extract_audio_step -> vad_step -> resolve_checkpoints_step
+      -> face_detection_step -> build_windows_step -> extract_features_step
+      -> fusion_step -> aggregate_windows_step -> print_json_predictions_step
+
+Run it with shipped media:
+
+    chimera-ml inference \\
+      --input examples/oragen/samples/f_25.mp4 \\
+      --output prediction.json \\
+      --config-path examples/oragen/configs/inference.yaml \\
+      --work-dir runs/oragen
+
+resolve_checkpoints_step caches audio, image, and fusion weights under model_cache. YOLO resolves yolo26n.pt separately. CPU is a fallback when CUDA is unavailable. A representative final object uses gender (label, class_index, probabilities), age (value), num_windows, windows (index, start_sec, end_sec, gender fields, age_pred, num_faces, num_frames), and debug. No windows produces null gender/age, num_windows 0, windows [], and status no_predictions. Probabilities are softmax probabilities and age is a scaled sigmoid output, not calibrated uncertainty.
+
+## XAI and troubleshooting
+
+ORAGEN fusion_step does not expose the on_prediction callback required by xai_step, so XAI is not enabled. Use the [XAI guide](../user-guide/xai.md) and [custom inference steps](../inference/custom-steps.md) for the generic mechanism. Common failures are missing plugin/cache/checkpoints, torchcodec/ffmpeg, invalid media, no face/speech, and unwritable work-dir.

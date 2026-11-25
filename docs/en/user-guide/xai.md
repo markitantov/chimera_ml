@@ -320,7 +320,7 @@ class WriteXAIJsonStep:
             raise ValueError("Expected xai artifact")
         path = Path(self.output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+        path.write_text(json.dumps(artifact, indent=2, allow_nan=False), encoding="utf-8")
         ctx.set_artifact("xai_output_path", path)
         return ctx
 
@@ -357,6 +357,6 @@ The exporter is documentation-only here: register and install it in the applicat
 
 ## Cost and limitations
 
-For each callback batch, XAI keeps one baseline forward and runs another forward for each selected modality. With `M` modalities, this is approximately `1 + M` forwards per batch, plus the surrounding prediction step. This can be expensive for large models or long sequences; select modalities and batches deliberately.
+For each callback batch, the wrapped prediction step performs one original forward and reuses its output as the XAI baseline. XAI performs at most M additional intervention forwards for M selected modalities; missing modalities can reduce that count. Summary generation performs no forwards. A normal callback with M evaluated modalities costs one original forward plus M intervention forwards.
 
 Results depend on the ablation policy, score function, masks, validity checks, model mode, and data distribution. They require no ground truth and measure sensitivity to the chosen intervention, not causal contribution or model quality. Heterogeneous scores with incompatible scales should not be aggregated. Temporal summaries describe output positions, not guaranteed input locations. Missing, unsupported, and invalid comparisons must remain visible when interpreting coverage.
