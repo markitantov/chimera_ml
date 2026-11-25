@@ -1,40 +1,35 @@
-# Sweeps
+# Гиперпараметрические переборы
 
-chimera-ml sweep запускает обычный training для каждого trial:
+Перебор принимает корректную конфигурацию обучения и запускает обычное обучение для каждого испытания. Сначала проверьте базовую конфигурацию: перебор не исправляет датасеты, ключи плагинов или отсутствующие мониторы.
 
-~~~bash
-chimera-ml sweep \
-  --base-config config.yaml \
-  --sweep-config sweep.yaml \
-  --sweep-name lr-search \
-  --max-trials 4 \
-  --dry-run
-~~~
+## Сценарий полного перебора
 
-Base config должен содержать experiment_info.params.experiment_name. Overrides
-используют dotted paths, включая named list entries:
-optimizer.params.lr или callbacks.checkpoint_callback.params.monitor.
+`sweep.yaml` содержит либо `parameters`, либо `trials`, но не оба:
 
-## Grid sweeps
-
-Без method (или method: grid) задайте parameters либо trials, но не оба:
-
-~~~yaml
+```yaml
 parameters:
   optimizer.params.lr: [0.001, 0.0001]
   train.params.epochs: [3, 5]
-~~~
+```
 
-Cartesian product создаёт четыре trials. trials удобен для ручных комбинаций.
+Это даёт четыре комбинации полного перебора:
 
-## Optuna sweeps
+```bash
+chimera-ml validate-config --config-path config.yaml
+chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-name lr-search --max-trials 4 --dry-run
+chimera-ml sweep --base-config config.yaml --sweep-config sweep.yaml --sweep-name lr-search
+```
 
-~~~yaml
+Составные пути могут адресовать отображения и именованные элементы списков: `optimizer.params.lr`, `callbacks.checkpoint_callback.params.monitor`. `--max-trials` ограничивает число испытаний, `--dry-run` не запускает обучение.
+
+## Сценарий Optuna
+
+```yaml
 method: optuna
 n_trials: 10
 study_name: lr-study
 target:
-  monitor: val/loss
+  monitor: val/mae
   mode: min
 parameters:
   optimizer.params.lr:
@@ -50,22 +45,25 @@ parameters:
   model.params.variant:
     type: categorical
     choices: [small, large]
-~~~
+```
 
-float требует low/high, допускает step или log; int допускает low/high/step/log;
-categorical требует непустой choices. storage и load_if_exists также
-поддерживаются. CLI добавляет sweep_target_callback, target по умолчанию
-val/loss и min.
+Тип `float` требует `low`/`high` и использует `step` или `log`, но не оба параметра. Тип `int` имеет `step` по умолчанию `1`; логарифмическая шкала для `int` требует `step: 1`. Тип `categorical` требует непустого `choices`. `target.mode` — `min`/`max`, а также псевдонимы `minimize`/`maximize`; цель по умолчанию — `val/loss`, `min`.
 
-## Artifacts и identity
+```bash
+chimera-ml sweep -b config.yaml -s optuna.yaml --dry-run
+chimera-ml sweep -b config.yaml -s optuna.yaml --max-trials 3
+```
 
-~~~text
-<log_path>/<experiment_name>/_sweeps/<sweep_id>/
+CLI добавляет `sweep_target_callback`, запускает обычный цикл обучения и записывает лучшее значение и эпоху.
+
+## Артефакты
+
+```text
+<log_path>/<experiment_name>/_sweeps/<sweep-id>/
 ├── base_config.yaml
 ├── sweep_config.yaml
 ├── manifest.yaml
 └── trial_configs/<label>-<short-id>-001.yaml
-~~~
+```
 
-manifest фиксирует status, trials и для Optuna study/objective/best trial.
---max-trials ограничивает trials; --dry-run печатает их и не запускает training.
+`manifest.yaml` содержит статус и записи испытаний; Optuna дополнительно сохраняет исследование, целевую функцию и лучшее испытание. Каждое испытание получает собственные артефакты запуска.

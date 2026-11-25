@@ -1,56 +1,46 @@
 # Quick start
 
-This short walkthrough checks the installed CLI and shows where a real
-experiment configuration enters the workflow.
+This is a non-training check that can be run immediately after installing the core package. It does not require a dataset or checkpoint.
 
-## Check the environment
-
-After installing `chimera-ml`, run:
+## 1. Check the installation
 
 ```bash
 chimera-ml doctor
 chimera-ml --help
+chimera-ml registry list --type models
+chimera-ml registry list --type collates
 ```
 
-`doctor` reports basic Python, PyTorch, CUDA, MLflow, and registry/plugin
-information without starting a training run.
+A clean core install lists the four built-in fusion model keys and the two built-in collates. A project plugin adds its own keys.
 
-## Validate a configuration
+## 2. Load a real plugin and validate its YAML
 
-Install one of the repository's example plugins, then validate a configuration
-before starting an experiment:
+From the repository root:
 
 ```bash
 python -m pip install -e examples/va_estimation
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
 chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
 ```
 
-Validation checks the YAML structure and required experiment fields. The
-example configuration still needs its dataset and output paths configured for
-an actual training run; see the
-[VA estimation example README](https://github.com/markitantov/chimera_ml/blob/main/examples/va_estimation/README.md)
-for those paths and the subsequent train/eval commands.
+The validation command checks required framework sections. It does not check that dataset paths, feature directories, credentials, or optional model files exist, so those prerequisites still need to be prepared.
 
-## Use the Python containers
-
-The smallest library-level interaction uses the public `Batch` and
-`ModelOutput` containers:
+## 3. Inspect the public Python containers
 
 ```python
 import torch
-
 from chimera_ml import Batch, ModelOutput
 
 batch = Batch(
-    inputs={"audio": torch.zeros(1, 16000)},
-    targets=None,
+    inputs={"audio": torch.zeros(2, 16000)},
+    targets=torch.zeros(2, 1),
+    masks={"audio_mask": torch.ones(2)},
+    meta={"sample_meta": [{"id": "a"}, {"id": "b"}]},
 )
-output = ModelOutput(preds=torch.zeros(1, 1))
-
-assert batch.inputs["audio"].shape == (1, 16000)
-assert output.preds.shape == (1, 1)
+output = ModelOutput(preds=torch.zeros(2, 1), aux={"features": torch.zeros(2, 8)})
+assert batch.inputs["audio"].shape == (2, 16000)
+assert output.preds.shape == (2, 1)
 ```
 
-Models consume `Batch` objects and return `ModelOutput` objects. The API
-reference documents these containers and the registry used to connect built-in
-or plugin components.
+A model receives `Batch` and returns `ModelOutput`. The example above is only a container check; it does not construct a model or train anything.

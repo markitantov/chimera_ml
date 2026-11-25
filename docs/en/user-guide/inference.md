@@ -1,62 +1,43 @@
-# Inference
+# Inference overview
 
-Inference is a separate YAML-driven pipeline:
+Inference is an independent, configuration-driven execution mechanism. It runs an `InferencePipeline` over one input path and a shared `InferenceContext`; it is not a training or evaluation shortcut.
 
-~~~bash
-chimera-ml inference \
-  --input video.mp4 \
-  --output prediction.json \
-  --config-path examples/oragen/configs/inference.yaml \
-  --device auto \
-  --work-dir work
-~~~
+```text
+Input
+  -> InferenceContext
+  -> input preparation
+  -> checkpoint resolution
+  -> plugin prediction step
+  -> optional XAI
+  -> postprocessing
+  -> output artifacts
+```
 
-The CLI accepts device auto, cpu, or cuda. auto selects CUDA when available,
-otherwise CPU. If work-dir is omitted, a temporary directory is created.
+This is a conceptual flow, not a mandatory fixed pipeline. A real application chooses the steps it needs.
 
-## Config shape
+## Training, evaluation, and inference
 
-~~~yaml
-pipeline:
-  name: demo
-  parallel: false
+| Operation | Runtime | Updates parameters? | Typical input/output |
+| --- | --- | --- | --- |
+| Training | `Trainer.fit` | Yes | DataLoaders with targets -> checkpoints and logs |
+| Evaluation | `Trainer.evaluate` via `chimera-ml eval` | No | Configured splits + compatible checkpoint -> metrics/cache |
+| Inference | `InferencePipeline` via `chimera-ml inference` | No | One input path -> shared artifacts and optional JSON |
 
-runtime:
-  device: auto
+Training YAML sections such as `data`, `loss`, `optimizer`, and `train` do not configure an inference pipeline. Inference YAML has `pipeline`, optional `runtime`, and `steps` instead. `Trainer.evaluate` is for labeled split metrics; inference is for application execution and prediction export.
 
-steps:
-  - name: extract_audio_step
-    params:
-      sample_rate: 16000
-  - name: print_json_predictions_step
-~~~
+## What the framework and application provide
 
-Every step is resolved from INFERENCE_STEPS and implements
-run(ctx: InferenceContext) -> InferenceContext. The context has input_path,
-work_dir, device, raw config, and shared artifacts. Use set_artifact and
-get_artifact; predictions is a convenience property for the predictions key.
+The core provides `InferenceConfig`, `InferenceContext`, pipeline scheduling, the `INFERENCE_STEPS` registry, checkpoint resolution, JSON output, and the universal XAI wrapper. The application or plugin provides input preparation, feature extraction, model construction, checkpoint loading, and prediction steps for a particular task. There is no universal core prediction step for every model.
 
-## Sequential and DAG modes
+Steps communicate through the context:
 
-With parallel false or omitted, steps run in config order and each depends on
-the previous step. With parallel true, after is authoritative: steps without
-dependencies are roots and can start together. Step ids default to name;
-repeated names need explicit id values. Unknown dependencies, self-dependencies,
-duplicate ids, and cycles raise ValueError.
+- `ctx.input_path` is the CLI input path;
+- `ctx.work_dir` is the persistent or temporary working directory;
+- `ctx.device` is the resolved `cpu` or `cuda` string;
+- `ctx.get_artifact(name, default)` reads upstream values;
+- `ctx.set_artifact(name, value)` publishes a value and records ownership for DAG merging;
+- `ctx.predictions` is the conventional `predictions` artifact.
 
-Each parallel step receives a copy of current artifacts. Results merge using
-keys written through set_artifact. A branch may overwrite an upstream artifact
-when it depends on that upstream node; unrelated branches may not write the
-same key.
+A prediction step normally loads a model in evaluation mode, constructs `Batch` objects from prepared data, runs `ModelOutput` under `torch.inference_mode()`, and publishes JSON-compatible predictions. Output steps then print or write those predictions.
 
-## Checkpoints and output
-
-resolve_checkpoints_step accepts local files or http/https references, writes
-remote files to a work-dir-relative cache, and exposes absolute paths in
-artifacts["checkpoints"]. Cached files are reused unless force_download is true.
-Failed downloads remove partial files.
-
-write_json_predictions_step writes input and predictions JSON; the print step
-prints the same payload. The CLI --output can create or override the write
-step in sequential mode. In parallel mode it cannot auto-create it: declare
-the step explicitly and set after dependencies in YAML.
+Continue with [Run inference](../inference/run.md), [pipeline configuration](../inference/pipeline.md), [built-in steps](../inference/built-in-steps.md), and [XAI](xai.md).

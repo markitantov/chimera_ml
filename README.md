@@ -1,12 +1,8 @@
 # Chimera ML
 
-`Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations)` is a lightweight framework for training and evaluating configurable uni-modal and multi-modal models.
+`Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations)` is a lightweight framework for configurable unimodal and multimodal training, checkpoint evaluation, and registry-driven inference pipelines.
 
-The core idea is simple:
-
-- the library provides runtime infrastructure (trainer, logging, callbacks, registry builders),
-- task-specific components (datamodules, models, losses, metrics, callbacks) live in external plugin packages,
-- experiments are driven by YAML configs and CLI commands.
+The framework provides infrastructure: a Trainer, logging, callbacks, registry builders, sequential or parallel DAG execution, modality-intervention XAI, and four built-in feature-only fusion architectures. Task-specific datasets, models, losses, metrics, prediction steps, and other components usually live in external plugin packages. YAML configuration and CLI commands connect that infrastructure to an experiment without making task-specific assumptions part of the core library.
 
 ## Requirements
 
@@ -50,6 +46,8 @@ Both names are available; docs use `chimera-ml`.
 2. Install your task plugin package (example below).
 3. Run train/eval with YAML config.
 
+The core package does not provide task-specific datasets or prediction models. Install a compatible plugin, prepare the external datasets and cached features it requires, and obtain the model weights or checkpoints required by that plugin before training or inference.
+
 Example plugin from this repo:
 
 ```bash
@@ -61,9 +59,11 @@ chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yam
 
 ## CLI
 
+The following is schematic CLI syntax; replace angle-bracket placeholders with actual paths and values.
+
 Main commands:
 
-```bash
+```text
 chimera-ml validate-config --config-path <config.yaml>
 chimera-ml doctor
 chimera-ml train --config-path <config.yaml>
@@ -76,7 +76,7 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 
 `validate-config`:
 
-- checks config structure and required sections without starting training.
+- checks training/evaluation config structure and required sections without starting training; it does not validate an inference YAML.
 
 `doctor`:
 
@@ -105,7 +105,7 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 `eval`:
 
 - builds datamodule/model/loss/metrics/callbacks from the same config style,
-- optionally loads checkpoint (`model_state_dict` or raw state dict),
+- requires `--checkpoint-path` and loads either `model_state_dict` or a raw state dict from that checkpoint,
 - evaluates over merged `train`/`val`/`test` loader splits when available.
 
 `inference`:
@@ -118,8 +118,10 @@ chimera-ml plugins list [--group chimera_ml.plugins]
 - uses `after` for explicit dependencies between steps in parallel mode,
 - lets `--output/-o` create or override `write_json_predictions_step` only for sequential configs,
 - requires `write_json_predictions_step` to be declared explicitly in the config when `pipeline.parallel: true`, together with its `after` dependencies,
-- keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`.
-- supports a built-in `resolve_checkpoints_step` that resolves local paths or downloads remote checkpoints into the inference work directory cache and stores resolved local files in `artifacts["checkpoints"]`,
+- keeps output behavior inside explicit pipeline steps such as `write_json_predictions_step` and `print_json_predictions_step`,
+- supports a built-in `resolve_checkpoints_step` whose default `cache_dir` is `checkpoints` relative to the inference work directory; it resolves local paths or downloads remote checkpoints and stores resolved local files in `artifacts["checkpoints"]`.
+
+Core inference provides checkpoint resolution and JSON output steps; task-specific extraction, feature, fusion, and prediction steps are supplied by plugins.
 
 `registry list`:
 
@@ -146,7 +148,9 @@ For DAG inference configs:
 - by default, dependency names refer to the step `name`
 - use `id` only for the steps that need it, for example when the same step `name` is reused multiple times
 - shared upstream artifacts may be read by multiple branches; overwrite conflicts are checked only for keys explicitly written via `InferenceContext.set_artifact(...)`
-- if two DAG steps write the same artifact key, the pipeline raises an error
+- writes to the same artifact key are rejected when they come from unordered parallel branches; an explicit dependency order permits the later step to overwrite the earlier value
+
+The following YAML is schematic; replace placeholder paths and registry keys before use.
 
 Sequential example:
 
@@ -172,6 +176,8 @@ steps:
     params:
       checkpoint_key: fusion
 ```
+
+The following YAML is also schematic and demonstrates only the `id` rule.
 
 Example where only repeated steps need `id`:
 
@@ -215,6 +221,12 @@ steps:
       window_sec: 10
       stride_sec: 5
 ```
+
+## Explainable AI (XAI)
+
+Chimera ML provides leave-one-modality-out sensitivity analysis through the registered `xai_step`. It reuses the original model prediction as the baseline and applies one intervention per selected modality using `zero`, `mask`, or `remove`. A wrapped prediction step may expose the optional `on_prediction` callback; XAI temporarily collects that callback and restores the previous value afterward.
+
+The resulting artifacts support per-sample, global, and temporal summaries. This is intervention sensitivity, not causal attribution, SHAP, calibrated confidence, or a reliability guarantee. Existing ORAGEN and Affective States prediction steps do not expose the required callback and therefore do not support XAI as currently documented. See the full [English XAI guide](https://chimera-ml.readthedocs.io/en/latest/user-guide/xai/) and [Russian XAI guide](https://chimera-ml.readthedocs.io/ru/latest/user-guide/xai/).
 
 ## YAML Config Model
 
@@ -672,9 +684,13 @@ Release checklist:
 
 ## Documentation
 
-The full bilingual documentation is published on [Read the Docs](https://chimera-ml.readthedocs.io/):
+The English documentation website is published on [Read the Docs](https://chimera-ml.readthedocs.io/). The Russian documentation is maintained in `docs/ru/` and built with `mkdocs.ru.yml`:
 
-- [Getting started](https://chimera-ml.readthedocs.io/en/latest/getting-started/)
-- [User guide](https://chimera-ml.readthedocs.io/en/latest/user-guide/)
-- [Tutorials](https://chimera-ml.readthedocs.io/en/latest/tutorials/)
-- [API and CLI reference](https://chimera-ml.readthedocs.io/en/latest/api/)
+- [English documentation](https://chimera-ml.readthedocs.io/en/latest/)
+- [English getting started](https://chimera-ml.readthedocs.io/en/latest/getting-started/)
+- [English training and evaluation](https://chimera-ml.readthedocs.io/en/latest/user-guide/training/)
+- [English inference and XAI](https://chimera-ml.readthedocs.io/en/latest/user-guide/inference/)
+- [Russian documentation](https://github.com/markitantov/chimera_ml/tree/main/docs/ru)
+- [Russian начало работы](https://github.com/markitantov/chimera_ml/tree/main/docs/ru/getting-started)
+- [Russian обучение и оценка](https://github.com/markitantov/chimera_ml/blob/main/docs/ru/user-guide/training.md)
+- [Russian инференс и XAI](https://github.com/markitantov/chimera_ml/blob/main/docs/ru/user-guide/inference.md)

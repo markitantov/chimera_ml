@@ -14,63 +14,88 @@ nav:
       - Installation: getting-started/installation.md
       - Quick start: getting-started/quickstart.md
       - First experiment: getting-started/first-experiment.md
-  - Concepts:
-      - Overview: concepts/index.md
-      - Architecture: concepts/architecture.md
-      - Configuration: concepts/configuration.md
-      - Registries: concepts/registries.md
-      - BuildContext: concepts/build-context.md
-      - Plugins: concepts/plugins.md
-  - User guide:
-      - Overview: user-guide/index.md
-      - Configuration reference: user-guide/configuration.md
-      - Data: user-guide/data.md
-      - Models: user-guide/models.md
-      - TFS: user-guide/tfs-fusion.md
-      - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
-      - RAAV: user-guide/raav-fusion.md
-      - TOMAR: user-guide/tomar-fusion.md
-      - Training: user-guide/training.md
-      - Evaluation: user-guide/evaluation.md
-      - Losses: user-guide/losses.md
-      - Metrics: user-guide/metrics.md
-      - Optimizers and schedulers: user-guide/optimizers-schedulers.md
+      - Essential concepts: getting-started/essential-concepts.md
+  - Training:
+      - Overview: training/index.md
+      - Prepare a dataset: user-guide/data.md
+      - Configure an experiment: user-guide/configuration.md
+      - Train a model: user-guide/training.md
+      - Evaluate a checkpoint: user-guide/evaluation.md
       - Callbacks: user-guide/callbacks.md
-      - Logging: user-guide/logging.md
+      - Logging and MLflow: user-guide/logging.md
       - MLflow: user-guide/mlflow.md
-      - Inference: user-guide/inference.md
-      - Research-aligned XAI: user-guide/xai.md
-      - Sweeps: user-guide/sweeps.md
-      - Plugins: user-guide/plugins.md
-      - CLI workflows: user-guide/cli.md
+      - Hyperparameter sweeps: user-guide/sweeps.md
       - Troubleshooting: user-guide/troubleshooting.md
-  - Tutorials:
+  - Inference:
+      - Overview: user-guide/inference.md
+      - Run inference: inference/run.md
+      - Pipeline configuration: inference/pipeline.md
+      - Built-in inference steps: inference/built-in-steps.md
+      - Custom prediction steps: inference/custom-steps.md
+      - Sequential and parallel pipelines: inference/execution.md
+      - Checkpoints and artifacts: inference/checkpoints.md
+      - Explainable AI (XAI): user-guide/xai.md
+      - Troubleshooting: inference/troubleshooting.md
+  - Components:
+      - Overview: components/index.md
+      - Core:
+          - Batch, ModelOutput, configuration: components/core.md
+      - Data:
+          - Datasets, DataModules, collates: components/data.md
+      - Models:
+          - Model interface and built-ins: components/models.md
+          - Fusion models overview: components/fusion.md
+          - TFS: user-guide/tfs-fusion.md
+          - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
+          - RAAV: user-guide/raav-fusion.md
+          - TOMAR: user-guide/tomar-fusion.md
+      - Training components:
+          - Losses, metrics, optimizers, schedulers: components/training.md
+      - Callbacks:
+          - Overview: components/callbacks/index.md
+          - Checkpointing: components/callbacks/checkpointing.md
+          - Early stopping: components/callbacks/early-stopping.md
+          - Snapshots, predictions, confusion matrices: components/callbacks/artifacts.md
+          - Sweep objectives: components/callbacks/sweeps.md
+          - Notifications: components/callbacks/notifications.md
+      - Loggers: components/logging.md
+  - Examples:
       - Overview: tutorials/index.md
       - VA estimation: tutorials/va-estimation.md
       - ORAGEN: tutorials/oragen.md
       - Affective states recognition: tutorials/affective-states-recognition.md
-  - API reference:
-      - Overview: api/index.md
-      - Core: api/core.md
-      - Data: api/data.md
-      - Models: api/models.md
-      - Training: api/training.md
-      - Inference: api/inference.md
-      - Callbacks: api/callbacks.md
-      - Losses: api/losses.md
-      - Metrics: api/metrics.md
-      - Logging: api/logging.md
-      - Plugins: api/plugins.md
-  - CLI reference: cli/reference.md
+  - Extending:
+      - Overview: extending/index.md
+      - Registries: extending/registries.md
+      - BuildContext: extending/build-context.md
+      - Plugins: extending/plugins.md
+      - Custom datasets and DataModules: extending/data.md
+      - Custom models: extending/models.md
+      - Custom losses and metrics: extending/training.md
+      - Custom callbacks: extending/callbacks.md
+      - Custom inference steps: extending/inference.md
+  - Reference:
+      - Configuration: user-guide/configuration.md
+      - CLI: cli/reference.md
+      - Python API: api/index.md
+      - Core API: api/core.md
+      - Data API: api/data.md
+      - Models API: api/models.md
+      - Training API: api/training.md
+      - Inference API: api/inference.md
+      - Callbacks API: api/callbacks.md
+      - Losses API: api/losses.md
+      - Metrics API: api/metrics.md
+      - Logging API: api/logging.md
+      - Plugins API: api/plugins.md
   - Development:
       - Overview: development/index.md
-      - Setup: development/setup.md
+      - Concepts and architecture: concepts/architecture.md
       - Architecture: development/architecture.md
+      - Setup: development/setup.md
       - Testing: development/testing.md
       - Documentation: development/documentation.md
-      - Plugin authoring: development/plugins.md
-      - Releasing: development/releasing.md
-  - Releases:
-      - Overview: releases/index.md
       - Changelog: releases/changelog.md
       - Migration guide: releases/migration.md
+      - Releasing: development/releasing.md
+      - Releases: releases/index.md

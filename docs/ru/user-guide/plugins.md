@@ -1,7 +1,8 @@
-# Writing a plugin
+# Создание плагина
 
-Plugin — Python package с registration function в entry-point group
-chimera_ml.plugins.
+Плагин — это пакет Python, содержащий функцию регистрации и объявленный в группе
+точек входа `chimera_ml.plugins`. При загрузке Chimera ML находит такие точки
+входа, импортирует указанные модули и вызывает их функции регистрации.
 
 ~~~text
 my-plugin/
@@ -24,9 +25,11 @@ def register():
     import my_components
 ~~~
 
-Регистрируйте models, datamodules, losses, metrics, callbacks, collates,
-loggers или inference steps в соответствующем registry. Принимайте context
-только если factory использует BuildContext.
+Функция регистрации импортирует модуль с компонентами. В этом модуле можно
+зарегистрировать модели, наборы данных, функции потерь, метрики, колбэки,
+функции формирования батчей, логгеры и шаги инференса в соответствующих реестрах.
+Принимайте `BuildContext` только тогда, когда фабрике действительно нужны
+зависимости или метаданные текущего построения.
 
 ~~~bash
 python -m pip install -e my-plugin
@@ -34,5 +37,7 @@ chimera-ml plugins list
 chimera-ml registry list --type models
 ~~~
 
-Пишите tests для discovery, factory params и runtime boundary. Duplicate keys
-отклоняются; plugin load failures являются warnings.
+Проверяйте обнаружение плагина, параметры фабрик и границы выполнения тестами.
+Дублирующиеся ключи реестра отклоняются, а ошибки загрузки плагинов выдаются как
+предупреждения, чтобы одна неисправная интеграция не скрывала диагностическую
+информацию о запуске.

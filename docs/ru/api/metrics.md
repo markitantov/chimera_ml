@@ -1,18 +1,19 @@
-# API metrics
+# API метрик
 
-Metrics — stateful epoch accumulators. \`Trainer\` вызывает \`reset\`, передаёт
-каждый model output и batch в \`update\`, затем вызывает \`compute\` для получения
-scalar log values. Metric factories настраиваются через \`METRICS\` registry.
-См. [Metrics](../user-guide/metrics.md).
+Метрики — накопители с состоянием, работающие в пределах эпохи. `Trainer` вызывает
+`reset`, передаёт каждый результат модели и батч в `update`, затем вызывает `compute`
+для получения скалярных значений журнала. Функции построения метрик настраиваются через
+реестр `METRICS`. См. [Метрики](../user-guide/metrics.md).
 
-## Contract
+## Контракт
 
 ::: chimera_ml.metrics.base.BaseMetric
 
-## Regression metrics
+## Метрики регрессии
 
-Regression metrics flatten outputs в \`(N, D)\` и поддерживают uniform или raw
-multi-output aggregation. R² также поддерживает variance-weighted output.
+Метрики регрессии приводят результаты к форме `(N, D)` и поддерживают равномерную
+или исходную агрегацию нескольких выходов. R² также поддерживает агрегацию,
+взвешенную дисперсией.
 
 ::: chimera_ml.metrics.regression_metric.RegressionBaseMetric
 
@@ -32,11 +33,11 @@ multi-output aggregation. R² также поддерживает variance-weigh
 
 ::: chimera_ml.metrics.regression_metric.r2_metric
 
-## Classification metrics
+## Метрики классификации
 
-\`PRFMetric\` возвращает precision, recall и F1 с micro, macro или weighted
-averaging. \`ConfusionMatrixMetric\` хранит class matrix, возвращает summary
-accuracy через \`compute\`, а саму matrix — через \`value\`.
+`PRFMetric` возвращает precision, recall и F1 с микро-, макро- или взвешиванием.
+`ConfusionMatrixMetric` хранит матрицу классов, возвращает сводную точность через
+`compute`, а саму матрицу — через `value`.
 
 ::: chimera_ml.metrics.prf_metric.PRFMetric
 

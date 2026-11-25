@@ -1,39 +1,39 @@
 # API обучения
 
-Подсистема training связывает validated experiment configuration с model,
-data loaders, optimization components, metrics, loggers и callbacks. Обычно эти
-компоненты задаются в YAML; direct construction полезен для integrations и
-тестов. Практические сценарии описаны в [Training guide](../user-guide/training.md)
-и [configuration guide](../user-guide/configuration.md).
+Подсистема обучения связывает проверенную конфигурацию эксперимента с моделью,
+загрузчиками данных, компонентами оптимизации, метриками, логгерами и колбэками.
+Обычно эти компоненты задаются в YAML; прямое создание полезно для интеграций и
+тестов. Практические сценарии описаны в [руководстве по обучению](../user-guide/training.md)
+и [руководстве по конфигурации](../user-guide/configuration.md).
 
-## Configuration
+## Конфигурация
 
-\`TrainConfig\` содержит runtime settings loop: epochs, device, mixed precision,
-multi-loader sampling, scheduler stepping и prediction caching.
+`TrainConfig` содержит параметры цикла выполнения: эпохи, устройство, смешанную точность,
+выборку из нескольких загрузчиков, шаги планировщика и кэширование предсказаний.
 
 ::: chimera_ml.training.config.TrainConfig
 
 ## Trainer
 
-\`Trainer\` управляет fit/evaluate lifecycle: переносит batches на device,
-вызывает model и loss, обновляет metrics, пишет logs, вызывает callbacks и
-может кэшировать split outputs для artifact callbacks.
+`Trainer` управляет жизненным циклом обучения и оценки: переносит батчи на устройство,
+вызывает модель и функцию потерь, обновляет метрики, записывает журналы, вызывает колбэки
+и может кэшировать результаты выборок для колбэков артефактов.
 
 ::: chimera_ml.training.trainer.Trainer
 
-## Build context
+## Контекст построения
 
-\`BuildContext\` передаётся между построением registry components. Components
+\`BuildContext\` передаётся между этапами построения компонентов реестра. Компоненты
 могут читать и записывать значения и реализовывать \`describe_context\`, чтобы
-обогащать context для следующих builders.
+обогащать контекст для следующих функций построения.
 
 ::: chimera_ml.training.builders.BuildContext
 
-## Registry builders
+## Функции построения реестров
 
-\`build_from_registry\` реализует общий configuration contract \`name\` +
-\`params\`. Typed helpers inject runtime dependencies — например model,
-optimizer или context — и связывают YAML с Python objects.
+\`build_from_registry\` реализует общий контракт конфигурации \`name\` +
+\`params\`. Типизированные вспомогательные функции внедряют зависимости выполнения — например модель,
+оптимизатор или контекст — и связывают YAML с объектами Python.
 
 ::: chimera_ml.training.builders.build_from_registry
 
@@ -55,13 +55,13 @@ optimizer или context — и связывают YAML с Python objects.
 
 ::: chimera_ml.training.builders.build_logger
 
-## Sweeps
+## Переборы
 
-\`GridSweep\` строит конечное Cartesian product или explicit trial list.
-\`OptunaSweep\` передаёт typed suggestions и objective direction в Optuna.
-Оба класса сохраняют base/sweep/trial configs и manifest в sweep log directory.
-\`SweepTarget\` задаёт monitored metric и направление оптимизации. См. раздел
-[Sweeps](../user-guide/sweeps.md).
+\`GridSweep\` строит конечное декартово произведение или явный список испытаний.
+\`OptunaSweep\` передаёт типизированные предложения и направление целевой функции в Optuna.
+Оба класса сохраняют базовую конфигурацию, конфигурацию перебора и конфигурации испытаний, а также манифест в каталоге журналов перебора.
+\`SweepTarget\` задаёт контролируемую метрику и направление оптимизации. См. раздел
+[Переборы](../user-guide/sweeps.md).
 
 ::: chimera_ml.training.sweep.GridSweep
 

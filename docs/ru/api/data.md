@@ -1,28 +1,28 @@
-# API data
+# API данных
 
-Data subsystem превращает datasets в DataLoader containers для Trainer.
-DataModule строит train/validation/test. Доступны два встроенных collate:
-legacy MaskingCollate с key masking_collate и
-MultimodalSequenceCollate с key multimodal_sequence_collate. Формы, masks и
-YAML examples описаны в [Data](../user-guide/data.md).
+Подсистема данных превращает наборы данных в контейнеры DataLoader для Trainer.
+DataModule строит обучающую, валидационную и тестовую выборки. Доступны две встроенные
+collate-функции: устаревшая MaskingCollate с ключом `masking_collate` и
+MultimodalSequenceCollate с ключом `multimodal_sequence_collate`. Формы, маски и
+примеры YAML описаны в разделе [Данные](../user-guide/data.md).
 
-## Data module
+## Модуль данных
 
 ::: chimera_ml.data.datamodule.DataModule
 
-## Legacy collation
+## Устаревшее объединение образцов
 
 ::: chimera_ml.data.masking_collate.MaskingCollate
 
 ::: chimera_ml.data.masking_collate.masking_collate
 
-## Independent sequence collation
+## Объединение независимых последовательностей
 
 ::: chimera_ml.data.multimodal_sequence_collate.MultimodalSequenceCollate
 
 ::: chimera_ml.data.multimodal_sequence_collate.multimodal_sequence_collate
 
-## Loader utilities
+## Утилиты загрузчиков
 
 ::: chimera_ml.data.loader_utils.normalize_loaders
 

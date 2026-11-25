@@ -1,38 +1,31 @@
-# Troubleshooting
+# Диагностика обучения
 
-## Config section must be a mapping/list
+## Конфигурация и реестры
 
-Причина: ExperimentConfig.validate enforces framework shape.
+- **Раздел должен быть отображением или списком**: `data`, `model`, `loss`, `optimizer` — отображения; `metrics`, `callbacks`, `logging` — списки.
+- **Нет имени эксперимента**: добавьте `experiment_info.params.experiment_name` для `train`/`sweep`.
+- **Неизвестный ключ реестра**: установите плагин, проверьте `chimera-ml plugins list` и `registry list --type ...`.
+- **Конфликт collate**: не задавайте одновременно верхнеуровневый `collate` и `data.params.collate_fn`.
 
-Решение: data, model, train, loss и optimizer должны быть mappings; metrics,
-callbacks и logging — lists элементов {name, params}. Снова запустите
-chimera-ml validate-config.
+## Данные и формы
 
-## Unknown registry key
+- **Путь к датасету не найден**: `validate-config` не проверяет файловую систему. Проверьте пути и текущий рабочий каталог.
+- **Нет целевых значений**: обучение требует `Batch.targets`; исправьте Dataset или collate-функцию.
+- **Несовпадение формы**: сравните размерности признаков и целевых значений с контрактом модели. `multimodal_sequence_collate` принимает тензоры размерности 1 `[D]` или размерности 2 `[T,D]` и одинаковую ширину признаков для каждой модальности.
+- **Несовпадение маски**: временные маски должны иметь форму `[B,T]`, явные маски образца — длину исходной последовательности без дополнения. Отсутствующие входы заполняются нулями, но маски наличия должны отмечать недоступные данные.
 
-Причина: factory не зарегистрирована; обычно plugin не установлен или entry
-point/import завершился ошибкой.
+## Устройство и численные ошибки
 
-Решение: проверьте chimera-ml plugins list и registry list --type для нужного
-типа, затем entry point и warnings.
+- **CUDA недоступна**: `doctor` показывает `cuda_available`; Trainer использует CPU. Для GPU нужны совместимая сборка PyTorch с поддержкой CUDA и драйвер.
+- **NaN/Inf**: проверьте нормализацию, целевые значения, масштаб функции потерь, скорость обучения и маски.
+- **Смешанная точность на CPU**: AMP включается только на выбранном устройстве CUDA.
 
-## Training batch без targets
+## Мониторы, колбэки и результаты
 
-Trainer требует targets для optimization. Используйте labeled dataset для
-training; для inference применяйте inference pipeline.
+- **Монитор отсутствует**: используйте точный ключ `val/loss`, `val/mae` или ключ плагина `val_framewise/va_ccc_metric`.
+- **Нет артефактов предсказаний или графиков**: колбэкам требуются журналировщик MLflow и кэшированные результаты для размеченных данных; проверьте выборку и `collect_cache`.
+- **Ошибка Telegram**: экспортируйте настроенные переменные окружения с токеном и идентификатором чата; учётные данные не храните в YAML.
 
-## Checkpoint/output errors в inference
+## Совместимость контрольных точек
 
-Local checkpoint ref должен быть file, remote ref — доступным http/https URL.
-В parallel mode --output не создаёт output step автоматически. Проверьте path и
-объявите write_json_predictions_step с after dependencies.
-
-## Callback не находит monitor
-
-Monitor — точный key в flat epoch logs. Используйте val/loss или точный
-plugin metric key; тот же key нужен sweep_target_callback.
-
-## with_features fails
-
-Model output не содержит aux["features"]. Добавьте tensor или вызовите
-Trainer.evaluate напрямую с feature_extractor.
+Оценка выполняет строгую загрузку `model_state_dict`. Нужны те же ключ модели, параметры конструктора, имена модальностей и размерности признаков. Необёрнутый словарь состояния допускается, но не содержит метаданных оптимизатора и планировщика.

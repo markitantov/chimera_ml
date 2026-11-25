@@ -1,5 +1,7 @@
 # Optimizers and schedulers
 
+For the complete optimizer and scheduler factory catalog, see [Training components](../components/training.md).
+
 Built-in optimizers:
 
 - adamw_optimizer (default for direct builder use): lr=1e-3, weight_decay=0.0;

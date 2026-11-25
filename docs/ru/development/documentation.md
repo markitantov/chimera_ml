@@ -1,22 +1,22 @@
-# Documentation development
+# Разработка документации
 
-English — canonical source; Russian pages должны зеркалить relevant English
-paths после завершения English страницы.
+Английская документация — канонический источник; русские страницы должны отражать
+соответствующие английские пути после завершения английской страницы.
 
-Локальный serve:
+Локальный просмотр:
 
 ~~~bash
 poetry run mkdocs serve -f mkdocs.en.yml
 poetry run mkdocs serve -f mkdocs.ru.yml
 ~~~
 
-Strict builds:
+Строгие сборки:
 
 ~~~bash
 poetry run mkdocs build --strict -f mkdocs.en.yml
 poetry run mkdocs build --strict -f mkdocs.ru.yml
 ~~~
 
-Общие settings находятся в mkdocs.base.yml, language-specific nav/site name/
-docs_dir — в mkdocs.en.yml и mkdocs.ru.yml. API pages используют mkdocstrings,
-а примеры должны быть подтверждены source, tests или shipped YAML.
+Общие настройки находятся в `mkdocs.base.yml`, а навигация, имя сайта и `docs_dir`
+для каждого языка — в `mkdocs.en.yml` и `mkdocs.ru.yml`. Страницы API используют
+mkdocstrings, а примеры должны подтверждаться исходным кодом, тестами или поставляемым YAML.

@@ -1,18 +1,17 @@
 # Руководство пользователя
 
-Этот раздел нужен, когда task package уже установлен и нужно выполнить
-конкретную операцию.
+Этот раздел предназначен для ситуации, когда пакет задачи уже установлен и нужно выполнить конкретную операцию.
 
-- [Configuration reference](configuration.md) — поля, defaults и name/params.
-- [Data](data.md) — datamodules, collates, masks и multiple loaders.
-- [Models](models.md) — Batch/ModelOutput и built-in fusion models.
-- [Training](training.md) — Trainer.fit, mixed precision, scheduling и checkpoints.
-- [Evaluation](evaluation.md) — checkpoint loading и split metrics.
-- [Losses](losses.md), [Metrics](metrics.md) — primitives и plugin interfaces.
-- [Optimizers and schedulers](optimizers-schedulers.md) — built-ins и config.
-- [Callbacks](callbacks.md) — lifecycle hooks и artifacts.
-- [Logging](logging.md) и [MLflow](mlflow.md) — local и experiment tracking.
-- [Inference](inference.md) — sequential и DAG pipelines.
-- [Sweeps](sweeps.md) — grid и Optuna trials.
-- [Plugins](plugins.md) — task components.
-- [CLI workflows](cli.md) и [Troubleshooting](troubleshooting.md).
+- [Справочник конфигурации](configuration.md) — поля, значения по умолчанию и пары `name`/`params`.
+- [Данные](data.md) — DataModule, collate-функции, маски и несколько загрузчиков.
+- [Модели](models.md) — Batch/ModelOutput и встроенные модели слияния.
+- [Обучение](training.md) — Trainer.fit, смешанная точность, планирование скорости обучения и контрольные точки.
+- [Оценка](evaluation.md) — загрузка контрольной точки и метрики по выборкам.
+- [Функции потерь](losses.md), [метрики](metrics.md) — базовые примитивы и интерфейсы плагинов.
+- [Оптимизаторы и планировщики](optimizers-schedulers.md) — встроенные компоненты и конфигурация.
+- [Колбэки](callbacks.md) — хуки жизненного цикла и артефакты.
+- [Журналирование](logging.md) и [MLflow](mlflow.md) — локальные журналы и отслеживание экспериментов.
+- [Инференс](inference.md) — последовательные и DAG-конвейеры.
+- [Переборы](sweeps.md) — полный перебор и испытания Optuna.
+- [Плагины](plugins.md) — компоненты задачи.
+- [Сценарии CLI](cli.md) и [диагностика](troubleshooting.md).

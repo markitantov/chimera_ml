@@ -1,19 +1,21 @@
-# Evaluation
+# Оценка контрольной точки
 
-Оцените checkpoint без optimization:
+Проверка в `Trainer.fit` выполняется после каждой эпохи обучения и используется колбэками. Отдельная команда `eval` позволяет оценить сохранённую модель, не обновляет параметры оптимизатором и может запускаться с отдельной конфигурацией тестовой выборки.
 
-~~~bash
-chimera-ml eval \
-  --config-path config.yaml \
-  --checkpoint-path logs/experiment/run/checkpoints/last.pt
-~~~
+```bash
+chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/<run>/checkpoints/last.pt
+```
 
-Команда строит те же data/model/loss/metrics/callback components, что и train.
-Checkpoint загружается с weights_only=True на CPU и может быть mapping с
-model_state_dict или raw state dictionary. load_state_dict(strict=True)
-требует точного соответствия архитектуры.
+Оба параметра обязательны. `--with-features` дополнительно требует признаки из `ModelOutput.aux["features"]`:
 
-Train, validation и test loaders datamodule объединяются в split names.
-Evaluation выполняется как один epoch через Trainer.evaluate, запускает
-callbacks, обновляет metrics и может cache predictions. --with-features
-требует ModelOutput.aux["features"] либо прямой feature_extractor.
+```bash
+chimera-ml eval -c test.yaml --checkpoint-path checkpoints/best.pt --with-features
+```
+
+CLI строит те же DataModule, модель, функцию потерь, метрики, оптимизатор и колбэки и загружает контрольную точку на CPU с `weights_only=True`. Допустима полезная нагрузка с `model_state_dict` или необёрнутый словарь состояния. `load_state_dict(strict=True)` требует точного совпадения архитектуры модели, имён модальностей и размерностей.
+
+Загрузчики обучающей, валидационной и тестовой выборок объединяются; имена отображений нормализуются, а безымянные загрузчики получают префикс выборки. Поэтому ключи выглядят как `val/loss`, `val/mae`, `test2/rmse`. Оценка вызывает хуки колбэков вокруг одной эпохи. При `collect_cache` для колбэков сохраняются предсказания, целевые значения, метаданные и необязательные признаки.
+
+Артефакты зависят от настроенных колбэков и журналировщиков: локальные журналы находятся в каталоге запуска, MLflow получает метрики и CSV, графики и конфигурационные артефакты. Оценка — не инференс развёртывания и не XAI на уровне всего набора данных.
+
+Ошибки `--with-features` означают, что нет `aux["features"]` с размерностью батча, а ошибки контрольной точки обычно означают несовпадение конфигурации и модели, создавшей файл.

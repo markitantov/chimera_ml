@@ -1,17 +1,16 @@
-# Optimizers и schedulers
+# Оптимизаторы и планировщики
 
-Built-in optimizers:
+Полный каталог фабрик оптимизаторов и планировщиков находится в разделе [компонентов обучения](../components/training.md).
 
-- adamw_optimizer (direct builder default): lr=1e-3, weight_decay=0.0;
-- adam_optimizer: те же defaults;
-- sgd_optimizer: lr=1e-2, weight_decay=0.0, momentum=0.0, nesterov=false.
+Встроенные оптимизаторы:
 
-Дополнительные kwargs передаются PyTorch optimizer. Factory получает model,
-если signature явно объявляет model.
+- `adamw_optimizer` (значения по умолчанию непосредственного строителя): `lr=1e-3`, `weight_decay=0.0`;
+- `adam_optimizer`: те же значения по умолчанию;
+- `sgd_optimizer`: `lr=1e-2`, `weight_decay=0.0`, `momentum=0.0`, `nesterov=false`.
 
-Scheduler keys: steplr_scheduler, cosineannealinglr_scheduler и
-reduceonplateau_scheduler. Params передаются соответствующему PyTorch
-scheduler; builder inject-ит optimizer.
+Дополнительные именованные аргументы передаются оптимизатору PyTorch. Фабрика получает модель, если её сигнатура явно объявляет параметр `model`.
+
+Ключи планировщиков: `steplr_scheduler`, `cosineannealinglr_scheduler` и `reduceonplateau_scheduler`. Параметры передаются соответствующему планировщику PyTorch; строитель внедряет `optimizer`.
 
 ~~~yaml
 optimizer:

@@ -1,57 +1,69 @@
 # VA estimation
 
-## Goal
+## Task and plugin
 
-Run the repository's audio or multimodal valence/arousal example plugin.
+This example estimates continuous valence and arousal (VA). It contains audio and multimodal training/evaluation families: audio_train.yaml/audio_test.yaml use the audio DataModule and window caches; multimodal_train.yaml/multimodal_test.yaml use the fusion DataModule and cached audio/image/frame features.
 
-## What you will learn
+There is no shipped inference YAML. fusion_model, audio_*, fusion_*, and va_* are plugin registrations, not the core TFS/RAAV/TOMAR architectures.
 
-You will see how a plugin registers datamodules, models, losses, metrics,
-callbacks, an optimizer, a scheduler, and custom collates, then exposes them
-through ordinary train/eval commands.
+## Install and inspect registration
 
-## Prerequisites
-
-Install the package and the example:
+From the repository root:
 
 ~~~bash
-python -m pip install chimera-ml
+python -m pip install -e .
 python -m pip install -e examples/va_estimation
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
+chimera-ml registry list --type models
+chimera-ml registry list --type losses
 ~~~
 
-The example requires its VA datasets, extracted features, annotations, and
-machine-specific paths. Some configs also include Telegram notifications;
-remove that callback or provide TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+The entry point is va_estimation = chimera_plugin:register in the chimera_ml.plugins group.
 
-## Project structure and configuration
+## Project and data
 
-The package entry point is va_estimation = chimera_plugin:register. The
-configs directory contains audio_train.yaml/audio_test.yaml and
-multimodal_train.yaml/multimodal_test.yaml. Update data.params paths and any
-annotation/output paths before running.
+    examples/va_estimation/
+    ├── configs/audio_{train,test}.yaml
+    ├── configs/multimodal_{train,test}.yaml
+    └── src/
+        ├── chimera_plugin.py
+        ├── audio/data, audio/models, audio/loss
+        ├── fusion/data, fusion/models, fusion/loss, fusion/callbacks
+        └── metrics/
 
-Each config selects plugin keys under data, model, loss, metrics, callbacks,
-and optionally logging. Validate the exact config before starting:
+The datasets read configured waveform/feature paths; they do not download a corpus. Audio is read at sr 16000, split with win_max_length, win_shift and win_min_length, and filtered with VAD metadata when present. Labels must provide the audio path and VA targets. A feature index and window cache are created under features_root.
+
+The multimodal DataModule reads the modalities mapping. The shipped adapted configuration uses face, qwen_mm, and qwen_v with emb_size 256, 256, and 128. Audio has its own path and emb_size. mask_audio: true allows missing audio to be represented by the configured mask. Framewise evaluation reads annotations from callbacks[].params.ann_root and ann_split_dir; these are not feature paths.
+
+Change these placeholders before use:
+
+| Field | Meaning |
+| --- | --- |
+| data.params.audio.path | Audio feature/window cache |
+| data.params.modalities.*.path | Per-modality frame features |
+| data.params.*.emb_size | Actual feature width |
+| callbacks[].params.ann_root | VA challenge annotation root |
+| callbacks[].params.ann_split_dir | Annotation split |
+| logging[].params.log_path and callback log_path | Logs/checkpoints |
+| telegram_notifier_callback | Optional Telegram environment credentials |
+
+The example contains no external VA corpus, challenge annotations, or feature download command. Treat repository-relative paths as placeholders.
+
+## Validate, train, and evaluate
 
 ~~~bash
-chimera-ml validate-config -c examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml \
+  --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
 ~~~
-
-## Run
 
 ~~~bash
-chimera-ml train -c examples/va_estimation/configs/multimodal_train.yaml
-chimera-ml eval -c examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path path/to/checkpoint.pt
+chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml \
+  --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
 ~~~
 
-Use the audio_* configs for the audio-only path.
-
-## What happens and outputs
-
-The CLI builds plugin components from registries and passes them through the
-shared runtime. Configured callbacks can write checkpoints, a source snapshot,
-predictions, and metric figures beneath the configured log path. Actual paths
-and filenames come from the YAML.
-
-Read the [example source and README](https://github.com/markitantov/chimera_ml/tree/main/examples/va_estimation)
-when changing dataset-specific preprocessing.
+The checkpoint callback writes last.pt and monitored .pt files below the run directory. Loggers, snapshots, and the framewise callback add configured artifacts. Evaluation needs a state dict compatible with the selected audio or fusion model. Remove the Telegram callback or export TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Dataset-dependent training was not executed.

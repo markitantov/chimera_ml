@@ -1,18 +1,18 @@
 # Архитектура
 
-Каталог src/chimera_ml разделён по runtime-ответственности:
+Каталог `src/chimera_ml` разделён по подсистемам, каждая из которых отвечает за свою часть выполнения:
 
-- core: Batch, ModelOutput, ExperimentConfig и Registry;
-- data: datamodule, нормализация loaders и collation;
-- models, losses и metrics: граница модели и базовые training primitives;
-- training: Trainer, builders, optimizer/scheduler factories и sweeps;
-- callbacks и logging: lifecycle hooks, локальные logs и MLflow;
-- inference: YAML-driven steps и sequential/DAG execution;
-- utils: entry-point loading, seeds, sweep helpers и source snapshots.
+- `core`: Batch, ModelOutput, ExperimentConfig и Registry;
+- `data`: DataModule, нормализация загрузчиков и объединение образцов;
+- `models`, `losses` и `metrics`: контракт модели и базовые примитивы обучения;
+- `training`: Trainer, функции построения, фабрики оптимизаторов и планировщиков, переборы;
+- `callbacks` и `logging`: хуки жизненного цикла, локальные журналы и MLflow;
+- `inference`: шаги, управляемые YAML, и последовательное/DAG-выполнение;
+- `utils`: загрузка точек входа, начальные значения, вспомогательные функции переборов и снимки исходного кода.
 
-CLI соединяет эти части, но не содержит task-specific datasets или models.
-Они находятся в установленном plugin и регистрируют factories в тех же registry.
+CLI соединяет эти части, но не содержит наборы данных и модели, специфичные для задачи.
+Они находятся в установленном плагине и регистрируют фабрики в тех же реестрах.
 
-Граница модели явная: dataloader выдаёт Batch, model принимает Batch и
-возвращает ModelOutput, loss и metrics получают оба объекта. Благодаря этому
-plugin не зависит от реализации CLI.
+Граница модели явная: загрузчик данных выдаёт Batch, модель принимает Batch и
+возвращает ModelOutput, а функция потерь и метрики получают оба объекта. Благодаря этому
+плагин не зависит от реализации CLI.

@@ -1,47 +1,31 @@
-# Troubleshooting
+# Training troubleshooting
 
-## Config section must be a mapping/list
+## Configuration and registries
 
-Cause: ExperimentConfig.validate enforces the framework shape.
+- **“Section must be a mapping/list”**: use the expected top-level shape. `data`, `model`, `loss`, and `optimizer` are mappings; `metrics`, `callbacks`, and `logging` are lists of named items.
+- **Missing experiment name**: add `experiment_info.params.experiment_name` for `train` and `sweep`.
+- **Unknown registry key**: install the plugin, run `chimera-ml plugins list`, then inspect the relevant `registry list --type ...`. Registration happens at process startup.
+- **Top-level `collate` conflict**: do not also set `data.params.collate_fn`; the builder rejects both forms.
 
-Fix: use mappings for data, model, train, loss, and optimizer; use lists of
-{name, params} entries for metrics, callbacks, and logging. Run
-chimera-ml validate-config again.
+## Data and shapes
 
-## Unknown key from a registry
+- **Dataset paths fail**: `validate-config` does not check filesystem paths. Confirm every plugin path under `data.params` and that the process working directory is the one expected by the YAML.
+- **No targets**: training requires `Batch.targets`; fix the dataset or collate. Unlabeled data belongs in evaluation/inference.
+- **Shape mismatch**: inspect modality feature dimensions, target dimensions, and the model's input contract. `MultimodalSequenceCollate` requires rank-one `[D]` or rank-two `[T, D]` modality samples with a consistent feature dimension per modality.
+- **Mask mismatch**: temporal masks must match `[B, T]`; explicit sample masks must match the unpadded sequence length. Missing inputs are zero-filled but should remain marked unavailable by presence masks.
 
-Cause: the factory was not registered, usually because the plugin is not
-installed or its entry point/import failed.
+## Devices and numerical errors
 
-Fix: run chimera-ml plugins list, then registry list with the relevant --type.
-Confirm the entry point and inspect warnings.
+- **CUDA requested but unavailable**: `doctor` reports `cuda_available`; the Trainer resolves to CPU. Install a compatible CUDA PyTorch wheel/driver if GPU execution is required.
+- **NaN or Inf**: the Trainer raises a finite-value error. Check input normalization, targets, loss scale, learning rate, and masks before increasing complexity.
+- **Mixed precision behaves like CPU**: AMP is only enabled when the resolved device is CUDA.
 
-## Training reports a batch without targets
+## Monitors, callbacks, and outputs
 
-Cause: Trainer requires targets for optimization.
+- **Checkpoint/early stopping says monitor is missing**: use the exact epoch key, such as `val/loss`, `val/mae`, or a plugin key like `val_framewise/va_ccc_metric`.
+- **Prediction/figure artifacts are absent**: those callbacks require an MLflow logger and cached labeled outputs; inspect the callback split selector and `collect_cache`.
+- **Telegram callback fails at fit start**: export the configured token and chat ID environment variables. No credentials are read from YAML unless the variable names point to them.
 
-Fix: use a labeled training dataset. Use an inference pipeline for unlabeled
-inference.
+## Checkpoint compatibility
 
-## Checkpoint or output errors in inference
-
-Cause: local checkpoint refs must be files; remote refs require reachable
-http/https URLs. In parallel mode --output cannot create an output step.
-
-Fix: verify the path/network and declare write_json_predictions_step with its
-after dependencies when pipeline.parallel is true.
-
-## A callback cannot find its monitor
-
-Cause: monitor names are exact keys in flat epoch logs.
-
-Fix: use a key such as val/loss or the exact plugin metric key. For Optuna, the
-same key must be available to sweep_target_callback.
-
-## with_features fails
-
-Cause: evaluation was asked to cache features but model output has no
-aux["features"].
-
-Fix: add that tensor in the model output or call Trainer.evaluate directly
-with a feature_extractor.
+Evaluation loads `model_state_dict` strictly. Use the same model registry key, constructor parameters, modality names, and feature dimensions that produced the checkpoint. A raw state dictionary is accepted, but optimizer/scheduler metadata is not available from it.

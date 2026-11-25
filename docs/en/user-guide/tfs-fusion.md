@@ -84,3 +84,21 @@ groups, where each pair is a two-item list such as [text, audio]. Empty groups
 and repeated directed pairs are invalid. A three-modality input with a missing
 whole tensor can take the generalized path; when all three tensors are present,
 the default hierarchy is used.
+
+## Synthetic forward
+
+The smallest useful check uses two or more configured modality tensors. The three-modality example below returns one prediction vector per sample and exposes pair diagnostics:
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import TFSFusionModel
+
+model = TFSFusionModel({"a": 4, "b": 5, "c": 6}, shared_dim=8, output_dim=2).eval()
+batch = Batch(inputs={"a": torch.randn(2, 3, 4), "b": torch.randn(2, 3, 5), "c": torch.randn(2, 3, 6)}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 2)
+assert "pair_weights" in output.aux
+```
+
+`groups` and modality masks must describe the same configured names. A missing whole tensor can use the generalized path, but fewer than two available tensors raises `ValueError`.

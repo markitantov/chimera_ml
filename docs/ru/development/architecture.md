@@ -1,17 +1,17 @@
-# Архитектура для contributors
+# Архитектура для разработчиков
 
 Начинайте трассировку изменений с src/chimera_ml:
 
-- core задаёт containers, config loading и registries;
-- training/builders переводит named YAML sections в runtime objects;
-- training/trainer отвечает за optimization, evaluation, callbacks и logging;
-- data нормализует loaders и создаёт masks;
-- inference строит и выполняет step graphs;
-- plugins.py импортирует built-ins и загружает entry points.
+- `core` задаёт контейнеры, загрузку конфигурации и реестры;
+- `training/builders` переводит именованные разделы YAML в объекты выполнения;
+- `training/trainer` отвечает за оптимизацию, оценку, колбэки и журналирование;
+- `data` нормализует загрузчики и создаёт маски;
+- `inference` строит и выполняет графы шагов;
+- `plugins.py` импортирует встроенные компоненты и загружает точки входа.
 
-Tests организованы по подсистемам в tests/: core, data, models, losses,
-metrics, callbacks, logging, inference, plugins, CLI и training. Examples —
-отдельные packaged projects и часть integration surface.
+Тесты организованы по подсистемам в `tests/`: core, data, models, losses,
+metrics, callbacks, logging, inference, plugins, CLI и training. Примеры —
+отдельные упакованные проекты и часть поверхности интеграции.
 
-При добавлении user-facing component обновите registration, tests, example/
-config при необходимости, API reference и обе language trees.
+При добавлении компонента, видимого пользователю, обновите регистрацию, тесты,
+конфигурацию примера при необходимости, справочник API и обе языковые ветви документации.

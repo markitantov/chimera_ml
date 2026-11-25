@@ -1,5 +1,7 @@
 # Models
 
+For the structured component catalog, see [Models](../components/models.md) and the [fusion comparison](../components/fusion.md).
+
 A model subclasses BaseModel and implements forward(batch: Batch) ->
 ModelOutput. ModelOutput.preds is the task prediction tensor; ModelOutput.aux
 contains optional fused representations, validity masks, weights, and attention

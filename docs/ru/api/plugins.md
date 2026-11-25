@@ -1,16 +1,16 @@
-# API plugins
+# API плагинов
 
-Plugins заполняют framework registries built-in или project-specific components.
-Вызовите \`register_all\` на startup приложения, чтобы загрузить built-ins и
-Python entry-point plugins. Внешний пакет объявляет entry-point group
-\`chimera_ml.plugins\`; entry point может указывать callable registration function
-или module-level object. Packaging и configuration описаны в
-[Plugins](../user-guide/plugins.md).
+Плагины заполняют реестры фреймворка встроенными или специфичными для проекта компонентами.
+Вызовите `register_all` при запуске приложения, чтобы загрузить встроенные компоненты и
+плагины с точками входа Python. Внешний пакет объявляет группу точек входа
+`chimera_ml.plugins`; точка входа может указывать на вызываемую функцию регистрации
+или объект уровня модуля. Упаковка и конфигурация описаны в
+[разделе о плагинах](../user-guide/plugins.md).
 
-## Built-in registration
+## Встроенная регистрация
 
 ::: chimera_ml.plugins.register_all
 
-## Entry-point loading
+## Загрузка через точки входа
 
 ::: chimera_ml.utils.entrypoints.load_entrypoint_plugins

@@ -1,84 +1,93 @@
-# Data и loaders
+# Подготовка датасетов и загрузчиков
 
-Datamodule factory возвращает train, validation и test DataLoaders. Dataset
-передаёт тензоры признаков и может добавлять targets, masks и metadata.
+Контракты компонентов и зарегистрированные collate-функции собраны в [каталоге данных](../components/data.md); здесь описан сценарий подготовки данных.
 
-## Collates и маски
+## Ответственность Dataset
 
-В CHIMERA-ML есть два разных встроенных collate.
+Набор данных задачи — PyTorch `Dataset` (или эквивалент плагина), чей `__getitem__` возвращает отображение. Фреймворк не определяет формат аудио, видео, текста, кэшированных признаков, меток и идентификаторов.
 
-### MaskingCollate
+Пример образца:
 
-MaskingCollate с registry key masking_collate сохраняет legacy-поведение для
-существующих pipelines. Он дополняет или объединяет tensor fields, создаёт
-sequence_mask и маски присутствия вроде audio_mask, а при настройке может
-копировать маски в legacy meta["masks"]. Новый collate его не заменяет.
+```python
+{
+    "inputs": {
+        "audio": torch.Tensor,  # [T_audio, D_audio] или [D_audio]
+        "video": torch.Tensor,  # [T_video, D_video] или [D_video]
+    },
+    "targets": torch.Tensor,     # [2] или [T_target, 2]
+    "meta": {"id": "sample-001"},
+}
+```
 
-### MultimodalSequenceCollate
+Разрешён псевдоним `target`. Модальность может отсутствовать в образце. `targets=None` допустим для данных без меток, но `Trainer.fit` отклоняет обучающий батч без целевых значений.
 
-MultimodalSequenceCollate с registry key multimodal_sequence_collate нужен для
-модальностей признаков с независимыми длинами последовательностей.
+## DataModule и выборки
 
-- Вектор образца [D] собирается в [B, D], временная маска имеет форму [B, 1].
-- Последовательность [T, D] отдельно для каждой модальности дополняется до
-  [B, T_max, D].
-- Для каждой модальности создаётся float32-маска присутствия
-  `<modality>_mask` формы [B].
-- Для временной модальности создаётся булева маска
-  `<modality>_temporal_mask` формы [B, T_max].
-- Отсутствующие строки заполняются нулями, для дополнения используется
-  pad_value.
-- Явная одномерная временная маска может находиться в
-  `meta[<modality>_temporal_mask]`, `meta["masks"][<modality>_temporal_mask]`
-  или в `sample["masks"][<modality>_temporal_mask]`; она проверяется
-  и объединяется с маской дополнения.
-- Настройки: pad_sequences, pad_value и include_legacy_meta_masks.
-- Поддерживаются последовательности нулевой длины.
-- Автоматического выравнивания временных шкал между модальностями нет.
+Ядро `DataModule` принимает один набор данных, отображение именованных наборов или последовательность для каждой выборки и строит DataLoader с `batch_size`, `num_workers`, `pin_memory`, `persistent_workers`, `shuffle_train` и `drop_last_train`:
 
-Например, последовательности audio длины 2 и 1 получают audio [B, 2, D_audio],
-а video длины 3 и 2 — video [B, 3, D_video]. Каждая модальность сохраняет
-собственную ширину последовательности и маску; общий максимум для них не
-используется.
+```python
+from chimera_ml.data import DataModule, multimodal_sequence_collate
 
-Минимальная конфигурация через registry:
+module = DataModule(
+    train_dataset=train_dataset,
+    val_dataset={"validation": validation_dataset},
+    test_dataset=test_dataset,
+    batch_size=16,
+    num_workers=4,
+    pin_memory=True,
+    collate_fn=multimodal_sequence_collate(),
+)
+```
 
-~~~yaml
+DataModule плагина обычно создаёт наборы данных и возвращает тот же интерфейс. Ядро не регистрирует универсальный ключ DataModule, поэтому `data.name` в YAML должен быть предоставлен плагином.
+
+Отображение сохраняет имена; последовательность получает имена вроде `train0`. Несколько обучающих загрузчиков планируются через `train_loader_mode`.
+
+## Batch и канонические маски
+
+`Batch.inputs` — отображение модальности на тензоры, `targets` — целевое значение или `None`, `masks` — каноническое плоское отображение. `Batch.get_masks()` также понимает вложенные маски обратной совместимости `masks["mask"]` и `meta["masks"]`.
+
+- `<modality>_mask` — наличие модальности в образце; встроенная мультимодальная collate-функция создаёт float32 `[B]`.
+- `<modality>_temporal_mask` — допустимые временные позиции, bool `[B, T]`.
+- `sequence_mask` от `masking_collate` — допустимые позиции после дополнения, bool `[B, T_max]`.
+- Отсутствующие входы заполняются нулями, но маски отличают отсутствующие данные от настоящего нуля.
+
+## Выбор collate-функции
+
+### `masking_collate`
+
+Используйте для совместимости с устаревшим и общим поведением. Он дополняет первую размерность при `pad_sequences: true`, создаёт `sequence_mask` и `<modality>_mask`.
+
+```yaml
 collate:
-  name: multimodal_sequence_collate
+  name: masking_collate
   params:
     pad_sequences: true
-~~~
+    pad_value: 0.0
+    include_legacy_meta_masks: false
+```
 
-Во время CLI `train` и `eval` верхнеуровневая секция передаётся через
-`build_collate()` в factory выбранного datamodule как `collate_fn`. Custom
-datamodule должен явно объявить keyword-параметр `collate_fn`; неподдерживаемый
-ход завершится понятной ошибкой, а не тихим игнорированием настройки. Если
-секции нет, CLI не создаёт и не внедряет collate, поэтому сохраняется текущий
-default datamodule. Не задавайте одновременно эту секцию и
-`data.params.collate_fn`.
+Последовательности `audio` длины 3 и 1 дают `audio.shape == [2, 3, D]`, `audio_mask.shape == [2]`, `sequence_mask.shape == [2, 3]`.
 
-Fusion utilities получают эти маски через _mask(). Выделенная временная маска
-имеет приоритет и проверяется относительно нормализованных признаков [B, T, D].
-Старые форматы [B], [B, T] и совместимый sequence_mask остаются поддержанными.
+### `multimodal_sequence_collate`
 
-## Multiple loaders
+Используйте для независимых временных шкал признаков. `[D]` становится `[B, D]` с временной маской `[B, 1]`; `[T, D]` отдельно для каждой модальности дополняется до `[B, T_max, D]`.
 
-Loader может быть одним DataLoader, mapping или list/tuple. Training
-поддерживает single, round_robin и weighted modes. Имена split нормализуются
-для стабильных metric keys.
+```python
+import torch
+from chimera_ml.data.multimodal_sequence_collate import MultimodalSequenceCollate
 
-## Batch contract
+collate = MultimodalSequenceCollate(pad_sequences=True, pad_value=0.0)
+batch = collate([
+    {"inputs": {"audio": torch.ones(2, 4), "video": torch.ones(3, 6)}, "targets": torch.tensor([1, 0])},
+    {"inputs": {"audio": torch.ones(1, 4)}, "targets": torch.tensor([0, 1]), "meta": {"id": "s2"}},
+])
+assert batch.inputs["audio"].shape == (2, 2, 4)
+assert batch.inputs["video"].shape == (2, 3, 6)
+assert batch.get_masks("audio_temporal_mask").shape == (2, 2)
+assert batch.get_masks("video_temporal_mask").shape == (2, 3)
+```
 
-~~~python
-Batch(
-    inputs={"audio": audio_tensor, "video": video_tensor},
-    targets=target_tensor,
-    masks={"audio_temporal_mask": audio_temporal_mask},
-    meta={"id": sample_id},
-)
-~~~
+Явная `<modality>_temporal_mask` может находиться в `meta`, `meta["masks"]` или масках уровня образца `masks`; длина должна совпадать с последовательностью. Поддерживаются `pad_value`, `pad_sequences`, `include_legacy_meta_masks`. Временные шкалы автоматически не выравниваются.
 
-Batch.get_masks() возвращает все маски, а с аргументом — одну плоскую маску.
-Для совместимости читаются также legacy nested masks из masks["mask"] и
-meta["masks"].
+Верхнеуровневый `collate` используется CLI `train` и `eval`; фабрика DataModule должна явно принимать именованный параметр `collate_fn`. Одновременная настройка `collate:` и `data.params.collate_fn` запрещена.

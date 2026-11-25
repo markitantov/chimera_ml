@@ -21,9 +21,11 @@ once a version is published to PyPI.
 From repository root:
 
 ```bash
-poetry install --with dev
+poetry install --with dev,docs
 poetry run pre-commit run --all-files
 poetry run pytest -q
+poetry run mkdocs build --strict -f mkdocs.en.yml
+poetry run mkdocs build --strict -f mkdocs.ru.yml
 poetry build
 ```
 

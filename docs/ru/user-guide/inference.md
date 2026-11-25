@@ -1,60 +1,37 @@
-# Inference
+# Обзор инференса
 
-Inference — отдельный YAML-driven pipeline:
+Инференс — независимый механизм выполнения, управляемый конфигурацией. `InferencePipeline` выполняет шаги над одним входным путём и общим `InferenceContext`; это не упрощённый вариант обучения или оценки.
 
-~~~bash
-chimera-ml inference \
-  --input video.mp4 \
-  --output prediction.json \
-  --config-path examples/oragen/configs/inference.yaml \
-  --device auto \
-  --work-dir work
-~~~
+```text
+Входной путь -> InferenceContext -> подготовка -> чекпоинты -> предсказание
+           -> XAI (необязательно) -> постобработка -> артефакты
+```
 
-CLI принимает device auto, cpu или cuda. auto выбирает CUDA при доступности,
-иначе CPU. Без work-dir создаётся temporary directory.
+## Обучение, оценка и инференс
 
-## Config shape
+| Операция | Среда выполнения | Обновляет параметры? | Типичный вход и выход |
+| --- | --- | --- | --- |
+| Обучение | `Trainer.fit` | Да | DataLoader с целевыми значениями → контрольные точки и журналы |
+| Оценка | `Trainer.evaluate` через `chimera-ml eval` | Нет | Настроенные выборки и совместимая контрольная точка → метрики и кэш |
+| Инференс | `InferencePipeline` через `chimera-ml inference` | Нет | Один входной путь → общие артефакты и необязательный JSON |
 
-~~~yaml
-pipeline:
-  name: demo
-  parallel: false
+YAML обучения с разделами `data`, `loss`, `optimizer` и `train` не настраивает конвейер инференса. В YAML инференса используются `pipeline`, необязательный `runtime` и `steps`. `Trainer.evaluate` предназначен для метрик по размеченным выборкам, а инференс — для выполнения прикладного конвейера и экспорта предсказаний.
 
-runtime:
-  device: auto
+## Что предоставляет фреймворк и что предоставляет приложение
 
-steps:
-  - name: extract_audio_step
-    params:
-      sample_rate: 16000
-  - name: print_json_predictions_step
-~~~
+Обучение (`Trainer.fit`) обновляет параметры по DataLoader и сохраняет чекпоинты. Оценка (`chimera-ml eval`) запускает модель на настроенных размеченных выборках и вычисляет метрики. Инференс (`chimera-ml inference`) запускает прикладной конвейер для входного файла и обычно экспортирует предсказания; параметры модели не обновляются.
 
-Каждый step строится из INFERENCE_STEPS и реализует
-run(ctx: InferenceContext) -> InferenceContext. Context содержит input_path,
-work_dir, device, raw config и shared artifacts; используйте set_artifact и
-get_artifact.
+Ядро предоставляет `InferenceConfig`, `InferenceContext`, планировщик конвейера, реестр `INFERENCE_STEPS`, разрешение чекпоинтов, JSON-вывод и универсальную XAI-обёртку. Прикладной пакет или плагин предоставляет подготовку входа, построение модели, загрузку весов и шаг предсказания: универсального шага ядра для любой задачи нет.
 
-## Sequential и DAG modes
+Шаги обмениваются данными через контекст:
 
-При parallel false или отсутствии поля steps выполняются в config order и
-зависят от предыдущего. При parallel true authoritative является after:
-steps без dependencies — root nodes и могут стартовать одновременно. Step id
-по умолчанию равен name; повторяющимся names нужны explicit id. Unknown
-dependencies, cycles, duplicate ids и self-dependencies дают ValueError.
+- `ctx.input_path` — входной путь CLI;
+- `ctx.work_dir` — постоянный или временный рабочий каталог;
+- `ctx.device` — выбранная строка `cpu` или `cuda`;
+- `ctx.get_artifact(name, default)` — чтение значений предыдущих шагов;
+- `ctx.set_artifact(name, value)` — публикация значения и фиксация владельца для объединения DAG;
+- `ctx.predictions` — стандартный артефакт `predictions`.
 
-Каждый parallel step получает copy текущих artifacts. Merge учитывает keys,
-записанные через set_artifact. Unrelated branches не могут записать один key;
-зависимая downstream branch может переопределить upstream artifact.
+Шаг предсказания обычно загружает модель в режиме оценки, создаёт объекты `Batch` из подготовленных данных, выполняет `ModelOutput` внутри `torch.inference_mode()` и публикует предсказания, совместимые с JSON. Последующие шаги печатают или записывают их.
 
-## Checkpoints и output
-
-resolve_checkpoints_step принимает local files или http/https refs, сохраняет
-remote files в work-dir-relative cache и публикует absolute paths в
-artifacts["checkpoints"]. Cache переиспользуется без force_download; partial
-files удаляются при ошибке.
-
-write_json_predictions_step пишет input/predictions JSON, print step печатает
-тот же payload. CLI --output создаёт/переопределяет write step только в
-sequential mode; в parallel mode step нужно объявить явно и задать after.
+Начните с [запуска инференса](../inference/run.md), затем изучите [конфигурацию конвейера](../inference/pipeline.md), [встроенные шаги](../inference/built-in-steps.md) и [XAI](xai.md).

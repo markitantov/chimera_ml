@@ -1,41 +1,41 @@
-# API inference
+# API инференса
 
-Inference выполняет configured sequence или dependency graph steps. Configuration
-описывает pipeline, builders получают step factories из \`INFERENCE_STEPS\`,
-каждый step читает и записывает artifacts в \`InferenceContext\`, а pipeline
-возвращает обновлённый context. CLI-сценарии описаны в
-[Inference](../user-guide/inference.md).
+Инференс выполняет настроенную последовательность шагов или граф зависимостей. Конфигурация
+описывает конвейер, функции построения получают фабрики шагов из `INFERENCE_STEPS`,
+каждый шаг читает и записывает артефакты в `InferenceContext`, а конвейер
+возвращает обновлённый контекст. Сценарии CLI описаны в
+[разделе об инференсе](../user-guide/inference.md).
 
-## Configuration
+## Конфигурация
 
-\`InferenceConfig\` предоставляет pipeline name, parallel mode, steps и
-requested runtime device из inference YAML mapping.
+`InferenceConfig` предоставляет имя конвейера, параллельный режим, шаги и
+запрошенное устройство выполнения из словаря YAML-конфигурации инференса.
 
 ::: chimera_ml.inference.config.InferenceConfig
 
-## Context и graph
+## Контекст и граф
 
-\`InferenceContext\` — mutable artifact store, передаваемый steps.
-\`InferenceGraphNode\` связывает один step с его dependencies из \`after\`.
+`InferenceContext` — изменяемое хранилище артефактов, передаваемое шагам.
+`InferenceGraphNode` связывает один шаг с его зависимостями из `after`.
 
 ::: chimera_ml.inference.context.InferenceContext
 
 ::: chimera_ml.inference.pipeline.InferenceGraphNode
 
-## Pipeline
+## Конвейер
 
-\`InferencePipeline\` проверяет node identifiers и dependencies, планирует ready
-nodes, изолирует step contexts и объединяет записанные artifacts. В parallel
-mode независимые nodes могут выполняться concurrently; conflicting writes
-отклоняются, если dependency graph не задаёт порядок overwrite.
+`InferencePipeline` проверяет идентификаторы узлов и зависимости, планирует готовые
+узлы, изолирует контексты шагов и объединяет записанные артефакты. В параллельном
+режиме независимые узлы могут выполняться одновременно; конфликтующие записи
+отклоняются, если граф зависимостей не задаёт порядок перезаписи.
 
 ::: chimera_ml.inference.pipeline.InferencePipeline
 
-## Builders и utilities
+## Функции построения и вспомогательные функции
 
-Используйте \`build_inference_step\` для одного registry-backed step и
-\`build_inference_pipeline\` для полного \`InferenceConfig\`. Выбор device
-(\`auto\`, \`cpu\`, \`cuda\`) выполняет \`resolve_inference_device\`.
+Используйте `build_inference_step` для одного шага, построенного через реестр, и
+`build_inference_pipeline` для полного `InferenceConfig`. Выбор устройства
+(`auto`, `cpu`, `cuda`) выполняет `resolve_inference_device`.
 
 ::: chimera_ml.inference.builders.build_inference_step
 
@@ -43,11 +43,29 @@ mode независимые nodes могут выполняться concurrently
 
 ::: chimera_ml.inference.utils.resolve_inference_device
 
-## Step protocol и built-ins
+## Объяснимый ИИ (XAI)
 
-Custom step реализует небольшой protocol \`run(ctx) -> ctx\`. Встроенный
-checkpoint step разрешает local или HTTP(S) references в cache; JSON steps
-записывают или печатают artifact \`predictions\`.
+Компоненты XAI измеряют чувствительность зарегистрированного шага предсказания
+к исключению одной модальности. `XAIStep` оборачивает шаг, `explain_batch`
+выполняет исходный прогон и вмешательства по модальностям,
+`summarize_explanations` строит сводки для образцов, всего набора или временных
+позиций, а `xai_step` — фабрика из реестра для конфигурации инференса. Подробности
+о контракте колбэка, политиках вмешательства и схемах артефактов приведены в
+[руководстве по XAI](../user-guide/xai.md).
+
+::: chimera_ml.inference.steps.xai_steps.XAIStep
+
+::: chimera_ml.inference.steps.xai_steps.explain_batch
+
+::: chimera_ml.inference.steps.xai_steps.summarize_explanations
+
+::: chimera_ml.inference.steps.xai_steps.xai_step
+
+## Протокол шагов и встроенные компоненты
+
+Пользовательский шаг реализует небольшой протокол `run(ctx) -> ctx`. Встроенный
+шаг контрольных точек разрешает локальные ссылки или ссылки HTTP(S) в кэше; шаги
+JSON записывают или печатают артефакт `predictions`.
 
 ::: chimera_ml.inference.steps.base.BaseInferenceStep
 

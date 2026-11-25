@@ -87,3 +87,28 @@ model:
 
 The collate step does not align timelines automatically. Prepare frame streams
 on a common timeline before collation, or validate their lengths in the dataset.
+
+## Synthetic forward
+
+Frame modalities must share their temporal length; the context timeline may differ:
+
+```python
+import torch
+from chimera_ml.core import Batch
+from chimera_ml.models import RAAVFusionModel
+
+model = RAAVFusionModel(
+    {"video": 4, "audio": 5, "text": 6}, shared_dim=8, output_dim=2,
+    frame_modalities=("video", "audio"), context_modality="text",
+).eval()
+batch = Batch(inputs={
+    "video": torch.randn(2, 3, 4),
+    "audio": torch.randn(2, 3, 5),
+    "text": torch.randn(2, 5, 6),
+}, targets=None)
+output = model(batch)
+assert output.preds.shape == (2, 3, 2)
+assert output.aux["frame_mask"].shape == (2, 3)
+```
+
+Changing `audio` to a different frame length raises `ValueError`; a different `text` length is supported.

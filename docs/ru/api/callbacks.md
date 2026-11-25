@@ -1,29 +1,29 @@
-# API callbacks
+# API колбэков
 
-Callbacks расширяют жизненный цикл Trainer без изменения основного training loop.
-Они получают события fit, epoch и batch и могут сохранять artifacts, запрашивать
-остановку обучения, собирать predictions или отправлять уведомления.
+Колбэки расширяют жизненный цикл Trainer без изменения основного цикла обучения.
+Они получают события обучения, эпох и батчей и могут сохранять артефакты, запрашивать
+остановку обучения, собирать предсказания или отправлять уведомления.
 
-Встроенные callbacks обычно создаются через реестр \`CALLBACKS\` в конфигурации
-эксперимента. Напрямую объект удобно создавать в собственном loop или тестах.
-Task-oriented примеры находятся в разделе [Callbacks](../user-guide/callbacks.md).
+Встроенные колбэки обычно создаются через реестр `CALLBACKS` в конфигурации
+эксперимента. Напрямую объект удобно создавать в собственном цикле или тестах.
+Примеры для конкретных задач находятся в разделе [Колбэки](../user-guide/callbacks.md).
 
 ## Контракт жизненного цикла
 
-\`BaseCallback\` задаёт порядок extension points: \`on_fit_start\`,
-\`on_epoch_start\`, повторяющиеся вызовы \`on_batch_end\`, затем
-\`on_epoch_end\` и \`on_fit_end\`. Hooks получают экземпляр \`Trainer\`, а также
-epoch, global step и агрегированные logs, когда они предусмотрены контрактом.
-Реализация должна явно управлять side effects и использовать состояние Trainer.
+`BaseCallback` задаёт порядок точек расширения: `on_fit_start`,
+`on_epoch_start`, повторяющиеся вызовы `on_batch_end`, затем
+`on_epoch_end` и `on_fit_end`. Хуки получают экземпляр `Trainer`, а также
+эпоху, глобальный шаг и агрегированные журналы, если это предусмотрено контрактом.
+Реализация должна явно управлять побочными эффектами и использовать состояние Trainer.
 
 ::: chimera_ml.callbacks.base.BaseCallback
 
-## Checkpointing
+## Контрольные точки
 
-\`CheckpointCallback\` наблюдает за одним scalar log, записывает \`last.pt\`
-и хранит лучшие checkpoints в
-\`<log_path>/<experiment_name>/<run_name>/checkpoints\`. Registry key:
-\`checkpoint_callback\`.
+`CheckpointCallback` наблюдает за одним скалярным журналируемым значением, записывает `last.pt`
+и хранит лучшие контрольные точки в
+`<log_path>/<experiment_name>/<run_name>/checkpoints`. Ключ реестра:
+`checkpoint_callback`.
 
 ::: chimera_ml.callbacks.checkpoint_callback.CheckpointCallback
 
@@ -31,12 +31,12 @@ epoch, global step и агрегированные logs, когда они пр�
 
 ::: chimera_ml.callbacks.checkpoint_callback.checkpoint_callback
 
-## Artifacts evaluation
+## Оценка артефактов
 
-\`CollectPredictionsCallback\` экспортирует cached predictions в CSV artifacts,
-а \`PlotConfusionMatrixCallback\` строит confusion matrix для classification.
-Оба callback используют MLflow-capable logger и включают caching predictions в
-начале fit.
+`CollectPredictionsCallback` экспортирует кэшированные предсказания в CSV-артефакты,
+а `PlotConfusionMatrixCallback` строит матрицу ошибок для классификации.
+Оба колбэка используют логгер с поддержкой MLflow и включают кэширование предсказаний
+в начале обучения.
 
 ::: chimera_ml.callbacks.collect_predictions_callback.CollectPredictionsCallback
 
@@ -48,11 +48,11 @@ epoch, global step и агрегированные logs, когда они пр�
 
 ## Управление обучением и observability
 
-\`EarlyStoppingCallback\` устанавливает \`trainer.stop_training\` после заданного
-patience. \`SweepTargetCallback\` сохраняет лучшее monitored value для sweep.
-\`SnapshotCallback\` сохраняет snapshots source/config, а
-\`TelegramNotifierCallback\` отправляет итоговое сообщение с credentials из
-environment variables.
+`EarlyStoppingCallback` устанавливает `trainer.stop_training` после заданного
+терпения. `SweepTargetCallback` сохраняет лучшее контролируемое значение для перебора.
+`SnapshotCallback` сохраняет снимки исходного кода и конфигурации, а
+`TelegramNotifierCallback` отправляет итоговое сообщение с учётными данными из
+переменных окружения.
 
 ::: chimera_ml.callbacks.early_stopping_callback.EarlyStoppingCallback
 

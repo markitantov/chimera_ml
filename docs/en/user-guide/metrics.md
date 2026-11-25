@@ -1,5 +1,7 @@
 # Metrics
 
+For the complete metric registry and state contract, see [Training components](../components/training.md).
+
 A metric implements the stateful BaseMetric interface:
 
 ~~~python
@@ -23,3 +25,26 @@ matrix through value().
 
 Metrics return scalar-compatible values for trainer logs. Plugin metrics may
 return several named values; callbacks can monitor exact keys such as val/loss.
+
+
+## Complete built-in examples
+
+Regression:
+
+    metrics:
+      - {name: mae_metric, params: {multioutput: uniform_average}}
+      - {name: mse_metric, params: {multioutput: uniform_average}}
+      - {name: rmse_metric, params: {multioutput: uniform_average}}
+      - {name: r2_metric, params: {multioutput: uniform_average}}
+
+Class-index classification:
+
+    metrics:
+      - {name: prf_micro_metric, params: {zero_division: 0}}
+      - {name: prf_macro_metric, params: {zero_division: 0}}
+      - {name: prf_weighted_metric, params: {zero_division: 0}}
+      - {name: confusion_matrix_metric, params: {normalize: true}}
+
+Use the regression keys only with regression targets. Classification keys are
+prf_micro_metric, prf_macro_metric, prf_weighted_metric, and
+confusion_matrix_metric; the confusion matrix is not a VA regression metric.

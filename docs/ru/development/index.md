@@ -1,11 +1,11 @@
 # Разработка
 
-- [Development setup](setup.md)
+- [Настройка разработки](setup.md)
 - [Архитектура](architecture.md)
-- [Testing](testing.md)
-- [Documentation](documentation.md)
-- [Plugin authoring](plugins.md)
-- [Releasing](releasing.md)
+- [Тестирование](testing.md)
+- [Документация](documentation.md)
+- [Создание плагинов](plugins.md)
+- [Выпуск релиза](releasing.md)
 
-Runtime behavior определяется source и tests. Документация объясняет этот
-behavior и не создаёт второй API contract.
+Поведение во время выполнения определяется исходным кодом и тестами. Документация
+объясняет это поведение и не создаёт второй контракт API.

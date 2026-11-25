@@ -1,83 +1,95 @@
-# Data and loaders
+# Preparing datasets and loaders
 
-A datamodule factory returns train, validation, and test DataLoaders. The
-dataset supplies feature tensors and optional targets, masks, and metadata.
+For the component contracts and registered collates, see the [Components data catalog](../components/data.md). This page keeps the workflow-oriented dataset preparation guidance.
 
-## Collates and masks
+## Dataset responsibility
 
-CHIMERA-ML provides two distinct built-in collates.
+A task dataset is a PyTorch `Dataset` (or a plugin equivalent) whose `__getitem__` returns a mapping. The framework collates these mappings; it does not prescribe how audio, video, text, cached features, labels, or IDs are stored.
 
-### MaskingCollate
+A practical sample has this shape:
 
-MaskingCollate, registered as masking_collate, keeps the legacy behavior for
-existing pipelines. It pads or stacks tensor fields, emits sequence_mask and
-per-modality presence masks such as audio_mask, and can copy masks to legacy
-meta["masks"] when configured. It remains available and is not replaced by the
-new collate.
+```python
+{
+    "inputs": {
+        "audio": torch.Tensor,  # [T_audio, D_audio] or [D_audio]
+        "video": torch.Tensor,  # [T_video, D_video] or [D_video]
+    },
+    "targets": torch.Tensor,     # e.g. [2] or [T_target, 2]
+    "meta": {"id": "sample-001"},
+}
+```
 
-### MultimodalSequenceCollate
+`target` is accepted as an alias for `targets`. Inputs may omit a modality for a sample. Unlabeled samples can set targets to `None`, but `Trainer.fit` rejects a training batch without targets.
 
-MultimodalSequenceCollate, registered as multimodal_sequence_collate, is for
-feature modalities whose temporal lengths are independent.
+## DataModule and splits
 
-- A sample vector [D] is collated as [B, D] with a [B, 1] temporal mask.
-- A sequence [T, D] is padded per modality as [B, T_max, D].
-- Each modality gets a float32 presence mask `<modality>_mask` with shape [B].
-- Each temporal modality gets a boolean `<modality>_temporal_mask` with shape
-  [B, T_max] and has boolean dtype.
-- Missing rows are zero-filled. Padding uses pad_value.
-- Explicit one-dimensional temporal masks may be supplied as
-  `meta[<modality>_temporal_mask]`, `meta["masks"][<modality>_temporal_mask]`, or
-  sample-level `sample["masks"][<modality>_temporal_mask]`; they are validated and combined
-  with padding.
-- pad_sequences, pad_value, and include_legacy_meta_masks are configurable.
-- Zero-length sequences are supported.
-- Timelines are not automatically aligned between modalities.
+The framework `DataModule` accepts one dataset, a mapping of named datasets, or a sequence for each split. It creates DataLoaders with `batch_size`, `num_workers`, `pin_memory`, `persistent_workers`, `shuffle_train`, and `drop_last_train`:
 
-For example, audio sequences with lengths 2 and 1 become audio [B, 2, D_audio],
-while video sequences with lengths 3 and 2 become video [B, 3, D_video]. The
-two modalities keep their own temporal widths and masks; they are not padded to
-one shared maximum.
+```python
+from chimera_ml.data import DataModule, multimodal_sequence_collate
 
-Minimal registry configuration:
+module = DataModule(
+    train_dataset=train_dataset,
+    val_dataset={"validation": validation_dataset},
+    test_dataset=test_dataset,
+    batch_size=16,
+    num_workers=4,
+    pin_memory=True,
+    collate_fn=multimodal_sequence_collate(),
+)
+```
 
-~~~yaml
+A plugin DataModule factory normally constructs these datasets and returns the same interface. The current core does not register a generic datamodule key, so the `data.name` in a training YAML must come from your plugin.
+
+A split mapping preserves names. A sequence becomes names such as `train0`; evaluation normalizes names and prefixes unnamed split loaders with `train`, `val`, or `test`. Multiple train loaders are scheduled by `train_loader_mode` in `TrainConfig`.
+
+## Batch and canonical masks
+
+`Batch.inputs` maps modality names to tensors. `Batch.targets` is the task target or `None`. `Batch.masks` is the canonical flat mask mapping; `Batch.get_masks()` also reads legacy nested masks from `masks["mask"]` or `meta["masks"]`.
+
+The built-in collates use these semantics:
+
+- `<modality>_mask` is sample presence. The built-in multimodal collate emits a float32 `[B]` tensor; a zero means that sample has no usable modality tensor.
+- `<modality>_temporal_mask` is valid temporal positions, boolean `[B, T]`.
+- `sequence_mask` from `masking_collate` marks valid padded sequence positions, boolean `[B, T_max]`.
+- Missing inputs are zero-filled by the collate, but the presence/temporal masks are what models use to distinguish missing data from real zeros.
+
+## Choosing a collate
+
+### `masking_collate`
+
+Use `masking_collate` for the legacy/general behavior. It accepts tensor fields, pads the first tensor dimension when `pad_sequences: true`, emits `sequence_mask`, and emits one `<modality>_mask` per modality. `pad_sequences: false` requires equal shapes for each present field.
+
+```yaml
 collate:
-  name: multimodal_sequence_collate
+  name: masking_collate
   params:
     pad_sequences: true
-~~~
+    pad_value: 0.0
+    include_legacy_meta_masks: false
+```
 
-During CLI `train` and `eval`, the top-level section is resolved through
-`build_collate()` and passed to the selected datamodule factory as `collate_fn`.
-A custom datamodule must explicitly declare a keyword-capable `collate_fn`
-parameter; unsupported datamodules fail clearly instead of silently ignoring
-this setting. If the section is absent, no collate is built or injected and the
-existing datamodule default remains in effect. Do not configure both this
-section and `data.params.collate_fn`.
+A batch of `audio` sequences with lengths 3 and 1 produces `audio.shape == [2, 3, D]`, `audio_mask.shape == [2]`, and `sequence_mask.shape == [2, 3]`.
 
-Fusion utilities consume these masks through _mask(). The dedicated temporal
-mask is preferred and its shape is validated against the normalized [B, T, D]
-features. Older [B] or [B, T] modality masks and compatible sequence_mask
-formats remain supported.
+### `multimodal_sequence_collate`
 
-## Multiple loaders
+Use this for independent feature timelines. Rank-one samples `[D]` become `[B, D]` with temporal mask `[B, 1]`; rank-two samples `[T, D]` are padded independently per modality to `[B, T_max, D]`. Audio and video do not share a temporal maximum.
 
-A loader may be a single DataLoader, a mapping, or a list/tuple. Training
-supports single, round_robin, and weighted modes. Split names are normalized
-for stable metric keys.
+```python
+import torch
+from chimera_ml.data.multimodal_sequence_collate import MultimodalSequenceCollate
 
-## Batch contract
+collate = MultimodalSequenceCollate(pad_sequences=True, pad_value=0.0)
+batch = collate([
+    {"inputs": {"audio": torch.ones(2, 4), "video": torch.ones(3, 6)}, "targets": torch.tensor([1, 0])},
+    {"inputs": {"audio": torch.ones(1, 4)}, "targets": torch.tensor([0, 1]), "meta": {"id": "s2"}},
+])
+assert batch.inputs["audio"].shape == (2, 2, 4)
+assert batch.inputs["video"].shape == (2, 3, 6)
+assert batch.get_masks("audio_temporal_mask").shape == (2, 2)
+assert batch.get_masks("video_temporal_mask").shape == (2, 3)
+```
 
-~~~python
-Batch(
-    inputs={"audio": audio_tensor, "video": video_tensor},
-    targets=target_tensor,
-    masks={"audio_temporal_mask": audio_temporal_mask},
-    meta={"id": sample_id},
-)
-~~~
+An explicit per-sample `<modality>_temporal_mask` may be supplied under `meta`, `meta["masks"]`, or a sample-level `masks` mapping. Its length must equal the present sequence length. `pad_value`, `pad_sequences`, and `include_legacy_meta_masks` are supported parameters. Timelines are not aligned automatically.
 
-Batch.get_masks accepts no argument for all masks or a specific flat key. For
-compatibility it also reads legacy nested masks from masks["mask"] and
-meta["masks"].
+Configure a collate at the top-level `collate` section for CLI `train` and `eval`. The selected DataModule factory must explicitly accept a keyword `collate_fn`; configuring both `collate:` and `data.params.collate_fn` is rejected.

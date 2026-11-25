@@ -1,55 +1,46 @@
 # Быстрый старт
 
-Это краткое руководство проверяет установленный CLI и показывает, где реальная
-конфигурация эксперимента входит в рабочий процесс.
+Это проверка без обучения, которую можно выполнить сразу после установки ядра. Датасет и контрольная точка не нужны.
 
-## Проверка окружения
-
-После установки `chimera-ml` выполните:
+## 1. Проверить установку
 
 ```bash
 chimera-ml doctor
 chimera-ml --help
+chimera-ml registry list --type models
+chimera-ml registry list --type collates
 ```
 
-Команда `doctor` сообщает базовую информацию о Python, PyTorch, CUDA, MLflow и
-реестрах/plugins, не запуская обучение.
+В установленном ядре доступны четыре встроенных ключа моделей слияния и две встроенные функции collate. Плагин добавляет собственные ключи.
 
-## Проверка конфигурации
+## 2. Установить плагин и проверить YAML
 
-Установите один из plugin packages примеров, затем проверьте конфигурацию до
-запуска эксперимента:
+Из корня репозитория:
 
 ```bash
 python -m pip install -e examples/va_estimation
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
 chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
 ```
 
-Проверка контролирует структуру YAML и обязательные поля эксперимента. Для
-реального обучения в конфигурации примера всё ещё нужно указать пути к датасету
-и выходным данным; эти пути, а также последующие команды train/eval описаны в
-[README примера оценки VA](https://github.com/markitantov/chimera_ml/blob/main/examples/va_estimation/README.md).
+Проверка контролирует разделы фреймворка. Она не проверяет наличие путей, меток, учётных данных и необязательных файлов модели, поэтому предварительные условия нужно подготовить отдельно.
 
-## Использование контейнеров Python
-
-Минимальное взаимодействие с библиотекой использует публичные контейнеры
-`Batch` и `ModelOutput`:
+## 3. Проверить контейнеры Python
 
 ```python
 import torch
-
 from chimera_ml import Batch, ModelOutput
 
 batch = Batch(
-    inputs={"audio": torch.zeros(1, 16000)},
-    targets=None,
+    inputs={"audio": torch.zeros(2, 16000)},
+    targets=torch.zeros(2, 1),
+    masks={"audio_mask": torch.ones(2)},
+    meta={"sample_meta": [{"id": "a"}, {"id": "b"}]},
 )
-output = ModelOutput(preds=torch.zeros(1, 1))
-
-assert batch.inputs["audio"].shape == (1, 16000)
-assert output.preds.shape == (1, 1)
+output = ModelOutput(preds=torch.zeros(2, 1), aux={"features": torch.zeros(2, 8)})
+assert batch.inputs["audio"].shape == (2, 16000)
+assert output.preds.shape == (2, 1)
 ```
 
-Модели принимают объекты `Batch` и возвращают объекты `ModelOutput`. В API
-описаны эти контейнеры и `Registry`, который связывает встроенные компоненты и
-компоненты плагинов.
+Модель получает `Batch` и возвращает `ModelOutput`. Этот пример проверяет только контейнеры данных.

@@ -1,10 +1,10 @@
-# Plugin architecture
+# Архитектура плагинов
 
-Plugin — обычный Python distribution с registration callable в entry-point group
-chimera_ml.plugins. При старте register_all импортирует built-ins и загружает
-каждый обнаруженный entry point один раз.
+Плагин — обычный дистрибутив Python с вызываемой функцией регистрации в группе
+точек входа `chimera_ml.plugins`. При запуске `register_all` импортирует встроенные
+компоненты и один раз загружает каждую обнаруженную точку входа.
 
-## Lifecycle
+## Жизненный цикл
 
 ~~~text
 pip install plugin
@@ -15,15 +15,15 @@ pip install plugin
   → registry keys доступны YAML builders
 ~~~
 
-Entry point может указывать callable registration function или module-level
-object. Если загруженный object callable, Chimera ML вызывает его; иначе
-достаточно import для decorator side effects. Ошибка загрузки выдаётся как
-warning.
+Точка входа может указывать на вызываемую функцию регистрации или объект уровня
+модуля. Если загруженный объект вызываем, CHIMERA-ML вызывает его; иначе достаточно
+импорта ради побочных эффектов декораторов. Ошибка загрузки выдаётся как
+предупреждение.
 
 ~~~bash
 chimera-ml plugins list
 chimera-ml registry list --type models
 ~~~
 
-Практические инструкции есть в [user guide](../user-guide/plugins.md) и
-[authoring tutorial](../development/plugins.md).
+Практические инструкции есть в [руководстве пользователя](../user-guide/plugins.md) и
+[руководстве для авторов](../development/plugins.md).
