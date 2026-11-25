@@ -5,11 +5,11 @@ CHIMERA-ML — конфигурационный PyTorch framework для пос�
 ## С чего начать
 
 - [Начало работы](getting-started/index.md): установка, проверка окружения и первый конфигурационный check.
-- [Обучение](user-guide/index.md): данные, конфигурация, обучение, evaluation и artifacts.
+- [Обучение](training/index.md): данные, конфигурация, обучение, evaluation и artifacts.
 - [Inference](user-guide/inference.md): запуск sequential или DAG pipeline по входному файлу.
-- [Компоненты](user-guide/models.md): контракты Batch/ModelOutput, fusion-модели и остальные built-in components.
+- [Компоненты](components/index.md): контракты Batch/ModelOutput, fusion-модели и остальные built-in components.
 - [Примеры](tutorials/index.md): VA, ORAGEN и affective-states проекты репозитория.
-- [Расширение](concepts/plugins.md): регистрация собственных datasets, моделей, losses, metrics, callbacks и inference steps.
+- [Расширение](extending/index.md): регистрация собственных datasets, моделей, losses, metrics, callbacks и inference steps.
 - [Справочник](api/index.md): Python API и точные CLI/configuration references.
 
 ## Основная схема

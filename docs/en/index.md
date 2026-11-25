@@ -5,11 +5,11 @@ CHIMERA-ML is a configuration-driven PyTorch framework for building, training, e
 ## Start here
 
 - [Getting started](getting-started/index.md): install the package, verify the environment, and run a first configuration check.
-- [Training](user-guide/index.md): prepare data, configure an experiment, train, evaluate, and inspect artifacts.
+- [Training](training/index.md): prepare data, configure an experiment, train, evaluate, and inspect artifacts.
 - [Inference](user-guide/inference.md): execute a sequential or DAG pipeline over an input file.
-- [Components](user-guide/models.md): inspect the Batch/ModelOutput contract, built-in fusion models, losses, metrics, callbacks, and loggers.
+- [Components](components/index.md): inspect the Batch/ModelOutput contract, built-in fusion models, losses, metrics, callbacks, and loggers.
 - [Examples](tutorials/index.md): reproduce the repository's VA, ORAGEN, and affective-states projects.
-- [Extending](concepts/plugins.md): register your own datasets, models, losses, metrics, callbacks, or inference steps.
+- [Extending](extending/index.md): register your own datasets, models, losses, metrics, callbacks, or inference steps.
 - [Reference](api/index.md): use the generated Python API and exact CLI/configuration references.
 
 ## The core idea

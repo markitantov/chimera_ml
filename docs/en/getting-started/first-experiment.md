@@ -58,7 +58,7 @@ The MLflow logger also records metrics and artifacts in the configured tracking 
 Use the matching test configuration and a checkpoint from the run:
 
 ```bash
-chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/<generated-run-name>/checkpoints/last.pt
+chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/your_run/checkpoints/last.pt
 ```
 
 Evaluation rebuilds the configured datamodule, model, loss, metrics, and callbacks, loads either the callback payload's `model_state_dict` or a raw state dictionary, and requires an exact model architecture match. It evaluates the available train/validation/test loaders exposed by the datamodule; it does not perform deployment inference.

@@ -6,12 +6,14 @@ Plugin оценивает непрерывные valence и arousal. Досту�
 
 ## Установка и данные
 
-    python -m pip install -e .
-    python -m pip install -e examples/va_estimation
-    chimera-ml plugins list
-    chimera-ml registry list --type datamodules
-    chimera-ml registry list --type models
-    chimera-ml registry list --type losses
+~~~bash
+python -m pip install -e .
+python -m pip install -e examples/va_estimation
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
+chimera-ml registry list --type models
+chimera-ml registry list --type losses
+~~~
 
 Entry point: va_estimation = chimera_plugin:register, group chimera_ml.plugins. Audio dataset читает waveform при sr 16000, режет окна win_max_length/win_shift/win_min_length, использует VAD и создаёт cache в features_root. Labels должны содержать audio path и VA targets.
 
@@ -21,12 +23,16 @@ Multimodal DataModule использует modalities с feature path и emb_siz
 
 ## Training и evaluation
 
-    chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
-    chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
-    chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
+~~~bash
+chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
+~~~
 
-    chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
-    chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
-    chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
+~~~bash
+chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
+~~~
 
 Checkpoint callback пишет last.pt и monitored .pt, loggers/snapshot/framewise добавляют настроенные artifacts. Dataset-dependent training не запускался.

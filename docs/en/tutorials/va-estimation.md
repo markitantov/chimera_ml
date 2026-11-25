@@ -10,12 +10,14 @@ There is no shipped inference YAML. fusion_model, audio_*, fusion_*, and va_* ar
 
 From the repository root:
 
-    python -m pip install -e .
-    python -m pip install -e examples/va_estimation
-    chimera-ml plugins list
-    chimera-ml registry list --type datamodules
-    chimera-ml registry list --type models
-    chimera-ml registry list --type losses
+~~~bash
+python -m pip install -e .
+python -m pip install -e examples/va_estimation
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
+chimera-ml registry list --type models
+chimera-ml registry list --type losses
+~~~
 
 The entry point is va_estimation = chimera_plugin:register in the chimera_ml.plugins group.
 
@@ -50,14 +52,18 @@ The example contains no external VA corpus, challenge annotations, or feature do
 
 ## Validate, train, and evaluate
 
-    chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
-    chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
-    chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml \\
-      --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
+~~~bash
+chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/audio_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/audio_test.yaml \
+  --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
+~~~
 
-    chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
-    chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
-    chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml \\
-      --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
+~~~bash
+chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml train --config-path examples/va_estimation/configs/multimodal_train.yaml
+chimera-ml eval --config-path examples/va_estimation/configs/multimodal_test.yaml \
+  --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
+~~~
 
 The checkpoint callback writes last.pt and monitored .pt files below the run directory. Loggers, snapshots, and the framewise callback add configured artifacts. Evaluation needs a state dict compatible with the selected audio or fusion model. Remove the Telegram callback or export TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. Dataset-dependent training was not executed.

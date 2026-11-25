@@ -54,7 +54,7 @@ Config и `code.zip` создаются snapshot callback при включён�
 ## 5. Оценить checkpoint
 
 ```bash
-chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/<generated-run-name>/checkpoints/last.pt
+chimera-ml eval   --config-path examples/va_estimation/configs/multimodal_test.yaml   --checkpoint-path logs/va_estimation_fusion/your_run/checkpoints/last.pt
 ```
 
 Evaluation заново строит datamodule, model, loss, metrics и callbacks, загружает `model_state_dict` из payload или raw state dict и требует точного совпадения архитектуры. Это не deployment inference.

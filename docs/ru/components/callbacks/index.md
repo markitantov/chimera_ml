@@ -21,3 +21,22 @@ on_fit_end
 | `telegram_notifier_callback` | start/end | final Telegram notification |
 
 Проверяйте registry: `chimera-ml registry list --type callbacks`.
+
+
+## Пример confusion matrix
+
+Callback предназначен только для classification. Он требует cache collection,
+MLflow logger и optional dependency matplotlib.
+
+~~~yaml
+- name: plot_confusion_matrix_callback
+  params:
+    splits: [val]
+    class_names: [negative, neutral, positive]
+    artifact_path: figures
+    filename_template: confusion_matrix_epoch_{epoch}.pdf
+    title_template: "{split} Confusion Matrix (epoch {epoch})"
+~~~
+
+В on_fit_start callback включает collection, а в on_epoch_end пишет figure для
+каждого выбранного split. Regression predictions он интерпретировать не может.

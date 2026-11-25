@@ -1,63 +1,134 @@
 # Affective states recognition
 
-## Task and architecture
+## Task and project
 
-This plugin predicts seven emotions (neutral, happy, sad, anger, surprise, disgust, fear) and three sentiments (negative, neutral, positive) from aligned audio, video, and text. The registry model is lefsa_model. Its preds tensor concatenates emotion logits and sentiment logits. Inference applies softmax separately and aggregates window probabilities with duration weights.
+This plugin predicts seven emotions and three sentiments from audio, video, and
+text. The model registry key is lefsa_model. Its prediction tensor contains
+emotion logits followed by sentiment logits. The inference step applies softmax
+separately and emits the predictions artifact described below.
 
-    examples/affective_states_recognition/
-    ├── configs/{multimodal_train,multimodal_test,inference}.yaml
-    ├── samples/
-    └── src/
-        ├── chimera_plugin.py
-        ├── fusion/data, fusion/models
-        ├── feature_extractors
-        ├── inference (decode, VAD, ASR, faces, fusion)
-        └── common (losses, metrics, callback, utilities)
+## Install and prepare data
 
-## Install and data
+~~~bash
+python -m pip install -e .
+python -m pip install -e examples/affective_states_recognition
+chimera-ml plugins list
+chimera-ml registry list --type datamodules
+chimera-ml registry list --type inference_steps
+chimera-ml validate-config --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
+~~~
 
-    python -m pip install -e .
-    python -m pip install -e examples/affective_states_recognition
-    chimera-ml plugins list
-    chimera-ml registry list --type datamodules
-    chimera-ml registry list --type inference_steps
-    chimera-ml validate-config --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
+Training requires prepared CMU-MOSEI, MELD, or RAMAS media, label CSV files,
+VAD pickles, transcript/ASR columns, and cached feature files. The paths in
+the shipped YAML are placeholders. Set features_root, corpus roots, label
+paths, VAD paths, and compatible cached features before training.
 
-Training requires prepared CMU-MOSEI, MELD, or RAMAS media, labels CSVs, VAD pickles, transcript/ASR columns, and cached feature files. The shipped roots are placeholders: CMUMOSEI uses data/CMUMOSEI/vocals and data/CMUMOSEI/Video_chunk/{subset}; MELD uses data/MELD/vocals/{subset} and data/MELD/videos/{subset}; RAMAS uses data/RAMAS/vocals and data/RAMAS/videos. Label and VAD paths are the corresponding data/labels/* and data/* paths in the YAML.
+The configured feature mapping is a: wav2vec2, v: emoaffectnet, and t: jinaai.
+Windows are at most 3 seconds, shift by 2 seconds, and require at least
+2 seconds. Video features use 10 fps and text uses max length 48. The project
+does not download or preprocess these datasets.
 
-Set features_root, corpus roots, labels, and VAD paths. Feature mapping is a: wav2vec2, v: emoaffectnet, t: jinaai; windows are 3 seconds maximum, 2-second shift, 2-second minimum, video_target_fps 10, text_max_length 48. There is no dataset download/preprocessing command in this project.
+~~~bash
+chimera-ml train --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
+chimera-ml eval --config-path examples/affective_states_recognition/configs/multimodal_test.yaml   --checkpoint-path "logs/your_experiment/your_run/checkpoints/last.pt"
+~~~
 
-    chimera-ml train --config-path examples/affective_states_recognition/configs/multimodal_train.yaml
-    chimera-ml eval --config-path examples/affective_states_recognition/configs/multimodal_test.yaml \\
-      --checkpoint-path logs/<experiment>/<run>/checkpoints/last.pt
+## Inference DAG
 
-Training uses emotion_sentiment_loss, combined/emotion/sentiment metrics, AdamW, cosine scheduler, emotion_metrics_callback, checkpoint/snapshot callbacks, and optional console/MLflow logging.
+The shipped inference.yaml is a parallel DAG. These are its actual
+dependencies:
 
-## Video inference
+~~~text
+extract_audio_step
+  -> vad_step -> build_segments_step -> transcribe_segments_step
+                                      resolve_checkpoints_step ----------------> face_detection_step
+                                           -> extract_features_step
+                                           -> fusion_step
+                                           -> write_json_predictions_step
+                                           -> print_json_predictions_step
+~~~
 
-The shipped config is a parallel DAG. Explicit after edges are required so artifact producers finish before consumers:
+In the configuration, face detection explicitly waits for both
+resolve_checkpoints_step and transcribe_segments_step. Feature extraction waits
+for face detection; fusion waits for feature extraction; the writer waits for
+fusion; printing waits for the writer. The implemented stages are audio
+decoding, Silero VAD, fixed segment construction, Whisper transcription, YOLO
+face detection, audio/video/text feature extraction, checkpoint-backed fusion,
+and JSON output.
 
-    extract_audio_step -> vad_step -> build_segments_step -> transcribe_segments_step
-    resolve_checkpoints_step -> face_detection_step -> extract_features_step
-    extract_features_step -> fusion_step -> write_json_predictions_step
-    write_json_predictions_step -> print_json_predictions_step
+~~~bash
+chimera-ml inference   --input examples/affective_states_recognition/samples/01_neutral_neutral_cmumosei.mp4   --output prediction.json   --config-path examples/affective_states_recognition/configs/inference.yaml   --work-dir runs/affective
+~~~
 
-The implemented stages are audio decoding, Silero VAD, segment construction, Whisper transcription, YOLO face detection, audio/video/text feature extraction, checkpoint-backed fusion, and JSON output.
+The pipeline resolves emoaffectnet and lefsa into model_cache. Whisper and YOLO
+also need their external weights. CPU is supported but can be slow.
 
-    chimera-ml inference \\
-      --input examples/affective_states_recognition/samples/01_neutral_neutral_cmumosei.mp4 \\
-      --output prediction.json \\
-      --config-path examples/affective_states_recognition/configs/inference.yaml \\
-      --work-dir runs/affective
+## Prediction artifact
 
-The config caches emoaffectnet and lefsa; Whisper and YOLO also need external weights. CPU is supported but may be slow. Final output contains emotion and sentiment objects, each with label, class_index, and probabilities, plus num_windows. These are softmax probabilities averaged over windows, not calibrated confidence. Empty windows produce null emotion and sentiment.
+Fusion writes this artifact to InferenceContext.predictions:
 
+~~~json
+{
+  "emotion": {
+    "label": "happy",
+    "class_index": 1,
+    "probabilities": {"neutral": 0.10, "happy": 0.62, "sad": 0.04, "anger": 0.03, "surprise": 0.12, "disgust": 0.06, "fear": 0.08}
+  },
+  "sentiment": {
+    "label": "positive",
+    "class_index": 2,
+    "probabilities": {"negative": 0.08, "neutral": 0.17, "positive": 0.75}
+  },
+  "text": "example transcript",
+  "segments": [
     {
-      "emotion": {"label": "happy", "class_index": 1, "probabilities": {"neutral": 0.10, "happy": 0.62, "...": 0.28}},
-      "sentiment": {"label": "positive", "class_index": 2, "probabilities": {"negative": 0.08, "neutral": 0.17, "positive": 0.75}},
-      "num_windows": 2
+      "index": 0,
+      "start_sec": 0.0,
+      "end_sec": 3.0,
+      "duration_sec": 3.0,
+      "speech_duration_sec": 2.4,
+      "weight": 3.0,
+      "text": "example transcript",
+      "has_text": true,
+      "has_speech": true,
+      "has_faces": true,
+      "num_windows": 1,
+      "emotion": {"label": "happy", "class_index": 1, "probabilities": {"neutral": 0.10, "happy": 0.62, "sad": 0.04, "anger": 0.03, "surprise": 0.12, "disgust": 0.06, "fear": 0.08}},
+      "sentiment": {"label": "positive", "class_index": 2, "probabilities": {"negative": 0.08, "neutral": 0.17, "positive": 0.75}}
     }
+  ]
+}
+~~~
+
+Each segment contains timing, duration, speech duration, the aggregation
+weight, transcription, modality-availability flags, window count, and
+segment-level emotion/sentiment objects. The weight is constructed as
+max(speech duration, segment duration) in seconds by the implementation; since
+speech intersections are bounded by the segment, it is normally the segment
+duration. Feature extraction averages the audio and video window features
+within each segment and uses zero feature tensors when a modality is absent.
+The final emotion and sentiment probabilities are weighted averages of segment
+probabilities. They are softmax probabilities, not calibrated confidence.
+
+The JSON writer adds an outer envelope:
+
+~~~json
+{"input": "path/to/input.mp4", "predictions": { "...": "the artifact above" }}
+~~~
+
+With no features, the predictions artifact is exactly:
+
+~~~json
+{"emotion": null, "sentiment": null, "text": "", "segments": [], "status": "no_predictions"}
+~~~
+
+Thus num_windows belongs to each segment, not to the top-level predictions
+object. Training outputs and inference output are separate workflows.
 
 ## XAI and limitations
 
-The example FusionStep performs its own model call and does not declare on_prediction, so xai_step is not currently compatible. Use the generic [XAI guide](../user-guide/xai.md) only when implementing a separate compatible step. No callback was added to this example.
+The example FusionStep performs its own model call and does not expose the
+on_prediction callback required by xai_step. XAI is therefore not enabled for
+this example. Use the generic XAI and custom inference-step guides when
+implementing a separate compatible step. External data, model weights, media
+decoding, network access, and writable cache space remain prerequisites.

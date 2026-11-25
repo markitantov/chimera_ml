@@ -1,66 +1,182 @@
-# Training components
+# Компоненты обучения
+
+Это встроенные зарегистрированные factory, используемые Trainer. Конфигурация
+выбирает один loss и совместимые metrics; блоки YAML ниже являются отдельными
+альтернативами, а не одним объединённым конфигом.
 
 ## Losses
 
-`BaseLoss.__call__(output: ModelOutput, batch: Batch) -> torch.Tensor` возвращает differentiable tensor для Trainer.
+Loss реализует BaseLoss.__call__(output, batch) и возвращает differentiable
+tensor. Формы predictions и targets должны совпадать.
 
-| Key | Данные | Parameters/defaults |
-| --- | --- | --- |
-| `mse_loss` | Same-shaped regression | `reduction="mean"` |
-| `mae_loss` | Same-shaped regression | `reduction="mean"` |
-| `ccc_loss` | Same-shaped regression, flatten в `[B,D]` | `eps=1e-12`, loss `1 - mean(CCC)` |
-| `cross_entropy_loss` | logits `[N,C]`, integer targets | `label_smoothing=0.0` |
-| `focal_loss` | multiclass logits и integer targets | `gamma=2.0`, `alpha=None`, `reduction="mean"`, `label_smoothing=0.0` |
-| `bce_with_logits_loss` | multilabel logits/float targets | `pos_weight=None`, `reduction="mean"` |
+| Key | Задача и defaults |
+| --- | --- |
+| mse_loss | Regression; reduction=mean, также sum/none |
+| mae_loss | Regression; reduction=mean, также sum/none |
+| ccc_loss | Regression; eps=1e-12; flatten по output features |
+| cross_entropy_loss | Class-index classification; label_smoothing=0.0 |
+| focal_loss | Multiclass classification; gamma=2.0, alpha=None, reduction=mean, label_smoothing=0.0 |
+| bce_with_logits_loss | Multi-label/multi-hot; pos_weight=None, reduction=mean |
 
-Built-in losses не применяют temporal masks, missing-label handling или `ModelOutput.aux` автоматически.
+Отдельные альтернативы для regression:
 
-```yaml
+~~~yaml
+loss:
+  name: mse_loss
+  params:
+    reduction: mean
+~~~
+
+~~~yaml
+loss:
+  name: mae_loss
+  params:
+    reduction: mean
+~~~
+
+~~~yaml
+loss:
+  name: ccc_loss
+  params:
+    eps: 0.000000000001
+~~~
+
+Для class-index classification:
+
+~~~yaml
+loss:
+  name: cross_entropy_loss
+  params:
+    label_smoothing: 0.0
+~~~
+
+~~~yaml
 loss:
   name: focal_loss
-  params: {gamma: 2.0, reduction: mean}
-```
+  params:
+    gamma: 2.0
+    alpha: 0.25
+    reduction: mean
+    label_smoothing: 0.0
+~~~
+
+Для multi-label/multi-hot targets:
+
+~~~yaml
+loss:
+  name: bce_with_logits_loss
+  params:
+    pos_weight: null
+    reduction: mean
+~~~
+
+Model должен возвращать logits; эти losses сами не добавляют softmax или
+sigmoid.
 
 ## Metrics
 
-`BaseMetric` stateful: Trainer вызывает `reset()`, затем `update(output, batch)` для labeled batches и `compute()` в конце epoch.
+Trainer вызывает reset, update для labeled batches и compute в конце split/epoch.
+Regression metrics требуют matching floating shapes; PRF/confusion используют
+class-index targets и argmax по последней оси logits.
 
-| Keys | Output | Parameters |
-| --- | --- | --- |
-| `mae_metric`, `mse_metric`, `rmse_metric` | `mae`, `mse`, `rmse` | `multioutput`: `uniform_average` default или `raw_values` |
-| `r2_metric` | `r2` | Также `variance_weighted`; one-sample может дать NaN |
-| `prf_micro_metric`, `prf_macro_metric`, `prf_weighted_metric` | `<average>_precision`, `<average>_recall`, `<average>_f1` | `zero_division=0` |
-| `confusion_matrix_metric` | `cm_acc`, matrix через `.value()` | `normalize=None`, `true`, `pred`, `all` |
+Regression:
 
-Regression flatten в `[N,D]` и требует matching shapes. PRF/confusion используют `argmax(-1)` и flattened integer targets. Trainer добавляет split prefix: `train/mae`, `val/r2`, `val/macro_f1`. Именно эти keys используются callbacks/scheduler/sweep.
-
-```yaml
+~~~yaml
 metrics:
   - name: mae_metric
     params: {multioutput: uniform_average}
+  - name: mse_metric
+    params: {multioutput: uniform_average}
+  - name: rmse_metric
+    params: {multioutput: uniform_average}
+  - name: r2_metric
+    params: {multioutput: variance_weighted}
+~~~
+
+| Key | Parameters/defaults |
+| --- | --- |
+| mae_metric, mse_metric, rmse_metric | multioutput=uniform_average или raw_values |
+| r2_metric | также variance_weighted |
+
+Classification:
+
+~~~yaml
+metrics:
+  - name: prf_micro_metric
+    params: {zero_division: 0}
   - name: prf_macro_metric
     params: {zero_division: 0}
-```
+  - name: prf_weighted_metric
+    params: {zero_division: 0}
+~~~
 
-## Optimizers и schedulers
+~~~yaml
+metrics:
+  - name: confusion_matrix_metric
+    params: {normalize: "true"}
+~~~
 
-| Key | PyTorch | Factory defaults |
+PRF keys возвращают precision/recall/f1 соответствующего average.
+confusion_matrix_metric возвращает cm_acc и matrix через value(); normalize
+может быть None, true, pred или all. Не объединяйте MAE и classification PRF
+в generic task без явной поддержки обоих target types.
+
+## Optimizers
+
+Factory injects model. Defaults framework factory:
+
+| Key | PyTorch constructor | Defaults |
 | --- | --- | --- |
-| `adamw_optimizer` | `torch.optim.AdamW` | `lr=1e-3`, `weight_decay=0.0` |
-| `adam_optimizer` | `torch.optim.Adam` | те же |
-| `sgd_optimizer` | `torch.optim.SGD` | `lr=1e-2`, `weight_decay=0.0`, `momentum=0.0`, `nesterov=False` |
+| adamw_optimizer | AdamW | lr=1e-3, weight_decay=0.0 |
+| adam_optimizer | Adam | lr=1e-3, weight_decay=0.0 |
+| sgd_optimizer | SGD | lr=1e-2, weight_decay=0.0, momentum=0.0, nesterov=false |
 
-Schedulers: `steplr_scheduler` → `StepLR`, `cosineannealinglr_scheduler` → `CosineAnnealingLR`, `reduceonplateau_scheduler` → `ReduceLROnPlateau`; их params передаются underlying PyTorch class, `optimizer` injects builder.
-
-```yaml
+~~~yaml
 optimizer:
   name: adamw_optimizer
-  params: {lr: 0.001, weight_decay: 0.01}
+  params: {lr: 0.00001, weight_decay: 0.01, betas: [0.9, 0.999], eps: 0.00000001}
+~~~
+
+~~~yaml
+optimizer:
+  name: adam_optimizer
+  params: {lr: 0.001, weight_decay: 0.0}
+~~~
+
+~~~yaml
+optimizer:
+  name: sgd_optimizer
+  params: {lr: 0.01, momentum: 0.9, weight_decay: 0.0, nesterov: true}
+~~~
+
+## Schedulers
+
+Scheduler factory injects optimizer; остальные params передаются в PyTorch
+constructor.
+
+| Key | Constructor | Required parameters | Defaults |
+| --- | --- | --- | --- |
+| steplr_scheduler | StepLR | step_size | gamma=0.1 |
+| cosineannealinglr_scheduler | CosineAnnealingLR | T_max | eta_min=0.0 |
+| reduceonplateau_scheduler | ReduceLROnPlateau | none | mode=min, factor=0.1, patience=10 |
+
+~~~yaml
+scheduler:
+  name: steplr_scheduler
+  params: {step_size: 10, gamma: 0.1}
+~~~
+
+~~~yaml
 scheduler:
   name: cosineannealinglr_scheduler
-  params: {T_max: 50}
-train:
-  params: {use_scheduler: true, scheduler_step_per_epoch: true}
-```
+  params: {T_max: 75, eta_min: 0.0000001}
+~~~
 
-`use_scheduler`, `scheduler_step_per_epoch` и `scheduler_monitor` — Trainer settings, не PyTorch constructor args. Первый включает stepping, второй выбирает batch/epoch stepping, третий задаёт split-prefixed metric для `ReduceLROnPlateau`.
+~~~yaml
+scheduler:
+  name: reduceonplateau_scheduler
+  params: {mode: min, factor: 0.1, patience: 10}
+~~~
+
+use_scheduler, scheduler_step_per_epoch и scheduler_monitor относятся к
+Trainer, а не к scheduler constructor.

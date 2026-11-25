@@ -23,3 +23,22 @@ on_fit_end
 These are Trainer lifecycle callbacks. They are distinct from the inference `on_prediction(model, batch, output)` callback used by `xai_step`.
 
 All keys are registered in `CALLBACKS`; inspect the current process with `chimera-ml registry list --type callbacks`. The detailed pages document constructor defaults and dependencies.
+
+
+## Classification confusion-matrix example
+
+Use this callback only for classification outputs. It requires cache collection,
+an MLflow logger, and the optional matplotlib dependency.
+
+~~~yaml
+- name: plot_confusion_matrix_callback
+  params:
+    splits: [val]
+    class_names: [negative, neutral, positive]
+    artifact_path: figures
+    filename_template: confusion_matrix_epoch_{epoch}.pdf
+    title_template: "{split} Confusion Matrix (epoch {epoch})"
+~~~
+
+The callback enables collection at fit start and writes one figure per selected
+split at epoch end. It cannot interpret regression predictions.
