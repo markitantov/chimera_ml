@@ -10,6 +10,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 - Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and modality influence summaries.
 
+### Documentation
+
+- Restructured the English and Russian documentation navigation around getting started, training, inference, components, examples, extension, reference, and development workflows.
+- Expanded training, evaluation, inference, plugin, and troubleshooting guides, and added component and callback catalogs.
+- Documented the built-in feature-only fusion architectures and practical plugin development and extension workflows.
+- Expanded the ORAGEN, Affective States, VA estimation, and XAI tutorials, including the XAI API reference.
+- Improved consistency and technical coverage across the English and Russian documentation.
+
 ## [0.3.1] - 2026-11-24
 
 ### Added

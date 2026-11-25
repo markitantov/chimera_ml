@@ -29,7 +29,7 @@ adds sweep_target_callback. Review [Sweeps](../user-guide/sweeps.md) and the
 canonical changelog when upgrading.
 
 
-## Current feature-only fusion architectures
+## Feature-only fusion architectures released in 0.3.1
 
 The current TFS, TFS-DCMMOE, RAAV, and TOMAR classes are new feature-only
 architectures. They accept `input_dims`, `shared_dim`, and `output_dim`, read

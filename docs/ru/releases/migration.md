@@ -26,7 +26,7 @@ BuildContext добавлен в 0.2.1. Функция построения, к�
 [Sweeps](../user-guide/sweeps.md) и канонический журнал изменений.
 
 
-## Текущие модели слияния только по признакам
+## Модели слияния только по признакам, выпущенные в 0.3.1
 
 Текущие TFS, TFS-DCMMOE, RAAV и TOMAR — это новые архитектуры, работающие только
 с признаками. Они принимают `input_dims`, `shared_dim` и `output_dim`, читают
@@ -45,7 +45,7 @@ BuildContext добавлен в 0.2.1. Функция построения, к�
 `FeatureFusionModel`, `PredictionFusionModel`, `GatedFusionModel` и
 `GatedPredictionFusionModel`, а также их registry keys
 `feature_fusion_model`, `prediction_fusion_model`, `gated_fusion_model` и
-`gated_prediction_fusion_model`. Прямого прямой замены для этих классов
+`gated_prediction_fusion_model`. Прямой замены для этих классов
 нет. Выберите одну из четырёх текущих моделей слияния только по признакам, если её
 архитектура соответствует задаче, и явно перенесите контракт входов и выходов;
 старые параметры конструктора и композиция подмоделей несовместимы.
