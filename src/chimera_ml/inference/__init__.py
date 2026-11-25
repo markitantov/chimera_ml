@@ -2,6 +2,7 @@ from chimera_ml.inference.builders import build_inference_pipeline, build_infere
 from chimera_ml.inference.config import InferenceConfig
 from chimera_ml.inference.context import InferenceContext
 from chimera_ml.inference.pipeline import InferencePipeline
+from chimera_ml.inference.steps.xai_steps import explain_batch, summarize_explanations
 from chimera_ml.inference.utils import resolve_inference_device
 
 __all__ = [
@@ -10,5 +11,7 @@ __all__ = [
     "InferencePipeline",
     "build_inference_pipeline",
     "build_inference_step",
+    "explain_batch",
     "resolve_inference_device",
+    "summarize_explanations",
 ]

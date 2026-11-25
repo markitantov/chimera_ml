@@ -40,6 +40,7 @@ nav:
       - Logging: user-guide/logging.md
       - MLflow: user-guide/mlflow.md
       - Inference: user-guide/inference.md
+      - Исследовательский XAI: user-guide/xai.md
       - Sweeps: user-guide/sweeps.md
       - Plugins: user-guide/plugins.md
       - CLI workflows: user-guide/cli.md
