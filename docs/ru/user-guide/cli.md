@@ -1,4 +1,4 @@
-# CLI workflows
+# Сценарии CLI
 
 Точный syntax находится в [CLI reference](../cli/reference.md).
 

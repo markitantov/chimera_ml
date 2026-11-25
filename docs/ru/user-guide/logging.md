@@ -1,8 +1,8 @@
-# Logging и MLflow
+# Журналирование и MLflow
 
 Полный registry loggers и defaults находится в [Loggers](../components/logging.md); здесь описан training workflow.
 
-## Local console/file logger
+## Локальный журнал в консоль и файл
 
 ```yaml
 logging:
@@ -18,7 +18,7 @@ logging:
 
 Logger создаёт `logs/<experiment_name>/<run_name>/train.log`; CLI inject-ит experiment и generated run names. Epoch logs содержат loss, sample count и metrics. `train.params.log_every_steps` задаёт interval step metrics для MLflow; callbacks получают `train_step/loss` на каждом train batch.
 
-## MLflow logger
+## Журнал MLflow
 
 ```yaml
 logging:

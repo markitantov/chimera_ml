@@ -1,8 +1,8 @@
-# Plugin authoring tutorial
+# Руководство по созданию плагина
 
 Это contributor-версия [Writing a plugin](../user-guide/plugins.md).
 
-## Minimal package
+## Минимальный пакет
 
 ~~~text
 my-plugin/
@@ -37,7 +37,7 @@ Inference component регистрируется в INFERENCE_STEPS, возвр�
 run(ctx) и пишет outputs через ctx.set_artifact. Для context используйте
 только declared runtime metadata.
 
-## Test и install
+## Тестирование и установка
 
 ~~~bash
 python -m pip install -e my-plugin

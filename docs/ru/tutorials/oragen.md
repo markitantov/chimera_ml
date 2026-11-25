@@ -28,7 +28,7 @@ chimera-ml train --config-path examples/oragen/configs/multimodal_train.yaml
 chimera-ml eval --config-path examples/oragen/configs/multimodal_test.yaml --checkpoint-path logs/your_experiment/your_run/checkpoints/last.pt
 ~~~
 
-## Video inference
+## Видеоинференс
 
 Pipeline из inference.yaml последовательный:
 
@@ -44,12 +44,12 @@ chimera-ml inference --input examples/oragen/samples/f_25.mp4 \
 
 resolve_checkpoints_step кэширует audio/image/fusion weights в model_cache; YOLO yolo26n.pt разрешается отдельно. CPU — fallback. Нужны readable video, writable work-dir и speech/face для полезных windows. Итог содержит gender, age, num_windows, windows, debug; gender содержит label, class_index, probabilities, окно — start_sec/end_sec, gender fields, age_pred, num_faces, num_frames. При отсутствии окон gender/age null и status no_predictions.
 
-## XAI и troubleshooting
+## XAI и диагностика
 
 fusion_step не имеет on_prediction, поэтому xai_step здесь не поддержан. Используйте [XAI](../user-guide/xai.md) и [custom inference steps](../inference/custom-steps.md). Типовые ошибки: plugin/cache/checkpoint, decoding, invalid video, no face/speech, device и output path.
 
 
-## Prediction artifact и JSON envelope
+## Артефакт предсказаний и оболочка JSON
 
 AggregateWindowsStep создаёт predictions artifact с gender, age и
 num_windows. При include_windows он также содержит windows, при include_debug

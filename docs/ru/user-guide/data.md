@@ -21,7 +21,7 @@
 
 Разрешён alias `target`. Modality может отсутствовать в sample. `targets=None` допустим для unlabeled data, но `Trainer.fit` отвергает train batch без targets.
 
-## DataModule и splits
+## DataModule и разделы данных
 
 Core `DataModule` принимает один dataset, mapping named datasets или sequence для каждого split и строит DataLoaders с `batch_size`, `num_workers`, `pin_memory`, `persistent_workers`, `shuffle_train` и `drop_last_train`:
 

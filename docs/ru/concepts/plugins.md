@@ -1,10 +1,10 @@
-# Plugin architecture
+# Архитектура плагинов
 
 Plugin — обычный Python distribution с registration callable в entry-point group
 chimera_ml.plugins. При старте register_all импортирует built-ins и загружает
 каждый обнаруженный entry point один раз.
 
-## Lifecycle
+## Жизненный цикл
 
 ~~~text
 pip install plugin

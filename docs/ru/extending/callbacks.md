@@ -1,4 +1,4 @@
-# Custom callbacks
+# Пользовательские колбэки
 
 Наследуйте `BaseCallback`, реализуйте нужные hooks `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, `on_fit_end` и зарегистрируйте factory в `CALLBACKS`.
 

@@ -1,4 +1,4 @@
-# Early stopping callback
+# Колбэк ранней остановки
 
 `EarlyStoppingCallback`, key `early_stopping_callback`, в `on_epoch_end` наблюдает exact scalar log key и при исчерпании patience устанавливает `trainer.stop_training=True`.
 

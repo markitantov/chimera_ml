@@ -1,6 +1,6 @@
-# Models
+# Модели
 
-## Model interface
+## Интерфейс модели
 
 `BaseModel` — abstract `torch.nn.Module` с `forward(batch: Batch) -> ModelOutput`. Модель описывает допустимые modality names и widths, читает `Batch.inputs` и masks и возвращает task predictions в `ModelOutput.preds`. При missing required modality или incompatible width должна выдавать понятный `ValueError`.
 
@@ -31,7 +31,7 @@ model:
 
 Trainer переключает `train()`/`eval()`, а prediction step должен сам установить совместимую модель в `eval()`.
 
-## Built-in architectures
+## Встроенные архитектуры
 
 | Key | Class | Principle | Output |
 | --- | --- | --- | --- |

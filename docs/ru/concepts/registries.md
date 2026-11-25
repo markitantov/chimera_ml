@@ -1,4 +1,4 @@
-# Registries
+# Реестры
 
 Registry сопоставляет стабильный строковый key с callable factory. В Chimera ML
 есть типы datamodules, models, losses, metrics, optimizers, schedulers,

@@ -1,4 +1,4 @@
-# TOMAR fusion
+# Слияние TOMAR
 
 TOMARFusionModel использует одну модальность как anchor и добавляет остаточные
 поправки от остальных заданных модальностей. Для каждой поправки отдельные
@@ -36,7 +36,7 @@ shared_dim — ширина остаточного представления, a
 остаточной поправке `<delta_modality>` для каждой доступной дополнительной
 модальности, а также fused. Основной результат находится в preds.
 
-## Python
+## Python API
 
 ~~~python
 from chimera_ml.models import TOMARFusionModel
@@ -49,7 +49,7 @@ model = TOMARFusionModel(
 )
 ~~~
 
-## YAML
+## Конфигурация YAML
 
 ~~~yaml
 model:

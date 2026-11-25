@@ -1,4 +1,4 @@
-# Affective states recognition
+# Распознавание аффективных состояний
 
 ## Задача и подготовка
 
@@ -28,7 +28,7 @@ chimera-ml train --config-path examples/affective_states_recognition/configs/mul
 chimera-ml eval --config-path examples/affective_states_recognition/configs/multimodal_test.yaml   --checkpoint-path "logs/your_experiment/your_run/checkpoints/last.pt"
 ~~~
 
-## Inference DAG
+## DAG инференса
 
 Shipped inference.yaml использует parallel DAG и следующие зависимости:
 
@@ -55,7 +55,7 @@ chimera-ml inference   --input examples/affective_states_recognition/samples/01_
 emoaffectnet и lefsa кэшируются в model_cache; Whisper и YOLO требуют
 external weights. CPU поддерживается, но может быть медленным.
 
-## Prediction artifact
+## Артефакт предсказаний
 
 Fusion записывает в InferenceContext.predictions объект:
 

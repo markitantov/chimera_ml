@@ -1,4 +1,4 @@
-# API core
+# API ядра
 
 Core types — общий vocabulary для data modules, models, losses, metrics и
 builders. \`Batch\` содержит modality tensors, optional targets, masks и metadata;
@@ -6,19 +6,19 @@ builders. \`Batch\` содержит modality tensors, optional targets, masks �
 оборачивает YAML и поддерживает validation и dotted overrides. Практические
 примеры находятся в [configuration guide](../user-guide/configuration.md).
 
-## Batch и model output
+## Batch и результат модели
 
 ::: chimera_ml.core.batch.Batch
 
 ::: chimera_ml.core.types.ModelOutput
 
-## Experiment configuration
+## Конфигурация эксперимента
 
 ::: chimera_ml.core.config.ExperimentConfig
 
 ::: chimera_ml.core.config.load_yaml
 
-## Registries
+## Реестры
 
 \`Registry\` связывает stable configuration key с factory или class. Все
 training, data, logging и inference registries используют этот API; обычно

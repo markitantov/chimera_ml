@@ -1,4 +1,4 @@
-# Optimizers и schedulers
+# Оптимизаторы и планировщики
 
 Полный каталог optimizer/scheduler factories находится в [Training components](../components/training.md).
 

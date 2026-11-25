@@ -1,15 +1,15 @@
-# API losses
+# API функций потерь
 
 Losses получают \`ModelOutput\` и labeled \`Batch\`, возвращая scalar (или
 elementwise, если поддерживается) tensor для optimization. Loss выбирается по
 \`LOSSES\` registry key в YAML; direct construction удобен в custom loops и
 тестах. Выбор objective: [Losses](../user-guide/losses.md).
 
-## Contract
+## Контракт
 
 ::: chimera_ml.losses.base.BaseLoss
 
-## Regression
+## Регрессия
 
 \`MSELoss\` и \`MAELoss\` используют PyTorch reductions и требуют matching
 shapes у predictions и targets.
@@ -22,7 +22,7 @@ shapes у predictions и targets.
 
 ::: chimera_ml.losses.regression.mae_loss
 
-## Classification
+## Классификация
 
 Cross entropy и focal loss получают class-index targets. Focal loss дополнительно
 поддерживает focusing, alpha weighting, reduction и label smoothing.
@@ -35,7 +35,7 @@ Cross entropy и focal loss получают class-index targets. Focal loss д�
 
 ::: chimera_ml.losses.focal.focal_loss
 
-## Multilabel и agreement objectives
+## Мультиметочные и согласующие цели
 
 \`BCEWithLogitsLoss\` ожидает multi-hot targets. \`CCCLoss\` оптимизирует one
 minus Lin's concordance correlation coefficient по flattened output dimensions.

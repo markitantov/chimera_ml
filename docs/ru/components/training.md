@@ -1,12 +1,12 @@
 # Компоненты обучения
 
-Это встроенные зарегистрированные factory, используемые Trainer. Конфигурация
-выбирает один loss и совместимые metrics; блоки YAML ниже являются отдельными
+Это встроенные зарегистрированные фабрики, используемые Trainer. Конфигурация
+выбирает одну функцию потерь и совместимые метрики; блоки YAML ниже являются отдельными
 альтернативами, а не одним объединённым конфигом.
 
-## Losses
+## Функции потерь
 
-Loss реализует BaseLoss.__call__(output, batch) и возвращает differentiable
+Функция потерь реализует BaseLoss.__call__(output, batch) и возвращает differentiable
 tensor. Формы predictions и targets должны совпадать.
 
 | Key | Задача и defaults |
@@ -73,7 +73,7 @@ loss:
 Model должен возвращать logits; эти losses сами не добавляют softmax или
 sigmoid.
 
-## Metrics
+## Метрики
 
 Trainer вызывает reset, update для labeled batches и compute в конце split/epoch.
 Regression metrics требуют matching floating shapes; PRF/confusion используют
@@ -121,9 +121,9 @@ confusion_matrix_metric возвращает cm_acc и matrix через value()
 может быть None, true, pred или all. Не объединяйте MAE и classification PRF
 в generic task без явной поддержки обоих target types.
 
-## Optimizers
+## Оптимизаторы
 
-Factory injects model. Defaults framework factory:
+Фабрика получает модель через внедрение зависимости. Встроенная фабрика фреймворка:
 
 | Key | PyTorch constructor | Defaults |
 | --- | --- | --- |
@@ -149,9 +149,9 @@ optimizer:
   params: {lr: 0.01, momentum: 0.9, weight_decay: 0.0, nesterov: true}
 ~~~
 
-## Schedulers
+## Планировщики
 
-Scheduler factory injects optimizer; остальные params передаются в PyTorch
+Фабрика планировщика получает оптимизатор через внедрение зависимости; остальные params передаются в PyTorch
 constructor.
 
 | Key | Constructor | Required parameters | Defaults |

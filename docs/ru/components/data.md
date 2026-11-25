@@ -1,6 +1,6 @@
-# Data-компоненты
+# Компоненты данных
 
-## Dataset interface
+## Интерфейс Dataset
 
 Core не регистрирует concrete dataset: в built-in registry `DATAMODULES` пуст. Plugin dataset обычно является `torch.utils.data.Dataset`, возвращающим mapping с `inputs`, optional `targets`/`target`, `meta` и `masks`:
 
@@ -35,7 +35,7 @@ val_loaders = module.val_dataloader()  # mapping сохраняется
 
 `train_dataloader`, `val_dataloader`, `test_dataloader` сохраняют форму container: DataLoader, mapping, sequence или `None`. Train-only options — shuffle/drop-last. Plugin DataModule factory должна принимать `collate_fn`, если используется top-level `collate`; одновременная настройка `collate` и `data.params.collate_fn` запрещена.
 
-## Registered collates
+## Зарегистрированные collate-функции
 
 | Key | Когда выбирать | Padding и masks |
 | --- | --- | --- |

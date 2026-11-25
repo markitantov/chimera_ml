@@ -1,4 +1,4 @@
-# Changelog
+# Журнал изменений
 
 Canonical history находится в [CHANGELOG.md](https://github.com/markitantov/chimera_ml/blob/main/CHANGELOG.md)
 репозитория. Он использует Keep a Changelog и Semantic Versioning.

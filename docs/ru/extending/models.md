@@ -1,4 +1,4 @@
-# Custom models
+# Пользовательские модели
 
 Наследуйте `BaseModel`, принимайте YAML-compatible constructor params, читайте `Batch`, возвращайте `ModelOutput` и явно проверяйте missing modality/width.
 

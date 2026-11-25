@@ -1,4 +1,4 @@
-# CLI reference
+# Справочник CLI
 
 Executable — chimera-ml; alias chimera_ml указывает на то же Typer application.
 Проверьте установленную версию командой chimera-ml --help.

@@ -1,10 +1,10 @@
-# Callbacks в training workflow
+# Колбэки в сценарии обучения
 
 Полный каталог callbacks и lifecycle находится в [Callbacks](../components/callbacks/index.md); эта страница описывает workflow setup.
 
 Callbacks получают lifecycle events Trainer: `on_fit_start`, `on_epoch_start`, `on_batch_end`, `on_epoch_end`, `on_fit_end`. Монитор должен быть точным flat log key.
 
-## Checkpoint, early stopping и snapshot
+## Контрольная точка, ранняя остановка и снимок
 
 ```yaml
 callbacks:
@@ -32,7 +32,7 @@ callbacks:
 
 Пример предполагает metric `mae` на split `val`. Checkpoint создаёт `logs/<experiment>/<run>/checkpoints`; snapshot создаёт `code.zip` и копию config. CLI inject-ит experiment/run names и config path.
 
-## Predictions и confusion matrix
+## Предсказания и матрица ошибок
 
 Оба callback требуют MLflow logger и включают evaluation cache:
 
@@ -58,7 +58,7 @@ callbacks:
 
 Prediction callback пишет CSV в `predictions/<split>`: для regression — `pred_*`/`target_*`, для classification — `pred_class`, probabilities и target. Confusion callback требует classification-compatible outputs и пишет PDF в `figures/<split>`. Нужен `matplotlib`.
 
-## Telegram и sweep target
+## Telegram и цель перебора
 
 ```bash
 export TELEGRAM_BOT_TOKEN='...'

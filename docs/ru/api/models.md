@@ -1,4 +1,4 @@
-# API models
+# API моделей
 
 Models реализуют BaseModel.forward(Batch) -> ModelOutput. Четыре встроенные
 fusion-модели получают feature-only tensors из Batch.inputs. Их constructors
@@ -6,11 +6,11 @@ fusion-модели получают feature-only tensors из Batch.inputs. И�
 prediction layers создаются внутри. Модели можно создавать напрямую в Python
 или через MODELS registry и YAML. См. [Models](../user-guide/models.md).
 
-## Model contract
+## Контракт модели
 
 ::: chimera_ml.models.base.BaseModel
 
-## Fusion models
+## Модели слияния
 
 ::: chimera_ml.models.tfs_fusion.TFSFusionModel
 

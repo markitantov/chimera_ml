@@ -1,4 +1,4 @@
-# RAAV fusion
+# Слияние RAAV
 
 RAAVFusionModel объединяет выровненные кадровые модальности и использует
 отдельную контекстную модальность как узкое контекстное представление. Сначала
@@ -53,7 +53,7 @@ RAAVFusionModel(
 context_mask, context_latent_attention, frame_to_context_attention,
 context_delta и refined.
 
-## Python
+## Python API
 
 ~~~python
 from chimera_ml.models import RAAVFusionModel
@@ -68,7 +68,7 @@ model = RAAVFusionModel(
 )
 ~~~
 
-## YAML
+## Конфигурация YAML
 
 ~~~yaml
 model:

@@ -1,4 +1,4 @@
-# Callbacks для artifacts
+# Колбэки для артефактов
 
 ## `snapshot_callback` — `SnapshotCallback`
 

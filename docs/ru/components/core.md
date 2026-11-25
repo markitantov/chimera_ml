@@ -1,6 +1,6 @@
-# Core-компоненты
+# Компоненты ядра
 
-## Public imports
+## Публичные импорты
 
 Core экспортирует `Batch`, `ModelOutput`, `ExperimentConfig`, `load_yaml`, `Registry`, and the named registries. Data экспортирует `DataModule`, both collate classes/factories, and loader utilities; models экспортирует `BaseModel` and the four architecture classes/factories.
 
@@ -54,7 +54,7 @@ Zero-filled missing input не равен настоящему нулевому 
 
 Trainer вычисляет loss из `output.preds` и `batch.targets`, а `aux` автоматически не оптимизирует. XAI копирует только явно запрошенные batch-aligned `aux` keys. Имена `aux` architecture-specific.
 
-## Configuration и builders
+## Конфигурация и строители
 
 Training YAML использует mapping `{"name": "mse_loss", "params": {"reduction": "mean"}}`. `build_from_registry` приводит name к lowercase, проверяет mapping `params`, объединяет injected runtime dependencies и вызывает `factory(**kwargs)`. `build_optimizer` injects `model`, scheduler — `optimizer`, а optional `context` передаётся только factory, которая его принимает.
 

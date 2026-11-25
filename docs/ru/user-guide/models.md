@@ -1,4 +1,4 @@
-# Models
+# Модели
 
 Структурированный каталог находится на страницах [Models](../components/models.md) и [сравнение fusion](../components/fusion.md).
 

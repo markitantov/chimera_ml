@@ -1,4 +1,4 @@
-# Registries и builders
+# Реестры и строители
 
 Публичные registries: `MODELS`, `LOSSES`, `METRICS`, `OPTIMIZERS`, `SCHEDULERS`, `CALLBACKS`, `DATAMODULES`, `COLLATES`, `LOGGERS`, `INFERENCE_STEPS`.
 

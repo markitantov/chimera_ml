@@ -1,4 +1,4 @@
-# Writing a plugin
+# Создание плагина
 
 Plugin — Python package с registration function в entry-point group
 chimera_ml.plugins.

@@ -1,4 +1,4 @@
-# Documentation development
+# Разработка документации
 
 English — canonical source; Russian pages должны зеркалить relevant English
 paths после завершения English страницы.

@@ -1,4 +1,4 @@
-# Losses
+# Функции потерь
 
 Полный registry losses и таблица параметров находятся в [Training components](../components/training.md).
 

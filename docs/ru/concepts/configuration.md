@@ -1,4 +1,4 @@
-# Configuration-driven архитектура
+# Архитектура на основе конфигурации
 
 Train и eval используют YAML mapping. Framework проверяет верхнеуровневую
 структуру, затем builders находят каждый name в registry и передают params
@@ -78,7 +78,7 @@ data, model, loss и optimizer должны быть mappings с непусты�
 experiment_info.params.experiment_name требуется для train и для
 validate-config, если не указать --no-require-experiment-name.
 
-## Named lists и runtime injection
+## Именованные списки и внедрение во время выполнения
 
 Секции принимают mapping или list. logging обычно является списком:
 
@@ -97,7 +97,7 @@ optimizer, а factory с явно объявленным context — текущ�
 При smart_inject=True передаются только явно объявленные параметры; одного
 **kwargs недостаточно.
 
-## Validation и execution
+## Проверка и выполнение
 
 validate-config проверяет только framework-level structure. Unknown registry
 keys, отсутствующие файлы, несовместимые plugin params и ошибки dataset

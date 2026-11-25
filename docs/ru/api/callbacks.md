@@ -1,4 +1,4 @@
-# API callbacks
+# API колбэков
 
 Callbacks расширяют жизненный цикл Trainer без изменения основного training loop.
 Они получают события fit, epoch и batch и могут сохранять artifacts, запрашивать
@@ -18,7 +18,7 @@ epoch, global step и агрегированные logs, когда они пр�
 
 ::: chimera_ml.callbacks.base.BaseCallback
 
-## Checkpointing
+## Контрольные точки
 
 \`CheckpointCallback\` наблюдает за одним scalar log, записывает \`last.pt\`
 и хранит лучшие checkpoints в
@@ -31,7 +31,7 @@ epoch, global step и агрегированные logs, когда они пр�
 
 ::: chimera_ml.callbacks.checkpoint_callback.checkpoint_callback
 
-## Artifacts evaluation
+## Оценка артефактов
 
 \`CollectPredictionsCallback\` экспортирует cached predictions в CSV artifacts,
 а \`PlotConfusionMatrixCallback\` строит confusion matrix для classification.

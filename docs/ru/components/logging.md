@@ -1,4 +1,4 @@
-# Loggers
+# Журналирование
 
 В live `LOGGERS` registry находятся `console_file_logger` и `mlflow_logger`.
 

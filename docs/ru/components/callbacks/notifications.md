@@ -1,4 +1,4 @@
-# Telegram notification callback — `TelegramNotifierCallback`
+# Колбэк уведомлений Telegram — `TelegramNotifierCallback`
 
 `TelegramNotifierCallback`, key `telegram_notifier_callback`, создаёт session в `on_fit_start`, отслеживает best monitor в `on_epoch_end` и отправляет сообщение в `on_fit_end`.
 

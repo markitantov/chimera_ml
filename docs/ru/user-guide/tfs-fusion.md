@@ -1,4 +1,4 @@
-# TFS fusion
+# Слияние TFS
 
 TFSFusionModel реализует вариант TripleFusion, работающий непосредственно с
 признаками. Модель проецирует признаки каждой модальности в shared_dim,
@@ -59,7 +59,7 @@ ValueError.
 `pair_valid_<source>-><target>`, pair_weights, group_weights и fused.
 Основной результат находится в ModelOutput.preds.
 
-## Python
+## Python API
 
 ~~~python
 from chimera_ml.models import TFSFusionModel
@@ -71,7 +71,7 @@ model = TFSFusionModel(
 )
 ~~~
 
-## YAML
+## Конфигурация YAML
 
 ~~~yaml
 model:

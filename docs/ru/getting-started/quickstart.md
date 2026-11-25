@@ -1,6 +1,6 @@
 # Быстрый старт
 
-Это проверка без training, которую можно выполнить сразу после установки core. Dataset и checkpoint не нужны.
+Это проверка без обучения, которую можно выполнить сразу после установки ядра. Датасет и контрольная точка не нужны.
 
 ## 1. Проверить установку
 
@@ -11,9 +11,9 @@ chimera-ml registry list --type models
 chimera-ml registry list --type collates
 ```
 
-В core install будут четыре built-in fusion model keys и два built-in collates. Plugin добавляет собственные keys.
+В установленном ядре будут четыре встроенных ключа моделей слияния и два встроенных collate. Плагин добавляет собственные ключи.
 
-## 2. Установить plugin и проверить YAML
+## 2. Установить плагин и проверить YAML
 
 Из корня репозитория:
 
@@ -24,7 +24,7 @@ chimera-ml registry list --type datamodules
 chimera-ml validate-config --config-path examples/va_estimation/configs/multimodal_train.yaml
 ```
 
-Проверка контролирует framework sections. Она не проверяет наличие paths, labels, credentials и optional model files, поэтому prerequisites нужно подготовить отдельно.
+Проверка контролирует разделы фреймворка. Она не проверяет наличие путей, меток, учётных данных и необязательных файлов модели, поэтому предварительные условия нужно подготовить отдельно.
 
 ## 3. Проверить Python containers
 
@@ -43,4 +43,4 @@ assert batch.inputs["audio"].shape == (2, 16000)
 assert output.preds.shape == (2, 1)
 ```
 
-Model получает `Batch` и возвращает `ModelOutput`. Этот пример проверяет только containers.
+Model получает `Batch` и возвращает `ModelOutput`. Этот пример проверяет только контейнеры.

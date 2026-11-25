@@ -1,15 +1,15 @@
-# API metrics
+# API метрик
 
 Metrics — stateful epoch accumulators. \`Trainer\` вызывает \`reset\`, передаёт
 каждый model output и batch в \`update\`, затем вызывает \`compute\` для получения
 scalar log values. Metric factories настраиваются через \`METRICS\` registry.
 См. [Metrics](../user-guide/metrics.md).
 
-## Contract
+## Контракт
 
 ::: chimera_ml.metrics.base.BaseMetric
 
-## Regression metrics
+## Метрики регрессии
 
 Regression metrics flatten outputs в \`(N, D)\` и поддерживают uniform или raw
 multi-output aggregation. R² также поддерживает variance-weighted output.
@@ -32,7 +32,7 @@ multi-output aggregation. R² также поддерживает variance-weigh
 
 ::: chimera_ml.metrics.regression_metric.r2_metric
 
-## Classification metrics
+## Метрики классификации
 
 \`PRFMetric\` возвращает precision, recall и F1 с micro, macro или weighted
 averaging. \`ConfusionMatrixMetric\` хранит class matrix, возвращает summary

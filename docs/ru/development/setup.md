@@ -1,4 +1,4 @@
-# Development setup
+# Настройка разработки
 
 Для contributor setup используйте Python 3.12 и Poetry:
 

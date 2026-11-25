@@ -9,7 +9,7 @@
 
 После этого переходите к [обзору обучения](../training/index.md).
 
-## Training, evaluation и inference
+## Обучение, оценка и инференс
 
 - **Training** вызывает `Trainer.fit`, обновляет параметры модели и сохраняет checkpoints/logs. В train batch должны быть targets.
 - **Evaluation** вызывает `Trainer.evaluate` с `train=False`, не делает optimizer updates и может сохранять predictions/features.

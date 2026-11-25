@@ -1,4 +1,4 @@
-# Checkpointing callback
+# Колбэк контрольных точек
 
 `CheckpointCallback`, key `checkpoint_callback`, сохраняет Trainer state в `on_epoch_end`.
 

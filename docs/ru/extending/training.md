@@ -1,6 +1,6 @@
-# Custom losses и metrics
+# Пользовательские функции потерь и метрики
 
-Custom loss реализует `BaseLoss.__call__(output, batch) -> torch.Tensor`, регистрируется в `LOSSES`, возвращает differentiable scalar/reduction и проверяет targets.
+Пользовательская функция потерь реализует `BaseLoss.__call__(output, batch) -> torch.Tensor`, регистрируется в `LOSSES`, возвращает дифференцируемый скаляр или редукцию и проверяет целевые значения.
 
 ```python
 import torch
@@ -31,4 +31,4 @@ class MeanBiasMetric(BaseMetric):
 def mean_bias_metric(): return MeanBiasMetric()
 ```
 
-Настройте `loss: {name: my_l2_loss, params: {reduction: mean}}` и `metrics: [{name: mean_bias_metric, params: {}}]`. Trainer reset-ит metric, обновляет labeled batches и добавляет split prefix: `bias` становится `val/bias`; этот key используется callbacks/scheduler/sweep.
+Настройте `loss: {name: my_l2_loss, params: {reduction: mean}}` и `metrics: [{name: mean_bias_metric, params: {}}]`. Trainer сбрасывает метрику, обновляет её на размеченных пакетах и добавляет split prefix: `bias` становится `val/bias`; этот ключ используется колбэками, планировщиком и перебором.

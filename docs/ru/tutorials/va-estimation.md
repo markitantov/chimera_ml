@@ -1,4 +1,4 @@
-# VA estimation
+# Оценка VA
 
 ## Задача и plugin
 
@@ -21,7 +21,7 @@ Multimodal DataModule использует modalities с feature path и emb_siz
 
 Перед запуском измените data.params.audio.path, data.params.modalities.*.path и emb_size, callback annotation paths, logging/callback log_path. Telegram callback требует TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID или должен быть удалён.
 
-## Training и evaluation
+## Обучение и оценка
 
 ~~~bash
 chimera-ml validate-config --config-path examples/va_estimation/configs/audio_train.yaml

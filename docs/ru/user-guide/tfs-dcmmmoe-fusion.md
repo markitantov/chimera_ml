@@ -1,4 +1,4 @@
-# Adaptive TFS-DCMMOE fusion
+# Адаптивное слияние TFS-DCMMOE
 
 TFSDCMMOEFusionModel сохраняет иерархию TFS и добавляет входозависимые шлюзы
 над экспертами направленных пар. Для каждой доступной пары вычисляется score,
@@ -47,7 +47,7 @@ ValueError.
 учитывающие маски адаптивные веса экспертов; результат задачи находится в
 preds.
 
-## Python
+## Python API
 
 ~~~python
 from chimera_ml.models import TFSDCMMOEFusionModel
@@ -60,7 +60,7 @@ model = TFSDCMMOEFusionModel(
 )
 ~~~
 
-## YAML
+## Конфигурация YAML
 
 ~~~yaml
 model:

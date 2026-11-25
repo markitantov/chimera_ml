@@ -1,24 +1,24 @@
 # Основные понятия
 
-## Объекты training run
+## Объекты запуска обучения
 
-- **Dataset** возвращает один sample. Plugin решает, как читать paths, features, labels и metadata.
-- **DataModule** строит datasets и предоставляет `train_dataloader()`, `val_dataloader()` и `test_dataloader()`; split может быть одним loader, mapping или sequence.
+- **Dataset** возвращает один sample. Плагин решает, как читать пути, признаки, метки и метаданные.
+- **DataModule** строит датасеты и предоставляет `train_dataloader()`, `val_dataloader()` и `test_dataloader()`; split может быть одним loader, mapping или sequence.
 - **DataLoader** собирает samples и вызывает collate.
 - **Collate** превращает список mappings в `Batch`; встроены `masking_collate` и `multimodal_sequence_collate`.
 - **Batch** содержит `inputs`, optional `targets`, canonical `masks` и `meta`.
 - **Model** получает `Batch` и возвращает `ModelOutput`.
-- **ModelOutput** содержит `preds` и optional tensor `aux`, например features.
-- **Loss** превращает output и labeled batch в scalar loss.
-- **Metrics** накапливают predictions/targets за epoch и возвращают named scalars.
-- **Optimizer** обновляет параметры модели; **Scheduler** меняет optimizer state.
-- **Trainer** координирует device, forward/loss/backward, metrics, logging, callbacks и checkpoints.
-- **Callbacks** реагируют на lifecycle и сохраняют artifacts или останавливают training.
-- **Loggers** пишут local logs и MLflow metrics/artifacts.
+- **ModelOutput** содержит `preds` и необязательный тензор `aux`, например признаки.
+- **Loss** превращает output и labeled batch в скалярную функцию потерь.
+- **Metrics** накапливают предсказания и целевые значения за эпоху и возвращают именованные скаляры.
+- **Optimizer** обновляет параметры модели; **Scheduler** изменяет состояние оптимизатора.
+- **Trainer** координирует устройство, прямой и обратный проходы, метрики, журналирование, колбэки и контрольные точки.
+- **Callbacks** реагируют на жизненный цикл, сохраняют артефакты или останавливают обучение.
+- **Loggers** записывают локальные журналы, метрики и артефакты MLflow.
 
-Framework предоставляет containers, built-in components, builders, Trainer и CLI. Task project обычно предоставляет Dataset/DataModule и регистрирует model, loss и metrics через plugin.
+Фреймворк предоставляет контейнеры, встроенные компоненты, строители, Trainer и CLI. Проект задачи обычно предоставляет Dataset/DataModule и регистрирует модель, функцию потерь и метрики через плагин.
 
-## YAML и registries
+## YAML и реестры
 
 ```yaml
 model:
@@ -36,4 +36,4 @@ chimera-ml registry list --type models
 chimera-ml registry list --type datamodules
 ```
 
-Plugins обнаруживаются через entry-point group `chimera_ml.plugins`. `plugins list` показывает discovery, `registry list` — результат registration.
+Плагины обнаруживаются через группу точек входа `chimera_ml.plugins`. `plugins list` показывает обнаружение, а `registry list` — результат регистрации.

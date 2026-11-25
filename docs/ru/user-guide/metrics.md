@@ -1,4 +1,4 @@
-# Metrics
+# Метрики
 
 Полный registry metrics и state contract находятся в [Training components](../components/training.md).
 
