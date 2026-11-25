@@ -8,7 +8,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 
-- Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and held-out modality quality evaluation.
+- Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and modality influence summaries.
 
 ## [0.3.1] - 2026-11-24
 

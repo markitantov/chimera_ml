@@ -11,7 +11,13 @@ from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, InferencePipeline, build_inference_step
 from chimera_ml.inference.pipeline import InferenceGraphNode
-from chimera_ml.inference.steps.xai_steps import XAIStep, _availability, _intervene, explain_batch
+from chimera_ml.inference.steps.xai_steps import (
+    XAIStep,
+    _availability,
+    _intervene,
+    explain_batch,
+    summarize_explanations,
+)
 
 
 class CountingModel(nn.Module):
@@ -189,6 +195,7 @@ def test_xai_wrapper_uses_returned_context_and_restores_callback(tmp_path: Path)
     assert result is not ctx
     assert result.get_artifact("predictions") == {"ok": True}
     assert "xai" in result.artifacts
+    assert model.calls == 3
     assert previous_calls[0][0] is model
     assert step.on_prediction is previous
 
@@ -381,3 +388,153 @@ def test_xai_step_runs_inside_sequential_and_parallel_dags(tmp_path: Path):
     result = parallel.run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
     assert result.get_artifact("xai")["samples"]
     assert result.get_artifact("other") is True
+
+
+def make_explanation(samples, modalities=("audio", "video")):
+    return {
+        "schema_version": 1,
+        "method": "leave_one_modality_out",
+        "ablation_policy": "zero",
+        "modalities": list(modalities),
+        "samples": samples,
+    }
+
+
+def explanation_sample(sample_id, **entries):
+    return {
+        "sample_id": sample_id,
+        "baseline": [0.0],
+        "modalities": entries,
+        "diagnostics": {},
+    }
+
+
+def evaluated(delta):
+    return {"status": "evaluated", "delta": delta}
+
+
+def test_summary_calculates_signed_absolute_relative_and_ranking():
+    artifact = make_explanation(
+        [
+            explanation_sample(
+                "one",
+                audio=evaluated([1.0, -1.0]),
+                video=evaluated([0.5, 0.5]),
+            )
+        ]
+    )
+    summary = summarize_explanations(artifact)
+    assert summary["status"] == "evaluated"
+    assert summary["ranking"] == ["audio", "video"]
+    assert summary["dominant_modality"] == "audio"
+    assert summary["modalities"]["audio"]["mean_signed_delta"] == 0.0
+    assert summary["modalities"]["audio"]["mean_absolute_delta"] == 1.0
+    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(2 / 3)
+    assert summary["samples"][0]["modalities"]["video"]["mean_signed_delta"] == 0.5
+    json.dumps(summary, allow_nan=False)
+
+
+def test_summary_uses_equal_sample_weighting_and_explicit_ties():
+    artifact = make_explanation(
+        [
+            explanation_sample("one", audio=evaluated([2.0, 2.0]), video=evaluated([1.0, 1.0])),
+            explanation_sample("two", audio=evaluated([0.0]), video=evaluated([1.0])),
+        ]
+    )
+    summary = summarize_explanations(artifact)
+    assert summary["ranking"] == ["audio", "video"]
+    assert summary["modalities"]["audio"]["mean_absolute_delta"] == 1.0
+    assert summary["modalities"]["video"]["mean_absolute_delta"] == 1.0
+    assert summary["ties"] == [["audio", "video"]]
+    assert summary["dominant_modality"] is None
+    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(0.5)
+
+
+def test_summary_handles_zero_missing_unsupported_empty_and_no_common():
+    artifact = make_explanation(
+        [
+            explanation_sample(
+                "one",
+                audio=evaluated([0.0]),
+                video={"status": "already_missing", "delta": None},
+                text={"status": "unsupported", "reason": "not compatible", "delta": None},
+            )
+        ],
+        modalities=("audio", "video", "text"),
+    )
+    summary = summarize_explanations(artifact)
+    assert summary["status"] == "no_measurable_influence"
+    assert summary["dominant_modality"] is None
+    assert summary["modalities"]["audio"]["relative_influence"] is None
+    assert summary["modalities"]["video"]["relative_influence"] is None
+    assert summary["modalities"]["text"]["unsupported_sample_count"] == 1
+
+    no_common = make_explanation(
+        [
+            explanation_sample(
+                "one",
+                audio=evaluated([1.0, None]),
+                video=evaluated([None, 2.0]),
+            )
+        ]
+    )
+    no_common_summary = summarize_explanations(no_common)
+    assert no_common_summary["status"] == "insufficient_common_support"
+    assert no_common_summary["ranking"] == []
+
+
+def test_summary_supports_temporal_axis_and_scalar_scores():
+    temporal = make_explanation(
+        [
+            explanation_sample(
+                "window-1",
+                audio=evaluated([1.0, 0.0, -1.0]),
+                video=evaluated([0.0, 2.0, 0.0]),
+            )
+        ]
+    )
+    summary = summarize_explanations(temporal, temporal_axis=1)
+    assert [item["position"] for item in summary["samples"][0]["temporal"]] == [0, 1, 2]
+    assert summary["samples"][0]["temporal"][0]["dominant_modality"] == "audio"
+    assert summary["samples"][0]["temporal"][1]["dominant_modality"] == "video"
+
+    scalar = make_explanation([explanation_sample("scalar", audio=evaluated(2.0), video=evaluated(-1.0))])
+    scalar_summary = summarize_explanations(scalar)
+    assert scalar_summary["modalities"]["audio"]["valid_comparison_count"] == 1
+    with pytest.raises(ValueError, match="temporal_axis"):
+        summarize_explanations(scalar, temporal_axis=1)
+
+
+def test_summary_requires_common_support_for_global_ranking():
+    artifact = make_explanation(
+        [
+            explanation_sample(
+                "audio-only", audio=evaluated([1.0]), video={"status": "already_missing", "delta": None}
+            ),
+            explanation_sample(
+                "video-only", audio={"status": "already_missing", "delta": None}, video=evaluated([2.0])
+            ),
+        ]
+    )
+    summary = summarize_explanations(artifact)
+    assert summary["status"] == "insufficient_common_support"
+    assert summary["ranking"] == []
+    assert summary["dominant_modality"] is None
+
+
+def test_quality_evaluation_is_no_longer_public():
+    import chimera_ml.inference as inference
+
+    assert not hasattr(inference, "evaluate_modality_quality")
+
+
+def test_scalar_score_validity_fn_is_batch_aligned():
+    model = eval_model(CountingModel())
+    result = explain_batch(
+        model,
+        make_batch(mixed=False),
+        modalities=("audio",),
+        score_fn=lambda output: output.preds[:, 0],
+        validity_fn=lambda name, batch, output: torch.tensor([True, True]),
+    )
+    assert result["samples"][0]["modalities"]["audio"]["status"] == "evaluated"

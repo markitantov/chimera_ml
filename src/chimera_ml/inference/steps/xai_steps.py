@@ -1,6 +1,8 @@
 """Universal XAI wrapper and modality intervention engine."""
 
 import json
+import math
+import numbers
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -92,7 +94,8 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
         raise ValueError(f"Modality '{modality}' is not present in the batch.")
 
     inputs = dict(batch.inputs)
-    masks = deepcopy(batch.get_masks() or {})
+    has_canonical_masks = isinstance(batch.masks, dict)
+    masks = deepcopy(batch.masks) if has_canonical_masks else deepcopy(batch.get_masks() or {})
     meta = deepcopy(batch.meta)
     value = batch.inputs[modality]
 
@@ -117,7 +120,7 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
         _drop_modality_masks(legacy, modality)
         meta["masks"] = legacy
 
-    return Batch(inputs, batch.targets, masks or None, meta)
+    return Batch(inputs, batch.targets, masks if has_canonical_masks or masks else None, meta)
 
 
 def _json(value: Any) -> Any:
@@ -231,6 +234,26 @@ def _require_eval(model: nn.Module) -> None:
         raise ValueError("model and all nested modules must already be in evaluation mode.")
 
 
+def _sample_metadata(batch: Batch, index: int, batch_size: int) -> dict[str, Any]:
+    meta = batch.meta or {}
+    result: dict[str, Any] = {}
+    sample_meta = meta.get("sample_meta")
+    if isinstance(sample_meta, list) and len(sample_meta) == batch_size and isinstance(sample_meta[index], Mapping):
+        result.update(_json(sample_meta[index]))
+    for key in ("window_id", "start", "end", "timestamp", "duration", "start_time", "end_time"):
+        if key not in meta:
+            continue
+        value = meta[key]
+        if torch.is_tensor(value):
+            if value.ndim and value.shape[0] == batch_size:
+                result[key] = _json(_sample(value, index))
+        elif isinstance(value, (list, tuple)) and len(value) == batch_size:
+            result[key] = _json(_sample(value, index))
+        else:
+            result[key] = _json(value)
+    return result
+
+
 def explain_batch(
     model: torch.nn.Module,
     batch: Batch,
@@ -289,10 +312,10 @@ def explain_batch(
                     if valid.ndim == 0 or valid.shape[0] != size:
                         raise ValueError("validity_fn result must be batch-aligned.")
                     valid = valid.to(common_valid.device).bool()
+                    rejected = ~valid if valid.ndim == 1 else ~valid.flatten(1).any(dim=1)
                     while valid.ndim < common_valid.ndim:
                         valid = valid.unsqueeze(-1)
                     valid = valid.expand_as(common_valid)
-                    rejected = ~valid.flatten(1).any(dim=1)
                     common_valid &= valid
                 elif not valid:
                     rejected.fill_(True)
@@ -326,6 +349,7 @@ def explain_batch(
                 "baseline": _masked_json(_sample(original, index), _sample(baseline_valid, index)),
                 "modalities": {name: results[name][index] for name in names},
                 "diagnostics": {key: _json(_sample(value, index)) for key, value in diagnostics.items()},
+                "metadata": _sample_metadata(batch, index, size),
             }
             for index in range(size)
         ]
@@ -340,43 +364,314 @@ def explain_batch(
         return result
 
 
-def evaluate_modality_quality(
-    model: torch.nn.Module,
-    batches: Iterable[Batch],
-    *,
-    metric: Callable[[Any, Any], float],
-    score_fn: Callable[[ModelOutput], Tensor] | None = None,
-    modalities: Iterable[str] | None = None,
-    ablation_policy: str = "zero",
-    higher_is_better: bool = True,
-) -> dict[str, Any]:
-    """Compare a held-out metric for baseline and modality interventions."""
-    _require_eval(model)
-    batches = list(batches)
-    names = tuple(modalities or {name for batch in batches for name in batch.inputs})
-
-    def collect(name: str | None) -> tuple[Tensor, Tensor]:
-        predictions, targets = [], []
-        for batch in batches:
-            size = _batch_size(batch)
-            output = model(batch if name is None else _intervene(batch, name, ablation_policy))
-            predictions.append(_score(output, size, score_fn).cpu())
-            targets.append(batch.targets.cpu())
-        return torch.cat(predictions), torch.cat(targets)
-
-    with torch.inference_mode():
-        baseline_preds, targets = collect(None)
-        baseline = float(metric(baseline_preds, targets))
-        result = {"baseline": baseline, "higher_is_better": higher_is_better, "modalities": {}}
-        for name in names:
-            predictions, _ = collect(name)
-            quality = float(metric(predictions, targets))
-            result["modalities"][name] = {
-                "status": "evaluated",
-                "quality": quality,
-                "signed_quality_change": quality - baseline if higher_is_better else baseline - quality,
-            }
+def _numeric_paths(value: Any, path: tuple[Any, ...] = ()) -> dict[tuple[Any, ...], float]:
+    if isinstance(value, Mapping):
+        result: dict[tuple[Any, ...], float] = {}
+        for key, item in value.items():
+            result.update(_numeric_paths(item, (*path, str(key))))
         return result
+    if isinstance(value, list):
+        result = {}
+        for index, item in enumerate(value):
+            result.update(_numeric_paths(item, (*path, index)))
+        return result
+    if isinstance(value, numbers.Real) and not isinstance(value, bool) and math.isfinite(float(value)):
+        return {path: float(value)}
+    return {}
+
+
+def _rank_details(
+    details: dict[str, Any],
+) -> tuple[list[str], list[list[str]], str | None, list[str], str]:
+    comparable = [
+        name
+        for name, item in details.items()
+        if item["common_comparison_count"] and item["mean_absolute_delta"] is not None
+    ]
+    ordered = sorted(comparable, key=lambda name: (-details[name]["mean_absolute_delta"], name))
+    ties: list[list[str]] = []
+    if ordered:
+        current = [ordered[0]]
+        for name in ordered[1:]:
+            if details[name]["mean_absolute_delta"] == details[current[0]]["mean_absolute_delta"]:
+                current.append(name)
+            else:
+                ties.append(current)
+                current = [name]
+        ties.append(current)
+
+    total_abs = sum(details[name]["mean_absolute_delta"] for name in ordered)
+    if total_abs > 0:
+        for index, name in enumerate(ordered):
+            previous = ordered[index - 1] if index else None
+            details[name]["rank"] = (
+                details[previous]["rank"]
+                if previous and details[previous]["mean_absolute_delta"] == details[name]["mean_absolute_delta"]
+                else index + 1
+            )
+            details[name]["relative_influence"] = details[name]["mean_absolute_delta"] / total_abs
+        dominant_modalities = ties[0]
+        dominant = dominant_modalities[0] if len(dominant_modalities) == 1 else None
+        status = "evaluated"
+    elif ordered:
+        dominant_modalities = []
+        dominant = None
+        status = "no_measurable_influence"
+    else:
+        dominant_modalities = []
+        dominant = None
+        status = "no_common_comparison"
+
+    return ordered, ties, dominant, dominant_modalities, status
+
+
+def _comparison_summary(
+    paths_by_modality: Mapping[str, dict[tuple[Any, ...], float]],
+    statuses: Mapping[str, str],
+) -> dict[str, Any]:
+    modalities = list(statuses)
+    evaluated = {name: paths_by_modality.get(name, {}) for name in modalities if statuses[name] == "evaluated"}
+    common: set[tuple[Any, ...]] = set()
+    if evaluated:
+        common = set.intersection(*(set(paths) for paths in evaluated.values()))
+
+    details: dict[str, Any] = {}
+    for name in modalities:
+        status = statuses[name]
+        paths = paths_by_modality.get(name, {})
+        item: dict[str, Any] = {
+            "status": status,
+            "mean_signed_delta": None,
+            "mean_absolute_delta": None,
+            "relative_influence": None,
+            "rank": None,
+            "valid_comparison_count": len(paths),
+            "common_comparison_count": 0,
+        }
+        if status == "evaluated" and not paths:
+            item["status"] = "insufficient_data"
+        if status == "evaluated" and common:
+            values = [paths[position] for position in common if position in paths]
+            item["common_comparison_count"] = len(values)
+            item["mean_signed_delta"] = sum(values) / len(values)
+            item["mean_absolute_delta"] = sum(abs(value) for value in values) / len(values)
+        details[name] = item
+
+    ordered, ties, dominant, dominant_modalities, status = _rank_details(details)
+
+    reason = None
+    if status == "unavailable":
+        reason = "no evaluated modality comparisons"
+    elif status == "no_common_comparison":
+        reason = "no common valid output positions remain"
+    elif status == "no_measurable_influence":
+        reason = "all comparable influence magnitudes are zero"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "ranking": ordered,
+        "ties": ties,
+        "dominant_modality": dominant,
+        "dominant_modalities": dominant_modalities,
+        "comparable_modalities": ordered,
+        "common_comparison_count": len(common),
+        "modalities": details,
+    }
+
+
+def _temporal_paths(
+    paths_by_modality: Mapping[str, dict[tuple[Any, ...], float]],
+    temporal_axis: int,
+) -> dict[int, dict[str, dict[tuple[Any, ...], float]]]:
+    position_index = temporal_axis - 1
+    positions: dict[int, dict[str, dict[tuple[Any, ...], float]]] = {}
+    for name, paths in paths_by_modality.items():
+        for path, value in paths.items():
+            if len(path) <= position_index or not isinstance(path[position_index], int):
+                continue
+            position = path[position_index]
+            positions.setdefault(position, {}).setdefault(name, {})[path] = value
+    return positions
+
+
+def _sample_summary(sample: Mapping[str, Any], modalities: list[str], temporal_axis: int | None) -> dict[str, Any]:
+    entries = sample.get("modalities") or {}
+    statuses = {name: str((entries.get(name) or {}).get("status", "already_missing")) for name in modalities}
+    paths = {name: _numeric_paths((entries.get(name) or {}).get("delta")) for name in modalities}
+    result = _comparison_summary(paths, statuses)
+    result["sample_id"] = sample.get("sample_id")
+    result["sample_coverage"] = 1.0 if result["common_comparison_count"] else 0.0
+
+    if temporal_axis is not None:
+        temporal = _temporal_paths(paths, temporal_axis)
+        if paths and not temporal:
+            raise ValueError("temporal_axis does not identify a list-like score dimension.")
+        result["temporal"] = [
+            {
+                "position": position,
+                **_comparison_summary(group_paths, statuses),
+            }
+            for position, group_paths in sorted(temporal.items())
+        ]
+    return result
+
+
+def summarize_explanations(
+    explanations: Mapping[str, Any],
+    *,
+    temporal_axis: int | None = None,
+) -> dict[str, Any]:
+    """Summarize JSON-compatible modality explanations without model execution."""
+    if temporal_axis is not None and (not isinstance(temporal_axis, int) or temporal_axis < 1):
+        raise ValueError("temporal_axis must be a positive batch-relative axis or None.")
+
+    samples = explanations.get("samples")
+    if not isinstance(samples, list):
+        raise ValueError("explanations['samples'] must be a list.")
+    modalities = list(explanations.get("modalities") or [])
+    for sample in samples:
+        for name in sample.get("modalities") or {}:
+            if name not in modalities:
+                modalities.append(name)
+
+    sample_summaries = [_sample_summary(sample, modalities, temporal_axis) for sample in samples]
+    paths_by_sample = []
+    for sample in samples:
+        entries = sample.get("modalities") or {}
+        paths_by_sample.append({name: _numeric_paths((entries.get(name) or {}).get("delta")) for name in modalities})
+
+    statuses_by_sample = [
+        {
+            name: str((sample.get("modalities") or {}).get(name, {}).get("status", "already_missing"))
+            for name in modalities
+        }
+        for sample in samples
+    ]
+    availability = {
+        name: {
+            "availability_count": sum(status != "already_missing" for status in statuses),
+            "evaluated_sample_count": sum(status == "evaluated" for status in statuses),
+            "missing_sample_count": sum(status == "already_missing" for status in statuses),
+            "unsupported_sample_count": sum(status == "unsupported" for status in statuses),
+        }
+        for name, statuses in ((name, [row[name] for row in statuses_by_sample]) for name in modalities)
+    }
+    candidates = [
+        name
+        for name in modalities
+        if any(
+            statuses[name] == "evaluated" and paths_by_sample[index][name]
+            for index, statuses in enumerate(statuses_by_sample)
+        )
+    ]
+
+    if len(candidates) > 1:
+        joint_indices = [
+            index
+            for index, statuses in enumerate(statuses_by_sample)
+            if all(statuses[name] == "evaluated" and paths_by_sample[index][name] for name in candidates)
+        ]
+    else:
+        joint_indices = [
+            index
+            for index, statuses in enumerate(statuses_by_sample)
+            if candidates and statuses[candidates[0]] == "evaluated" and paths_by_sample[index][candidates[0]]
+        ]
+
+    global_paths: dict[str, dict[tuple[Any, ...], float]] = {name: {} for name in modalities}
+    sample_contributions: dict[str, list[tuple[float, float]]] = {name: [] for name in candidates}
+    common_sample_count = 0
+    for index in joint_indices:
+        selected = {name: paths_by_sample[index][name] for name in candidates}
+        common = set.intersection(*(set(paths) for paths in selected.values()))
+        if not common:
+            continue
+        common_sample_count += 1
+        for name in candidates:
+            values = [selected[name][position] for position in common]
+            sample_contributions[name].append(
+                (sum(values) / len(values), sum(abs(value) for value in values) / len(values))
+            )
+            global_paths[name].update(
+                {(index, *position): value for position, value in selected[name].items() if position in common}
+            )
+
+    global_statuses = {
+        name: "evaluated"
+        if name in candidates
+        else ("unsupported" if availability[name]["unsupported_sample_count"] else "already_missing")
+        for name in modalities
+    }
+    global_result = _comparison_summary(global_paths, global_statuses)
+    for name in candidates:
+        contributions = sample_contributions[name]
+        if contributions:
+            item = global_result["modalities"][name]
+            item["mean_signed_delta"] = sum(value[0] for value in contributions) / len(contributions)
+            item["mean_absolute_delta"] = sum(value[1] for value in contributions) / len(contributions)
+            item["common_comparison_count"] = sum(
+                len(
+                    set(paths_by_sample[index][name])
+                    & set.intersection(*(set(paths_by_sample[index][candidate]) for candidate in candidates))
+                )
+                for index in joint_indices
+                if all(paths_by_sample[index][candidate] for candidate in candidates)
+                for _ in [0]
+            )
+    if candidates and common_sample_count:
+        (
+            global_result["ranking"],
+            global_result["ties"],
+            global_result["dominant_modality"],
+            global_result["dominant_modalities"],
+            global_result["status"],
+        ) = _rank_details(global_result["modalities"])
+    for name in modalities:
+        availability[name].update(global_result["modalities"][name])
+        availability[name]["comparable_sample_count"] = common_sample_count if name in candidates else 0
+        availability[name]["sample_coverage"] = (
+            availability[name]["comparable_sample_count"] / len(samples) if samples else 0.0
+        )
+
+    if len(candidates) > 1 and common_sample_count == 0:
+        global_result["status"] = "insufficient_common_support"
+        global_result["reason"] = "modalities have no jointly comparable samples"
+        global_result["ranking"] = []
+        global_result["ties"] = []
+        global_result["dominant_modality"] = None
+        global_result["dominant_modalities"] = []
+        for item in global_result["modalities"].values():
+            item["mean_signed_delta"] = None
+            item["mean_absolute_delta"] = None
+            item["relative_influence"] = None
+            item["rank"] = None
+
+    global_result["total_samples"] = len(samples)
+    global_result["comparable_samples"] = common_sample_count
+    global_result["sample_coverage"] = common_sample_count / len(samples) if samples else 0.0
+    global_result["modalities"] = availability
+    global_result["samples"] = sample_summaries
+    global_result["temporal_axis"] = temporal_axis
+
+    if temporal_axis is not None:
+        temporal_groups: dict[int, dict[str, dict[tuple[Any, ...], float]]] = {}
+        for sample_index, paths in enumerate(paths_by_sample):
+            for position, group in _temporal_paths(paths, temporal_axis).items():
+                for name, values in group.items():
+                    temporal_groups.setdefault(position, {}).setdefault(name, {}).update(
+                        {(sample_index, *path): value for path, value in values.items()}
+                    )
+        global_result["temporal"] = [
+            {
+                "position": position,
+                **_comparison_summary(group_paths, global_statuses),
+            }
+            for position, group_paths in sorted(temporal_groups.items())
+        ]
+
+    json.dumps(global_result, allow_nan=False)
+    return global_result
 
 
 @dataclass
@@ -390,6 +685,7 @@ class XAIStep:
     diagnostic_keys: Iterable[str] | None = None
     output_mask_key: str | Callable[[Batch, ModelOutput], Tensor] | None = None
     validity_fn: Callable[[str, Batch, ModelOutput], bool] | None = None
+    temporal_axis: int | None = None
     _results: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
 
     def run(self, ctx: InferenceContext) -> InferenceContext:
@@ -442,14 +738,17 @@ class XAIStep:
                 name: sample["modalities"].get(name, _missing("modality was not present in this batch"))
                 for name in modalities
             }
-        return {
-            "schema_version": 1,
+        result = {
+            "schema_version": 2,
             "method": "leave_one_modality_out",
             "ablation_policy": self.ablation_policy,
             "modalities": modalities,
             "samples": samples,
             "batches": len(self._results),
         }
+        result["summary"] = summarize_explanations(result, temporal_axis=self.temporal_axis)
+        json.dumps(result, allow_nan=False)
+        return result
 
 
 @INFERENCE_STEPS.register("xai_step")
