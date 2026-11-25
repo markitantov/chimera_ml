@@ -4,21 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.3.1] - 2026-11-24
 
 ### Added
 
 - Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and modality influence summaries.
-
-### Documentation
-
-- Restructured the English and Russian documentation navigation around getting started, training, inference, components, examples, extension, reference, and development workflows.
-- Expanded training, evaluation, inference, plugin, and troubleshooting guides, and added component and callback catalogs.
-- Documented the built-in feature-only fusion architectures and practical plugin development and extension workflows.
-- Expanded the ORAGEN, Affective States, VA estimation, and XAI tutorials, including the XAI API reference.
-- Improved consistency and technical coverage across the English and Russian documentation.
-
-## [0.3.1] - 2026-11-24
 
 ### Added
 
@@ -31,6 +21,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Fusion models now accept input_dims, shared_dim, and output_dim, project features internally, and create their prediction layers internally.
 - TFS uses six directed attention blocks, reciprocal second-level attention, and masked statistical pooling; TFS-DCMMOE adds input-dependent masking-aware pair gates.
 - RAAV uses frame/context fusion with bottleneck latents, while TOMAR uses anchor-conditioned gated residual contributions.
+- Restructured the English and Russian documentation navigation around getting started, training, inference, components, examples, extension, reference, and development workflows.
+- Expanded training, evaluation, inference, plugin, and troubleshooting guides, and added component and callback catalogs.
+- Documented the built-in feature-only fusion architectures and practical plugin development and extension workflows.
+- Expanded the ORAGEN, Affective States, VA estimation, and XAI tutorials, including the XAI API reference.
+- Improved consistency and technical coverage across the English and Russian documentation.
 
 ### Fixed
 
