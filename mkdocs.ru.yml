@@ -15,9 +15,9 @@ nav:
       - Установка: getting-started/installation.md
       - Быстрый старт: getting-started/quickstart.md
       - Первый эксперимент: getting-started/first-experiment.md
-      - Основные понятия: concepts/index.md
+      - Основные понятия: getting-started/essential-concepts.md
   - Обучение:
-      - Обзор: user-guide/index.md
+      - Обзор: training/index.md
       - Подготовка данных: user-guide/data.md
       - Конфигурация эксперимента: user-guide/configuration.md
       - Обучение модели: user-guide/training.md
@@ -55,11 +55,10 @@ nav:
       - Обзор: concepts/plugins.md
       - Архитектура: concepts/architecture.md
       - Конфигурация: concepts/configuration.md
-      - Конфигурация: concepts/configuration.md
       - Registries: concepts/registries.md
       - BuildContext: concepts/build-context.md
       - Plugins: user-guide/plugins.md
-      - Авторизация plugin: development/plugins.md
+      - Создание plugin: development/plugins.md
   - Справочник:
       - Обзор: api/index.md
       - Конфигурация: user-guide/configuration.md

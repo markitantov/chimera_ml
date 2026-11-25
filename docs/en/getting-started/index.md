@@ -1,24 +1,18 @@
 # Getting started
 
-Follow these pages in order if Chimera ML is new to you:
+Use this sequence for a first project. The core package supplies the runtime and built-in registries; task-specific datasets and datamodules usually come from a plugin.
 
-1. [Installation](installation.md) — install the supported Python package and
-   verify the CLI.
-2. [Quick start](quickstart.md) — validate a shipped example configuration.
-3. [First experiment](first-experiment.md) — understand the complete train and
-   evaluation workflow.
+1. [Installation](installation.md): install Python 3.12 and CHIMERA-ML, then verify the environment.
+2. [Quick start](quickstart.md): inspect CLI commands, registries, and a real plugin configuration without training.
+3. [First experiment](first-experiment.md): install a plugin, prepare its data, validate, train, find artifacts, and evaluate a checkpoint.
+4. [Essential concepts](essential-concepts.md): understand the objects exchanged by the training loop.
 
-After onboarding, read [Configuration](../concepts/configuration.md) and the
-[User guide](../user-guide/index.md).
+After that, use the [Training overview](../training/index.md) and its linked workflow pages.
 
+## Training, evaluation, and inference
 
-## Before you start
+- **Training** calls `Trainer.fit`, updates model parameters, and writes checkpoints and logs. Training batches must contain targets.
+- **Evaluation** calls `Trainer.evaluate` with `train=False`; it never performs optimizer updates. It loads a compatible checkpoint and can cache predictions or features.
+- **Inference** is a separate `InferencePipeline` over an input file. It is not a substitute for checkpoint evaluation and does not require the training loop's loss or optimizer.
 
-The core package supplies runtime infrastructure, not task data. Install a
-plugin when your configuration refers to plugin datamodules, models, metrics,
-callbacks, or inference steps. `validate-config` checks the framework shape; it
-does not download a dataset, checkpoint, or optional plugin dependency.
-
-For a first pass, use a repository example and follow its documented path
-changes. Then replace its `data`, `model`, and task-specific component entries
-with your own registered components.
+`validate-config` checks the framework-level YAML shape and required sections. It does not download datasets, resolve plugin dependencies, or prove that task-specific paths exist.

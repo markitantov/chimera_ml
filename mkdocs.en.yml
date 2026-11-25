@@ -14,9 +14,9 @@ nav:
       - Installation: getting-started/installation.md
       - Quick start: getting-started/quickstart.md
       - First experiment: getting-started/first-experiment.md
-      - Essential concepts: concepts/index.md
+      - Essential concepts: getting-started/essential-concepts.md
   - Training:
-      - Overview: user-guide/index.md
+      - Overview: training/index.md
       - Prepare a dataset: user-guide/data.md
       - Configure an experiment: user-guide/configuration.md
       - Train a model: user-guide/training.md
