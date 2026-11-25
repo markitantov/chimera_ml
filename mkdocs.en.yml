@@ -28,9 +28,14 @@ nav:
       - Troubleshooting: user-guide/troubleshooting.md
   - Inference:
       - Overview: user-guide/inference.md
-      - Run inference: user-guide/cli.md
+      - Run inference: inference/run.md
+      - Pipeline configuration: inference/pipeline.md
+      - Built-in inference steps: inference/built-in-steps.md
+      - Custom prediction steps: inference/custom-steps.md
+      - Sequential and parallel pipelines: inference/execution.md
+      - Checkpoints and artifacts: inference/checkpoints.md
       - Explainable AI (XAI): user-guide/xai.md
-      - Inference API: api/inference.md
+      - Troubleshooting: inference/troubleshooting.md
   - Components:
       - Overview: user-guide/models.md
       - Core components: api/core.md

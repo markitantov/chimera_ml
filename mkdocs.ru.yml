@@ -29,9 +29,14 @@ nav:
       - Диагностика: user-guide/troubleshooting.md
   - Inference:
       - Обзор: user-guide/inference.md
-      - Запуск inference: user-guide/cli.md
+      - Запуск inference: inference/run.md
+      - Конфигурация pipeline: inference/pipeline.md
+      - Встроенные шаги inference: inference/built-in-steps.md
+      - Пользовательские шаги предсказания: inference/custom-steps.md
+      - Последовательные и параллельные pipeline: inference/execution.md
+      - Чекпоинты и артефакты: inference/checkpoints.md
       - Объяснимый AI (XAI): user-guide/xai.md
-      - API inference: api/inference.md
+      - Устранение проблем: inference/troubleshooting.md
   - Компоненты:
       - Обзор: user-guide/models.md
       - Core-компоненты: api/core.md

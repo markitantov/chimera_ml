@@ -1,58 +1,43 @@
-# Inference
+# Inference overview
 
-Inference is a separate, configurable execution pipeline. It does not call `Trainer.evaluate`: it creates an `InferenceContext`, runs registered steps, and passes named artifacts between them.
+Inference is an independent, configuration-driven execution mechanism. It runs an `InferencePipeline` over one input path and a shared `InferenceContext`; it is not a training or evaluation shortcut.
 
-~~~bash
-chimera-ml inference -i input.mp4 -o prediction.json -c inference.yaml --device auto --work-dir work
-~~~
+```text
+Input
+  -> InferenceContext
+  -> input preparation
+  -> checkpoint resolution
+  -> plugin prediction step
+  -> optional XAI
+  -> postprocessing
+  -> output artifacts
+```
 
-`--input` and `--config-path` are required. `--device` accepts `auto`, `cpu`, or `cuda`; `auto` selects CUDA when available. If `--work-dir` is omitted, the CLI creates a temporary working directory.
+This is a conceptual flow, not a mandatory fixed pipeline. A real application chooses the steps it needs.
 
-## Configuration
+## Training, evaluation, and inference
 
-~~~yaml
-pipeline:
-  name: demo
-  parallel: false
-runtime:
-  device: auto
-steps:
-  - name: resolve_checkpoints_step
-    params:
-      cache_dir: checkpoints
-      checkpoints:
-        model: /absolute/path/to/model.pt
-  - name: my_prediction_step
-    params:
-      checkpoint_key: model
-  - name: write_json_predictions_step
-    params:
-      output_path: prediction.json
-~~~
+| Operation | Runtime | Updates parameters? | Typical input/output |
+| --- | --- | --- | --- |
+| Training | `Trainer.fit` | Yes | DataLoaders with targets -> checkpoints and logs |
+| Evaluation | `Trainer.evaluate` via `chimera-ml eval` | No | Configured splits + compatible checkpoint -> metrics/cache |
+| Inference | `InferencePipeline` via `chimera-ml inference` | No | One input path -> shared artifacts and optional JSON |
 
-Each step has a registry `name`, optional `id`, optional `after` dependencies, and optional `params`. A step implements `run(ctx: InferenceContext) -> InferenceContext`; it reads `ctx.input_path`, `ctx.device`, and artifacts and publishes results with `ctx.set_artifact`. The `predictions` property is a convenience view of the `predictions` artifact.
+Training YAML sections such as `data`, `loss`, `optimizer`, and `train` do not configure an inference pipeline. Inference YAML has `pipeline`, optional `runtime`, and `steps` instead. `Trainer.evaluate` is for labeled split metrics; inference is for application execution and prediction export.
 
-## Built-in steps
+## What the framework and application provide
 
-The core package registers these public steps:
+The core provides `InferenceConfig`, `InferenceContext`, pipeline scheduling, the `INFERENCE_STEPS` registry, checkpoint resolution, JSON output, and the universal XAI wrapper. The application or plugin provides input preparation, feature extraction, model construction, checkpoint loading, and prediction steps for a particular task. There is no universal core prediction step for every model.
 
-| Key | Parameters | Inputs and outputs |
-| --- | --- | --- |
-| `resolve_checkpoints_step` | `checkpoints`, `cache_dir="checkpoints"`, `force_download=false`, `chunk_size=8192` | Accepts local or HTTP(S) checkpoint references; writes absolute paths to `artifacts["checkpoints"]` and the cache path to `artifacts["cache_dir"]`. |
-| `write_json_predictions_step` | `output_path=null` | Requires `predictions`; writes `input` and `predictions` JSON and publishes `output_path`. |
-| `print_json_predictions_step` | none | Requires `predictions`; prints the same JSON payload and writes no file. |
-| `xai_step` | nested `step`, `modalities`, `ablation_policy`, and optional score/diagnostic settings | Wraps a compatible prediction step and publishes `xai`; see [XAI](xai.md). |
+Steps communicate through the context:
 
-Prediction, feature-extraction, and model-specific steps in the examples are plugin components, not built-ins. List the actual registrations in the current environment with `chimera-ml registry list --type inference_steps`.
+- `ctx.input_path` is the CLI input path;
+- `ctx.work_dir` is the persistent or temporary working directory;
+- `ctx.device` is the resolved `cpu` or `cuda` string;
+- `ctx.get_artifact(name, default)` reads upstream values;
+- `ctx.set_artifact(name, value)` publishes a value and records ownership for DAG merging;
+- `ctx.predictions` is the conventional `predictions` artifact.
 
-## Sequential and parallel pipelines
+A prediction step normally loads a model in evaluation mode, constructs `Batch` objects from prepared data, runs `ModelOutput` under `torch.inference_mode()`, and publishes JSON-compatible predictions. Output steps then print or write those predictions.
 
-With `parallel: false` or no `parallel` field, steps run in listed order. The CLI `--output` can create or override `write_json_predictions_step` only in this mode. With `parallel: true`, every step is a DAG node and `after` is authoritative. Steps without `after` are roots and may start together; repeated names need explicit `id` values.
-
-Unknown dependencies, duplicate IDs, self-dependencies, cycles, and conflicting writes to the same explicitly-set artifact are errors. A branch receives a copy of upstream artifacts; downstream steps merge only keys written through `set_artifact`. Declare the output step explicitly in parallel mode and include its dependencies.
-
-## Checkpoints and artifacts
-
-`resolve_checkpoints_step` reuses cached downloads unless `force_download: true`; incomplete downloads are removed. Downstream plugin steps must agree on the checkpoint key in `artifacts["checkpoints"]`. Inference output is owned by explicit output steps, so a successful pipeline without a writer may produce artifacts without a JSON file.
-
-For a custom prediction step, follow the minimal callback-compatible example in [XAI](xai.md) and register it through a plugin entry point.
+Continue with [Run inference](../inference/run.md), [pipeline configuration](../inference/pipeline.md), [built-in steps](../inference/built-in-steps.md), and [XAI](xai.md).
