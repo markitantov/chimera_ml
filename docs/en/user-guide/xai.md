@@ -1,47 +1,43 @@
 # Research-aligned XAI
 
-CHIMERA-ML exposes `explain_batch` and the registered `xai_step` for the
-Stage 2 leave-one-modality-out method. For a selected scalar score `s`,
-`Delta_m(x) = s(f(x)) - s(f(x^(-m)))`. Positive values mean that excluding
-the modality lowered the score; negative values mean that exclusion raised it.
-These are local, model-specific sensitivity measurements, not SHAP values,
-causal effects, calibrated confidence, or reliability scores.
+'xai_step' wraps an inference step that exposes an optional callback:
 
-The default `mask` policy preserves modality keys and disables the effective
-presence/temporal mask. `[B,D]` and `[B,T,D]` inputs are supported, and padded
-timesteps remain invalid. Classification requires an explicit class index (or
-fixed originally predicted class); regression selects `output_dim`. Temporal
-outputs use an explicit `mean`, `sum`, or `first` reduction.
+    on_prediction: Callable[[nn.Module, Batch, ModelOutput], None] | None
 
-Models return diagnostics independently of deltas: TFS exposes deterministic
-directed `pair_*`, `pair_weights`, and `group_weights`; TFS-DCMMOE exposes its
-adaptive pair weights; RAAV exposes frame/context masks and attention tensors;
-TOMAR exposes `anchor`, `rho_*`, and `delta_*`. TOMAR anchor exclusion is
-unsupported. Any exclusion that leaves a model without valid information is
-reported as unsupported with a reason.
+The wrapped step remains an ordinary prediction step. The wrapper installs the callback for the duration of 'run', invokes 'explain_batch' for every prediction batch, restores the previous callback in 'finally', and publishes the collected result as the 'xai' artifact. The existing 'predictions' artifact is unchanged.
 
-```yaml
-steps:
-  - id: predictions
-    name: my_model_inference_step
-  - id: xai
-    name: xai_step
-    after: predictions
-```
+    steps:
+      - name: xai_step
+        params:
+          step:
+            name: fusion_step
+            params:
+              batch_size: 8
+          ablation_policy: zero
+          modalities: [audio, image]
 
-The model-owning step should call `explain_batch` and store its detached result
-under `explanation`; `xai_step` validates it and publishes `explanations`, without
-overwriting `predictions`. A result contains `schema_version`, score and
-ablation policies, per-sample baseline scores, signed/absolute deltas,
-diagnostics, and unsupported reasons.
+The nested step is built through 'INFERENCE_STEPS'. It must expose 'on_prediction'. Existing steps without XAI configuration continue to work unchanged.
 
-Held-out quality changes are computed separately with
-`evaluate_modality_quality`. They compare actual baseline and ablated
-predictions using a supplied metric and explicit metric direction. Researchers
-should compare internal coefficients, local deltas, and aggregate quality
-changes as complementary measurements; the library does not combine them into an
-arbitrary trust score or call an external language model.
+The generic engine supports three explicit interventions:
 
-Plugin authors must own the model and batch, run the engine while the model is
-available, detach and serialize the explanation, and make `xai_step` depend on
-that producing artifact in sequential or parallel DAG configurations.
+- 'zero': replace one input tensor with zeros;
+- 'mask': disable its canonical presence and temporal masks;
+- 'remove': remove its input key.
+
+The caller chooses the policy compatible with the model. Masks are optional. Unexpected model errors propagate.
+
+By default, predictions are compared directly. No softmax or task semantics are inferred. Pass 'score_fn(preds)' for a task-specific score. The result contains baseline values, ablated values, delta = baseline - ablated, and absolute deltas. 'output_mask_key' can exclude invalid output positions. Diagnostics are copied only for explicitly requested 'diagnostic_keys'.
+
+ORAGEN uses zero intervention because its model requires both input keys and does not consume modality masks:
+
+    - name: xai_step
+      params:
+        step:
+          name: fusion_step
+          params:
+            batch_size: 8
+        ablation_policy: zero
+        modalities: [audio, image]
+    - name: aggregate_windows_step
+
+These deltas measure local prediction sensitivity. They are not causal effects, SHAP values, calibrated confidence, or a composite trust score. Held-out quality comparison remains separate in 'evaluate_modality_quality'.
