@@ -15,33 +15,72 @@ from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference.context import InferenceContext
 
 
+def _batch_size(batch: Batch) -> int:
+    for value in batch.inputs.values():
+        return int(value.shape[0])
+    masks = batch.get_masks() or {}
+    for value in masks.values():
+        value = torch.as_tensor(value)
+        if value.ndim:
+            return int(value.shape[0])
+    raise ValueError("Cannot determine batch size from an empty batch.")
+
+
+def _availability(batch: Batch, modality: str, batch_size: int) -> torch.Tensor:
+    if modality not in batch.inputs:
+        return torch.zeros(batch_size, dtype=torch.bool)
+
+    available = torch.ones(batch_size, dtype=torch.bool)
+    for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
+        value = batch.get_masks(key)
+        if value is None:
+            continue
+        value = torch.as_tensor(value).bool()
+        if value.ndim == 0 or value.shape[0] != batch_size:
+            raise ValueError(f"Mask '{key}' must have batch dimension {batch_size}, got {tuple(value.shape)}.")
+        available &= value if value.ndim == 1 else value.flatten(1).any(dim=1)
+    return available
+
+
 def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
-    inputs = {name: value.clone() for name, value in batch.inputs.items()}
-    masks = deepcopy(batch.get_masks() or {})
-    if modality not in inputs:
+    if modality not in batch.inputs:
         raise ValueError(f"Modality '{modality}' is not present in the batch.")
 
+    inputs = dict(batch.inputs)
+    masks = deepcopy(batch.get_masks() or {})
+    meta = deepcopy(batch.meta)
+    value = batch.inputs[modality]
+
     if policy == "zero":
-        inputs[modality] = torch.zeros_like(inputs[modality])
+        inputs[modality] = torch.zeros_like(value)
     elif policy == "remove":
         del inputs[modality]
+        for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
+            masks.pop(key, None)
     elif policy == "mask":
-        temporal = f"{modality}_temporal_mask"
-        presence = f"{modality}_mask"
-        if temporal in masks:
-            masks[temporal] = torch.zeros_like(torch.as_tensor(masks[temporal]).bool())
-        if presence in masks:
-            masks[presence] = torch.zeros_like(torch.as_tensor(masks[presence]).bool())
-        elif temporal not in masks:
-            masks[presence] = torch.zeros(inputs[modality].shape[0], dtype=torch.bool)
+        changed = False
+        for key in (f"{modality}_mask", f"{modality}_temporal_mask"):
+            if key in masks:
+                masks[key] = torch.zeros_like(torch.as_tensor(masks[key]).bool())
+                changed = True
+        if not changed:
+            masks[f"{modality}_mask"] = torch.zeros(value.shape[0], dtype=torch.bool, device=value.device)
     else:
-        raise ValueError("ablation_policy must be 'zero', 'mask', or 'remove'.")
-    return Batch(inputs, batch.targets, masks, deepcopy(batch.meta))
+        raise ValueError("ablation_policy must be zero, mask, or remove.")
+
+    if policy == "remove" and isinstance(meta, dict) and isinstance(meta.get("masks"), Mapping):
+        legacy = dict(meta["masks"])
+        legacy.pop(modality, None)
+        legacy.pop(f"{modality}_mask", None)
+        legacy.pop(f"{modality}_temporal_mask", None)
+        meta["masks"] = legacy
+
+    return Batch(inputs, batch.targets, masks or None, meta)
 
 
 def _json(value: Any) -> Any:
     if torch.is_tensor(value):
-        return value.detach().cpu().tolist()
+        return _json(value.detach().cpu().tolist())
     if isinstance(value, Mapping):
         return {str(key): _json(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -51,7 +90,9 @@ def _json(value: Any) -> Any:
 
 def _sample(value: Any, index: int) -> Any:
     if torch.is_tensor(value):
-        return value[index] if value.ndim else value
+        if value.ndim == 0:
+            return value
+        return value[index]
     if isinstance(value, Mapping):
         return {key: _sample(item, index) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -59,18 +100,93 @@ def _sample(value: Any, index: int) -> Any:
     return value
 
 
-def _score(
-    output: ModelOutput, batch: Batch, score_fn: Callable[[torch.Tensor], Any] | None, mask_key: str | None
-) -> Any:
-    score = score_fn(output.preds) if score_fn is not None else output.preds
+def _validate_batch_aligned(value: Any, batch_size: int, name: str) -> None:
+    if torch.is_tensor(value):
+        if value.ndim == 0 or value.shape[0] != batch_size:
+            raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _validate_batch_aligned(item, batch_size, f"{name}.{key}")
+        return
+    if isinstance(value, (list, tuple)):
+        if len(value) != batch_size:
+            raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
+        return
+    raise ValueError(f"Diagnostic '{name}' must be a batch-aligned tensor, mapping, or sequence.")
+
+
+def _masked_json(value: Any, valid: Any) -> Any:
+    value = _json(value)
+    valid = _json(valid)
+    if isinstance(valid, list):
+        if not isinstance(value, list) or len(value) != len(valid):
+            raise ValueError("Output validity shape does not match score shape.")
+        return [
+            None if not item_valid else _masked_json(item, item_valid)
+            for item, item_valid in zip(value, valid, strict=True)
+        ]
+    return value if bool(valid) else None
+
+
+def _score(output: ModelOutput, batch_size: int, score_fn: Callable[[ModelOutput], Tensor] | None) -> Tensor:
+    score = output.preds if score_fn is None else score_fn(output)
     if not torch.is_tensor(score):
-        score = torch.as_tensor(score)
-    if mask_key is not None:
-        mask = torch.as_tensor(batch.get_masks(mask_key), device=score.device).bool()
-        while mask.ndim < score.ndim:
-            mask = mask.unsqueeze(-1)
-        score = score.masked_fill(~mask, 0)
+        raise TypeError("score_fn must return a torch.Tensor.")
+    if score.ndim == 0 or score.shape[0] != batch_size:
+        raise ValueError(f"Scores must be batch-aligned with size {batch_size}, got {tuple(score.shape)}.")
     return score
+
+
+def _validity(
+    batch: Batch,
+    output: ModelOutput,
+    score: Tensor,
+    output_mask_key: str | Callable[[Batch, ModelOutput], Tensor] | None,
+) -> Tensor:
+    if output_mask_key is None:
+        return torch.ones_like(score, dtype=torch.bool)
+    value = output_mask_key(batch, output) if callable(output_mask_key) else batch.get_masks(output_mask_key)
+    if value is None:
+        raise ValueError(f"Output validity mask '{output_mask_key}' is missing.")
+    mask = torch.as_tensor(value, device=score.device).bool()
+    if mask.ndim == 0 or mask.shape[0] != score.shape[0]:
+        raise ValueError(f"Output validity mask must have batch dimension {score.shape[0]}, got {tuple(mask.shape)}.")
+    while mask.ndim < score.ndim:
+        mask = mask.unsqueeze(-1)
+    try:
+        return mask.expand_as(score)
+    except RuntimeError as error:
+        raise ValueError(
+            f"Output validity mask shape {tuple(mask.shape)} does not match score {tuple(score.shape)}."
+        ) from error
+
+
+def _sample_ids(batch: Batch, batch_index: int | None) -> list[str]:
+    size = _batch_size(batch)
+    raw = (batch.meta or {}).get("sample_ids")
+    if raw is None:
+        prefix = "sample" if batch_index is None else f"batch-{batch_index}"
+        return [f"{prefix}-{index}" for index in range(size)]
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
+        raise ValueError("batch.meta['sample_ids'] must be an iterable with one value per sample.")
+    values = list(raw)
+    if len(values) != size:
+        raise ValueError(f"batch.meta['sample_ids'] has {len(values)} values, expected {size}.")
+    return [str(value) for value in values]
+
+
+def _missing(reason: str) -> dict[str, Any]:
+    return {"status": "already_missing", "reason": reason, "ablated": None, "delta": None, "absolute_delta": None}
+
+
+def _unsupported(reason: str) -> dict[str, Any]:
+    return {"status": "unsupported", "reason": reason, "ablated": None, "delta": None, "absolute_delta": None}
+
+
+def _require_eval(model: nn.Module) -> None:
+    if any(module.training for module in model.modules()):
+        raise ValueError("model and all nested modules must already be in evaluation mode.")
 
 
 def explain_batch(
@@ -78,76 +194,97 @@ def explain_batch(
     batch: Batch,
     *,
     baseline_output: ModelOutput | None = None,
-    score_fn: Callable[[torch.Tensor], Any] | None = None,
+    score_fn: Callable[[ModelOutput], Tensor] | None = None,
     modalities: Iterable[str] | None = None,
     ablation_policy: str = "zero",
     diagnostic_keys: Iterable[str] | None = None,
-    output_mask_key: str | None = None,
+    output_mask_key: str | Callable[[Batch, ModelOutput], Tensor] | None = None,
     validity_fn: Callable[[str, Batch, ModelOutput], bool] | None = None,
+    batch_index: int | None = None,
 ) -> dict[str, Any]:
     """Compare a baseline ModelOutput with one intervention per modality."""
     if ablation_policy not in {"zero", "mask", "remove"}:
         raise ValueError("ablation_policy must be zero, mask, or remove.")
-    names = tuple(modalities or batch.inputs)
-    training = model.training
-    model.eval()
-    try:
-        with torch.inference_mode():
-            baseline = baseline_output if baseline_output is not None else model(batch)
-            original = _score(baseline, batch, score_fn, output_mask_key)
-            diagnostics = {
-                key: baseline.aux[key] for key in sorted(diagnostic_keys or ()) if baseline.aux and key in baseline.aux
-            }
-            results = {}
-            for name in names:
-                try:
-                    intervened = _intervene(batch, name, ablation_policy)
-                except ValueError as error:
-                    results[name] = [{"status": "unsupported", "reason": str(error)} for _ in original]
+    _require_eval(model)
+    size = _batch_size(batch)
+    names = tuple(modalities if modalities is not None else batch.inputs)
+    with torch.inference_mode():
+        baseline = baseline_output if baseline_output is not None else model(batch)
+        original = _score(baseline, size, score_fn)
+        baseline_valid = _validity(batch, baseline, original, output_mask_key)
+        diagnostics: dict[str, Any] = {}
+        for key in sorted(diagnostic_keys or ()):
+            if not baseline.aux or key not in baseline.aux:
+                continue
+            _validate_batch_aligned(baseline.aux[key], size, key)
+            diagnostics[key] = baseline.aux[key]
+
+        availability = {name: _availability(batch, name, size) for name in names}
+        results: dict[str, list[dict[str, Any]]] = {}
+        for name in names:
+            present = availability[name]
+            if not bool(present.any()):
+                results[name] = [_missing("modality is unavailable for this sample") for _ in range(size)]
+                continue
+            try:
+                intervened = _intervene(batch, name, ablation_policy)
+            except ValueError as error:
+                results[name] = [_unsupported(str(error)) for _ in range(size)]
+                continue
+
+            output = model(intervened)
+            changed = _score(output, size, score_fn)
+            if changed.shape != original.shape:
+                raise ValueError(
+                    f"Baseline and ablated scores differ: {tuple(original.shape)} vs {tuple(changed.shape)}."
+                )
+            changed_valid = _validity(intervened, output, changed, output_mask_key)
+            common_valid = baseline_valid & changed_valid
+            if validity_fn is not None:
+                valid = validity_fn(name, intervened, output)
+                if torch.is_tensor(valid):
+                    if valid.ndim == 0 or valid.shape[0] != size:
+                        raise ValueError("validity_fn result must be batch-aligned.")
+                    while valid.ndim < common_valid.ndim:
+                        valid = valid.unsqueeze(-1)
+                    common_valid &= valid.to(common_valid.device).bool().expand_as(common_valid)
+                elif not valid:
+                    common_valid.zero_()
+            delta = original - changed
+            results[name] = []
+            for index in range(size):
+                if not bool(present[index]):
+                    results[name].append(_missing("modality is unavailable for this sample"))
                     continue
-                output = model(intervened)
-                if validity_fn is not None and not validity_fn(name, intervened, output):
-                    results[name] = [
-                        {"status": "unsupported", "reason": "validity_fn returned false"} for _ in original
-                    ]
-                    continue
-                changed = _score(output, intervened, score_fn, output_mask_key)
-                if changed.shape != original.shape:
-                    raise ValueError(
-                        f"Baseline and ablated scores differ: {tuple(original.shape)} vs {tuple(changed.shape)}."
-                    )
-                delta = original - changed
-                results[name] = [
+                valid = common_valid[index]
+                results[name].append(
                     {
                         "status": "evaluated",
-                        "ablated": _json(_sample(changed, index)),
-                        "delta": _json(_sample(delta, index)),
-                        "absolute_delta": _json(_sample(delta.abs(), index)),
+                        "ablated": _masked_json(_sample(changed, index), valid),
+                        "delta": _masked_json(_sample(delta, index), valid),
+                        "absolute_delta": _masked_json(_sample(delta.abs(), index), valid),
                     }
-                    for index in range(original.shape[0])
-                ]
+                )
 
-            sample_ids = (batch.meta or {}).get("sample_ids", range(original.shape[0]))
-            samples = [
-                {
-                    "sample_id": str(sample_id),
-                    "baseline": _json(_sample(original, index)),
-                    "modalities": {name: results[name][index] for name in names},
-                    "diagnostics": {key: _sample(value, index) for key, value in diagnostics.items()},
-                }
-                for index, sample_id in enumerate(sample_ids)
-            ]
-            result = {
-                "schema_version": 1,
-                "method": "leave_one_modality_out",
-                "ablation_policy": ablation_policy,
-                "modalities": list(names),
-                "samples": samples,
+        sample_ids = _sample_ids(batch, batch_index)
+        samples = [
+            {
+                "sample_id": sample_ids[index],
+                "baseline": _masked_json(_sample(original, index), _sample(baseline_valid, index)),
+                "modalities": {name: results[name][index] for name in names},
+                "diagnostics": {key: _json(_sample(value, index)) for key, value in diagnostics.items()},
             }
-            json.dumps(result, allow_nan=False)
-            return result
-    finally:
-        model.train(training)
+            for index in range(size)
+        ]
+        result = {
+            "schema_version": 1,
+            "method": "leave_one_modality_out",
+            "ablation_policy": ablation_policy,
+            "modalities": list(names),
+            "samples": samples,
+        }
+        json.dumps(result, allow_nan=False)
+        return result
 
 
 def evaluate_modality_quality(
@@ -155,41 +292,38 @@ def evaluate_modality_quality(
     batches: Iterable[Batch],
     *,
     metric: Callable[[Any, Any], float],
-    score_fn: Callable[[torch.Tensor], Any] | None = None,
+    score_fn: Callable[[ModelOutput], Tensor] | None = None,
     modalities: Iterable[str] | None = None,
     ablation_policy: str = "zero",
     higher_is_better: bool = True,
 ) -> dict[str, Any]:
     """Compare a held-out metric for baseline and modality interventions."""
+    _require_eval(model)
     batches = list(batches)
     names = tuple(modalities or {name for batch in batches for name in batch.inputs})
 
-    def collect(name: str | None) -> tuple[torch.Tensor, torch.Tensor]:
+    def collect(name: str | None) -> tuple[Tensor, Tensor]:
         predictions, targets = [], []
         for batch in batches:
+            size = _batch_size(batch)
             output = model(batch if name is None else _intervene(batch, name, ablation_policy))
-            predictions.append(_score(output, batch, score_fn, None).cpu())
+            predictions.append(_score(output, size, score_fn).cpu())
             targets.append(batch.targets.cpu())
         return torch.cat(predictions), torch.cat(targets)
 
-    training = model.training
-    model.eval()
-    try:
-        with torch.inference_mode():
-            baseline_preds, targets = collect(None)
-            baseline = float(metric(baseline_preds, targets))
-            result = {"baseline": baseline, "higher_is_better": higher_is_better, "modalities": {}}
-            for name in names:
-                predictions, _ = collect(name)
-                quality = float(metric(predictions, targets))
-                result["modalities"][name] = {
-                    "status": "evaluated",
-                    "quality": quality,
-                    "signed_quality_change": quality - baseline if higher_is_better else baseline - quality,
-                }
-            return result
-    finally:
-        model.train(training)
+    with torch.inference_mode():
+        baseline_preds, targets = collect(None)
+        baseline = float(metric(baseline_preds, targets))
+        result = {"baseline": baseline, "higher_is_better": higher_is_better, "modalities": {}}
+        for name in names:
+            predictions, _ = collect(name)
+            quality = float(metric(predictions, targets))
+            result["modalities"][name] = {
+                "status": "evaluated",
+                "quality": quality,
+                "signed_quality_change": quality - baseline if higher_is_better else baseline - quality,
+            }
+        return result
 
 
 @dataclass
@@ -199,9 +333,9 @@ class XAIStep:
     step: Any
     ablation_policy: str = "zero"
     modalities: Iterable[str] | None = None
-    score_fn: Callable[[Tensor], Any] | None = None
+    score_fn: Callable[[ModelOutput], Tensor] | None = None
     diagnostic_keys: Iterable[str] | None = None
-    output_mask_key: str | None = None
+    output_mask_key: str | Callable[[Batch, ModelOutput], Tensor] | None = None
     validity_fn: Callable[[str, Batch, ModelOutput], bool] | None = None
     _results: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
 
@@ -210,9 +344,11 @@ class XAIStep:
             raise TypeError(
                 f"Wrapped step '{type(self.step).__name__}' must expose an 'on_prediction' callback attribute."
             )
+        previous = self.step.on_prediction
+        if previous is not None and not callable(previous):
+            raise TypeError("Wrapped step 'on_prediction' must be callable or None.")
 
         self._results = []
-        previous = self.step.on_prediction
 
         def collect(model: nn.Module, batch: Batch, output: ModelOutput) -> None:
             if previous is not None:
@@ -228,31 +364,39 @@ class XAIStep:
                     diagnostic_keys=self.diagnostic_keys,
                     output_mask_key=self.output_mask_key,
                     validity_fn=self.validity_fn,
+                    batch_index=len(self._results),
                 )
             )
 
         self.step.on_prediction = collect
         try:
             result = self.step.run(ctx)
+            result.set_artifact("xai", self._combine())
+            return result
         finally:
             self.step.on_prediction = previous
 
-        ctx.set_artifact("xai", self._combine())
-        return result
-
     def _combine(self) -> dict[str, Any]:
-        if not self._results:
-            return {
-                "schema_version": 1,
-                "method": "leave_one_modality_out",
-                "ablation_policy": self.ablation_policy,
-                "modalities": list(self.modalities or ()),
-                "samples": [],
+        modalities: list[str] = []
+        samples: list[dict[str, Any]] = []
+        for item in self._results:
+            for name in item["modalities"]:
+                if name not in modalities:
+                    modalities.append(name)
+            samples.extend(item["samples"])
+        for sample in samples:
+            sample["modalities"] = {
+                name: sample["modalities"].get(name, _missing("modality was not present in this batch"))
+                for name in modalities
             }
-        result = dict(self._results[0])
-        result["samples"] = [sample for item in self._results for sample in item["samples"]]
-        result["batches"] = len(self._results)
-        return result
+        return {
+            "schema_version": 1,
+            "method": "leave_one_modality_out",
+            "ablation_policy": self.ablation_policy,
+            "modalities": modalities,
+            "samples": samples,
+            "batches": len(self._results),
+        }
 
 
 @INFERENCE_STEPS.register("xai_step")
