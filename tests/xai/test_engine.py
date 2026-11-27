@@ -10,7 +10,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, build_inference_step
-from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch
+from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch, modality_available
 
 
 class MaskedSumModel(nn.Module):
@@ -80,6 +80,33 @@ def test_mask_intervention_creates_availability_mask_and_excludes_values() -> No
     assert artifact["samples"][0]["modalities"]["audio"]["delta"] == [2.0]
 
 
+def test_mask_intervention_uses_effective_canonical_masks_over_legacy_masks() -> None:
+    model = MaskedSumModel().eval()
+    batch = make_batch()
+    batch.masks = {
+        "audio_mask": torch.tensor([True, True]),
+        "video_mask": torch.tensor([True, True]),
+    }
+    batch.meta = {
+        "masks": {
+            "audio_mask": torch.tensor([False, False]),
+            "video_mask": torch.tensor([False, True]),
+        },
+        "sample_ids": ["first", "second"],
+    }
+
+    changed = intervene_batch(batch, "audio", "mask")
+    artifact = explain_batch(model, batch, modalities=("audio",), ablation_policy="mask")
+
+    assert changed.get_masks("audio_mask").tolist() == [False, False]
+    assert changed.meta["masks"]["audio_mask"].tolist() == [False, False]
+    assert changed.get_masks("video_mask").tolist() == [True, True]
+    assert changed.meta["masks"]["video_mask"].tolist() == [False, True]
+    assert batch.get_masks("audio_mask").tolist() == [True, True]
+    assert batch.meta["masks"]["audio_mask"].tolist() == [False, False]
+    assert artifact["samples"][0]["modalities"]["audio"]["delta"] == [2.0]
+
+
 def test_mask_intervention_preserves_existing_unrelated_masks() -> None:
     batch = make_batch()
     batch.masks = {
@@ -92,6 +119,19 @@ def test_mask_intervention_preserves_existing_unrelated_masks() -> None:
     assert changed.get_masks("audio_mask").tolist() == [False, False]
     assert changed.get_masks("video_mask").tolist() == [True, False]
     assert batch.get_masks("audio_mask").tolist() == [True, True]
+
+
+def test_modality_availability_uses_temporal_and_sequence_masks() -> None:
+    batch = Batch(
+        inputs={"audio": torch.ones(2, 2, 1)},
+        targets=None,
+        masks={
+            "audio_temporal_mask": torch.tensor([[True, False], [False, False]]),
+            "sequence_mask": torch.tensor([[True, True], [True, True]]),
+        },
+    )
+
+    assert modality_available(batch, "audio").tolist() == [True, False]
 
 
 def test_zero_intervention_is_rejected() -> None:

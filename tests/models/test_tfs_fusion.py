@@ -1,5 +1,6 @@
 import pytest
 import torch
+import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
@@ -66,6 +67,51 @@ def test_tfs_factory_is_registered():
         tfs_fusion_model(input_dims={"text": 3, "audio": 3}, shared_dim=4, output_dim=2),
         TFSFusionModel,
     )
+
+
+def test_tfs_preserves_direction_and_supports_different_sequence_lengths():
+    model = TFSFusionModel({"left": 2, "right": 2}, shared_dim=2, output_dim=1).eval()
+    output = model(
+        Batch(
+            inputs={"left": torch.ones(1, 2, 2), "right": torch.ones(1, 3, 2)},
+            targets=None,
+        )
+    )
+
+    assert output.aux["pair_left->right"].shape == (1, 2, 2)
+    assert output.aux["pair_right->left"].shape == (1, 3, 2)
+
+
+class IdentityAttention(nn.Module):
+    def forward(self, query, context, query_valid, context_valid):
+        return query, query.new_zeros(query.shape[0], query.shape[1], context.shape[1])
+
+
+def test_tfs_statistical_pooling_is_averaged_and_unavailable_groups_are_excluded():
+    model = TFSFusionModel(
+        {"a": 1, "b": 1, "c": 1},
+        shared_dim=1,
+        output_dim=1,
+        groups=((("a", "b"),), (("b", "a"),), (("a", "c"),)),
+        dropout=0.0,
+    ).eval()
+    model.group_blocks = nn.ModuleList(IdentityAttention() for _ in model.groups)
+
+    fused, weights, _ = model._fuse_groups(
+        {
+            "a->b": torch.tensor([[[1.0], [3.0]]]),
+            "b->a": torch.tensor([[[5.0], [7.0]]]),
+            "a->c": torch.zeros(1, 2, 1),
+        },
+        {
+            "a->b": torch.tensor([[True, True]]),
+            "b->a": torch.tensor([[True, True]]),
+            "a->c": torch.tensor([[False, False]]),
+        },
+    )
+
+    assert torch.allclose(fused, torch.tensor([[4.0, 1.0]]))
+    assert torch.equal(weights, torch.tensor([[0.5, 0.5, 0.0]]))
 
 
 def test_stat_pool_returns_mean_and_population_std():

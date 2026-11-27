@@ -73,7 +73,6 @@ The context receives artifacts["xai"]:
                     "status": "evaluated",
                     "reason": None,
                     "delta": 0.08,
-                    "prediction": 0.34,
                 }
             },
             "aux": {"frame_weights": [[0.6, 0.4]]},
@@ -82,8 +81,7 @@ The context receives artifacts["xai"]:
 }
 ~~~
 
-Statuses are evaluated, already_missing, or unsupported. Invalid output
-positions are serialized as null. For several processed batches, the modality
+Statuses are evaluated, already_missing, or unsupported. Invalid output positions are represented by null values; output masks are not serialized. For several processed batches, the modality
 list is the deterministic union of the configured names and names observed in
 the callback results.
 

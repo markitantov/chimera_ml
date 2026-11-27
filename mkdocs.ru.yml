@@ -47,7 +47,6 @@ nav:
           - Интерфейс моделей и встроенные реализации: components/models.md
           - Обзор архитектур слияния: components/fusion.md
           - TFS: user-guide/tfs-fusion.md
-          - TFS-DCMMOE: user-guide/tfs-dcmmmoe-fusion.md
           - RAAV: user-guide/raav-fusion.md
           - TOMAR: user-guide/tomar-fusion.md
       - Компоненты обучения:

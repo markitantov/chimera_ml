@@ -91,3 +91,25 @@ def test_tomar_allows_additional_modality_intervention() -> None:
     result = explain_batch(model, batch, modalities=("extra",), ablation_policy="mask")
 
     assert result["samples"][0]["modalities"]["extra"]["status"] == "evaluated"
+
+
+def test_tfs_evaluates_supported_observations_in_a_mixed_batch() -> None:
+    batch = Batch(
+        {
+            "a": torch.ones(2, 1, 2),
+            "b": torch.ones(2, 1, 2),
+            "c": torch.ones(2, 1, 2),
+        },
+        None,
+        masks={
+            "a_mask": torch.tensor([True, True]),
+            "b_mask": torch.tensor([False, True]),
+            "c_mask": torch.tensor([True, True]),
+        },
+    )
+    model = TFSFusionModel({"a": 2, "b": 2, "c": 2}, 2, 1).eval()
+
+    result = explain_batch(model, batch, modalities=("a",), ablation_policy="remove")
+
+    assert result["samples"][0]["modalities"]["a"]["status"] == "unsupported"
+    assert result["samples"][1]["modalities"]["a"]["status"] == "evaluated"

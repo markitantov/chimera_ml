@@ -151,3 +151,69 @@ def test_raav_factory_is_registered():
         ),
         RAAVFusionModel,
     )
+
+
+def configure_identity_attention(block: nn.MultiheadAttention):
+    with torch.no_grad():
+        identity = torch.eye(block.embed_dim)
+        block.in_proj_weight.copy_(torch.cat((identity, identity, identity)))
+        block.in_proj_bias.zero_()
+        block.out_proj.weight.copy_(identity)
+        block.out_proj.bias.zero_()
+
+
+def test_raav_frame_attention_depends_on_the_frame_query():
+    model = RAAVFusionModel(
+        {"frame": 2, "context": 2},
+        2,
+        1,
+        ("frame",),
+        ("context",),
+        num_context_latents=2,
+        dropout=0.0,
+        num_heads=1,
+    ).eval()
+    configure_identity_attention(model.context_compression["context"])
+    configure_identity_attention(model.context_attention["context"])
+    with torch.no_grad():
+        model.proj["frame"].weight.copy_(torch.eye(2))
+        model.proj["frame"].bias.zero_()
+        model.proj["context"].weight.copy_(torch.eye(2))
+        model.proj["context"].bias.zero_()
+        model.context_latents["context"].copy_(torch.tensor([[[1.0, 0.0], [0.0, 1.0]]]))
+
+    output = model(
+        Batch(
+            inputs={
+                "frame": torch.tensor([[[1.0, 0.0], [0.0, 1.0]]]),
+                "context": torch.tensor([[[1.0, 0.0], [0.0, 1.0]]]),
+            },
+            targets=None,
+        )
+    )
+
+    attention = output.aux["context_attention_context"]
+    assert not torch.allclose(attention[:, 0], attention[:, 1])
+
+
+def test_raav_sums_independent_context_corrections_before_normalization():
+    model = make_model()
+    inputs = {
+        "face": torch.ones(1, 3, 4),
+        "behavior": torch.ones(1, 3, 5),
+        "audio": torch.ones(1, 2, 6),
+        "text": torch.ones(1, 2, 7),
+    }
+    both = model(Batch(inputs=inputs, targets=None)).aux["context_delta"]
+    audio_batch = Batch(
+        inputs={key: value for key, value in inputs.items() if key != "text"},
+        targets=None,
+    )
+    text_batch = Batch(
+        inputs={key: value for key, value in inputs.items() if key != "audio"},
+        targets=None,
+    )
+    audio = model(audio_batch).aux["context_delta"]
+    text = model(text_batch).aux["context_delta"]
+
+    assert torch.allclose(both, audio + text)

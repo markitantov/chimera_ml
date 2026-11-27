@@ -64,15 +64,13 @@ def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
         nested_masks = changed.masks.get("mask")
         if isinstance(nested_masks, dict):
             mask_maps.append(nested_masks)
-
-    legacy_masks = (changed.meta or {}).get("masks")
-    if isinstance(legacy_masks, dict):
-        if legacy_masks is not changed.masks:
+    else:
+        legacy_masks = (changed.meta or {}).get("masks")
+        if isinstance(legacy_masks, dict):
             mask_maps.append(legacy_masks)
-
-        nested_masks = legacy_masks.get("mask")
-        if isinstance(nested_masks, dict):
-            mask_maps.append(nested_masks)
+            nested_masks = legacy_masks.get("mask")
+            if isinstance(nested_masks, dict):
+                mask_maps.append(nested_masks)
 
     if policy == "remove":
         changed.inputs.pop(modality)
@@ -222,17 +220,45 @@ def explain_batch(
         available = modality_available(batch, name)
         intervention = intervene_batch(batch, name, ablation_policy)
         validator = getattr(model, "validate_intervention", None)
-        reason = validator(batch, intervention, name, ablation_policy) if callable(validator) else None
 
-        if reason is not None:
-            for explanation in explanations:
-                explanation["modalities"][name] = {
-                    "status": "unsupported",
-                    "reason": reason,
-                    "delta": None,
-                }
+        def select_batch(index: int, source: Batch) -> Batch:
+            def select_value(value: Any) -> Any:
+                if torch.is_tensor(value) and value.ndim and value.shape[0] == batch_size:
+                    return value[index : index + 1]
 
-            continue
+                if isinstance(value, dict):
+                    return {key: select_value(item) for key, item in value.items()}
+
+                if isinstance(value, list) and len(value) == batch_size:
+                    return [value[index]]
+
+                if isinstance(value, tuple) and len(value) == batch_size:
+                    return (value[index],)
+
+                return value
+
+            return Batch(
+                inputs={key: select_value(value) for key, value in source.inputs.items()},
+                targets=select_value(source.targets),
+                masks=select_value(source.masks),
+                meta=select_value(source.meta),
+            )
+
+        supported = available.clone()
+        reasons: list[str | None] = [None] * batch_size
+        if bool(available.any()) and callable(validator):
+            batch_reason = validator(batch, intervention, name, ablation_policy)
+            if batch_reason is not None:
+                supported.zero_()
+                for index in available.nonzero(as_tuple=False).flatten().tolist():
+                    reason = validator(
+                        select_batch(index, batch),
+                        select_batch(index, intervention),
+                        name,
+                        ablation_policy,
+                    )
+                    reasons[index] = reason
+                    supported[index] = reason is None
 
         if not bool(available.any()):
             for explanation in explanations:
@@ -244,29 +270,68 @@ def explain_batch(
 
             continue
 
-        ablated = model(intervention)
-        ablated_score = select_score(ablated, score_fn)
+        if not bool(supported.any()):
+            for index, explanation in enumerate(explanations):
+                if not bool(available[index]):
+                    status = "already_missing"
+                    reason = None
+                else:
+                    status = "unsupported"
+                    reason = reasons[index] or "intervention is unsupported"
+
+                explanation["modalities"][name] = {
+                    "status": status,
+                    "reason": reason,
+                    "delta": None,
+                }
+
+            continue
+
+        if bool(supported.all()):
+            ablated = model(intervention)
+            ablated_score = select_score(ablated, score_fn)
+            ablated_valid = score_mask(intervention, model, ablated, ablated_score, output_mask)
+        else:
+            ablated_score = baseline_score.clone()
+            ablated_valid = torch.zeros_like(baseline_valid)
+            for index in supported.nonzero(as_tuple=False).flatten().tolist():
+                sample_intervention = select_batch(index, intervention)
+                ablated = model(sample_intervention)
+                sample_score = select_score(ablated, score_fn)
+                if sample_score.shape != baseline_score[index : index + 1].shape:
+                    raise ValueError("Ablated score must have the same shape as the baseline score.")
+
+                sample_valid = score_mask(sample_intervention, model, ablated, sample_score, output_mask)
+                ablated_score[index : index + 1] = sample_score
+                ablated_valid[index : index + 1] = sample_valid
+
         if ablated_score.shape != baseline_score.shape:
             raise ValueError("Ablated score must have the same shape as the baseline score.")
 
-        ablated_valid = score_mask(intervention, model, ablated, ablated_score, output_mask)
         valid = baseline_valid & ablated_valid
         delta = baseline_score - ablated_score
 
         for index in range(batch_size):
             if not bool(available[index]):
                 status = "already_missing"
+                reason = None
+                value = None
+            elif not bool(supported[index]):
+                status = "unsupported"
+                reason = reasons[index] or "intervention is unsupported"
                 value = None
             elif not bool(valid[index].any()):
                 status = "unsupported"
+                reason = "no common valid output positions"
                 value = None
             else:
                 status = "evaluated"
+                reason = None
                 value = masked_value(delta[index], valid[index])
 
             explanations[index]["modalities"][name] = {
                 "status": status,
-                "reason": None if status != "unsupported" else "no common valid output positions",
+                "reason": reason,
                 "delta": value,
             }
 
