@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- Simplified XAI aggregation and corrected multidimensional output-mask intersection, global temporal sensitivity aggregation, and signed/absolute modality ranking.
+
 ## [0.3.1] - 2026-11-24
 
 ### Added

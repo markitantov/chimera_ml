@@ -136,7 +136,7 @@ Thus a positive delta means that the selected score decreased after ablation; a 
 
 ## Correct score-shape examples
 
-Temporal meaning is never inferred automatically. The batch dimension is always first; choose `temporal_axis` only when the selected score has a time dimension.
+Temporal meaning is never inferred automatically. The batch dimension is always first; choose `temporal_axis` only when the selected score has a time dimension. Scores may be `[B]`, `[B, C]`, `[B, T]`, or `[B, T, C]`; validity masks are intersected elementwise and invalid serialized positions are `null`. Global temporal summaries aggregate comparable observations at each output position.
 
 ### Scalar score per sample: `[B]`
 

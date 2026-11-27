@@ -652,3 +652,53 @@ def test_output_mask_callable_reads_model_output_aux_and_intersects_masks():
     )
     assert result["samples"][0]["modalities"]["audio"]["delta"] == [None, 1.0]
     assert result["samples"][1]["modalities"]["audio"]["delta"] is None
+
+
+def test_multidimensional_masking_intersects_baseline_and_intervened_positions():
+    class TemporalVectorModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def forward(self, batch):
+            self.calls += 1
+            if self.calls == 1:
+                values = torch.tensor([[[1.0, 999.0], [1000.0, 1001.0]], [[2.0, 3.0], [4.0, 5.0]]])
+                valid = torch.tensor([[[True, False], [True, True]], [[True, True], [True, True]]])
+            else:
+                values = torch.tensor([[[0.0, 9999.0], [8888.0, 7.0]], [[1.0, 2.0], [3.0, 4.0]]])
+                valid = torch.tensor([[[True, False], [False, True]], [[True, True], [True, True]]])
+            return ModelOutput(values, {"frame_mask": valid})
+
+    model = TemporalVectorModel().eval()
+    result = explain_batch(
+        model,
+        Batch({"audio": torch.ones(2, 2, 1)}, None),
+        modalities=("audio",),
+        output_mask_key=lambda _, output: output.aux["frame_mask"],
+    )
+    assert result["samples"][0]["modalities"]["audio"]["delta"] == [[1.0, None], [None, 994.0]]
+    assert result["samples"][1]["modalities"]["audio"]["delta"] == [[1.0, 1.0], [1.0, 1.0]]
+
+
+def test_global_temporal_summary_aggregates_all_observations_and_uses_absolute_ranking():
+    artifact = make_explanation(
+        [
+            explanation_sample("one", audio=evaluated([1.0, -1.0]), video=evaluated([0.5, 0.5])),
+            explanation_sample("two", audio=evaluated([3.0, 3.0]), video=evaluated([0.5, 0.5])),
+        ]
+    )
+    summary = summarize_explanations(artifact, temporal_axis=1)
+    assert summary["ranking"] == ["audio", "video"]
+    assert summary["modalities"]["audio"]["mean_signed_delta"] == pytest.approx(1.5)
+    assert summary["modalities"]["audio"]["mean_absolute_delta"] == pytest.approx(2.0)
+    assert [item["position"] for item in summary["temporal"]] == [0, 1]
+    assert summary["temporal"][0]["modalities"]["audio"]["mean_absolute_delta"] == pytest.approx(2.0)
+
+
+def test_zero_total_sensitivity_has_no_dominant_modality():
+    artifact = make_explanation([explanation_sample("one", audio=evaluated([0.0, 0.0]), video=evaluated([0.0, 0.0]))])
+    summary = summarize_explanations(artifact)
+    assert summary["status"] == "no_measurable_influence"
+    assert summary["dominant_modality"] is None
+    assert summary["modalities"]["audio"]["relative_influence"] is None
