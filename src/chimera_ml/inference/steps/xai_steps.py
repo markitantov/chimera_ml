@@ -13,7 +13,7 @@ from torch import Tensor, nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
-from chimera_ml.core.types import ModelOutput
+from chimera_ml.core.types import InterventionValidation, ModelOutput
 from chimera_ml.inference.context import InferenceContext
 
 
@@ -145,6 +145,63 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
         meta["masks"] = legacy
 
     return Batch(inputs, batch.targets, masks if has_canonical_masks or masks else None, meta)
+
+
+def _select_value(value: Any, indices: Tensor, batch_size: int) -> Any:
+    if torch.is_tensor(value):
+        return value.index_select(0, indices) if value.ndim and value.shape[0] == batch_size else value
+    if isinstance(value, Mapping):
+        return {key: _select_value(item, indices, batch_size) for key, item in value.items()}
+    if isinstance(value, list) and len(value) == batch_size:
+        return [value[int(index)] for index in indices.detach().cpu().tolist()]
+    if isinstance(value, tuple) and len(value) == batch_size:
+        return tuple(value[int(index)] for index in indices.detach().cpu().tolist())
+    return value
+
+
+def _select_batch(batch: Batch, indices: Tensor, batch_size: int) -> Batch:
+    return Batch(
+        _select_value(batch.inputs, indices, batch_size),
+        _select_value(batch.targets, indices, batch_size),
+        _select_value(batch.masks, indices, batch_size),
+        _select_value(batch.meta, indices, batch_size),
+    )
+
+
+def _expand_value(value: Any, indices: Tensor, batch_size: int) -> Any:
+    if torch.is_tensor(value):
+        if not value.ndim or value.shape[0] != indices.numel():
+            return value
+        shape = (batch_size, *value.shape[1:])
+        expanded = value.new_zeros(shape)
+        return expanded.index_copy(0, indices, value)
+    if isinstance(value, Mapping):
+        return {key: _expand_value(item, indices, batch_size) for key, item in value.items()}
+    return value
+
+
+def _expand_output(output: ModelOutput, indices: Tensor, batch_size: int) -> ModelOutput:
+    return ModelOutput(
+        preds=_expand_value(output.preds, indices, batch_size),
+        aux=_expand_value(output.aux, indices, batch_size) if output.aux is not None else None,
+    )
+
+
+def _prevalidate_intervention(
+    model: nn.Module, original: Batch, intervened: Batch, modality: str, policy: str, present: Tensor
+) -> tuple[Tensor, str | None]:
+    validator = getattr(model, "validate_intervention", None)
+    if not callable(validator):
+        return present, None
+    result = validator(original, intervened, modality, policy)
+    if not isinstance(result, InterventionValidation):
+        raise TypeError("validate_intervention must return InterventionValidation.")
+    supported = torch.as_tensor(result.supported, device=present.device).bool()
+    if supported.ndim == 0:
+        supported = supported.expand_as(present)
+    elif supported.shape != present.shape:
+        raise ValueError("validate_intervention supported mask must have shape (batch_size,).")
+    return present & supported, result.reason
 
 
 def _json(value: Any) -> Any:
@@ -349,7 +406,23 @@ def explain_batch(
                 results[name] = [_unsupported(str(error)) for _ in range(size)]
                 continue
 
-            output = model(intervened)
+            supported, validation_reason = _prevalidate_intervention(
+                model, batch, intervened, name, ablation_policy, present
+            )
+            if not bool(supported.any()):
+                reason = validation_reason or "intervention is unsupported"
+                results[name] = [
+                    _missing("modality is unavailable for this sample")
+                    if not bool(present[index])
+                    else _unsupported(reason)
+                    for index in range(size)
+                ]
+                continue
+
+            supported_indices = supported.nonzero(as_tuple=False).flatten()
+            forward_batch = _select_batch(intervened, supported_indices, size)
+            output = model(forward_batch)
+            output = _expand_output(output, supported_indices, size)
             changed = _score(output, size, score_fn)
             if changed.shape != original.shape:
                 raise ValueError(
@@ -358,7 +431,8 @@ def explain_batch(
 
             changed_valid = _validity(intervened, output, changed, output_mask_key)
             common_valid = baseline_valid & changed_valid
-            rejected = torch.zeros(size, dtype=torch.bool, device=common_valid.device)
+            common_valid &= supported.view((size,) + (1,) * (common_valid.ndim - 1))
+            rejected = ~supported.clone().to(device=common_valid.device)
             if validity_fn is not None:
                 valid = validity_fn(name, intervened, output)
                 if torch.is_tensor(valid):

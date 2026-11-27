@@ -132,7 +132,7 @@ delta          = baseline_score - ablated_score
 absolute_delta = abs(delta)
 ```
 
-Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample, but cannot prevent that forward. `diagnostic_keys` copies selected batch-aligned values from `ModelOutput.aux` into each raw sample.
+Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample. Models may additionally implement the optional pre-forward `validate_intervention(original, intervened, modality, policy)` method, returning `InterventionValidation(supported, reason)`. `supported` may be a per-sample boolean tensor; unsupported rows are excluded from the intervened forward and remain ordered in the artifact. `diagnostic_keys` copies selected batch-aligned values from `ModelOutput.aux` into each raw sample.
 
 ## Correct score-shape examples
 
@@ -360,3 +360,31 @@ The exporter is documentation-only here: register and install it in the applicat
 For each callback batch, the wrapped prediction step performs one original forward and reuses its output as the XAI baseline. XAI performs at most M additional intervention forwards for M selected modalities; missing modalities can reduce that count. Summary generation performs no forwards. A normal callback with M evaluated modalities costs one original forward plus M intervention forwards.
 
 Results depend on the ablation policy, score function, masks, validity checks, model mode, and data distribution. They require no ground truth and measure sensitivity to the chosen intervention, not causal contribution or model quality. Heterogeneous scores with incompatible scales should not be aggregated. Temporal summaries describe output positions, not guaranteed input locations. Missing, unsupported, and invalid comparisons must remain visible when interpreting coverage.
+
+
+## Model compatibility and output masks
+
+Pre-forward validation is optional, so custom models without it continue to work. A custom model that has intervention-specific input requirements can implement:
+
+```python
+from chimera_ml.core.types import InterventionValidation
+
+def validate_intervention(self, original, intervened, modality, policy):
+    supported = ...  # bool or [B] boolean tensor
+    return InterventionValidation(supported, "why unsupported rows cannot be compared")
+```
+
+`unsupported` means the proposed intervention cannot produce a valid comparison; `already_missing` means the modality was unavailable in the original sample. Both have null numerical fields, and unsupported rows are excluded from summaries. Zeroing changes tensor values, masking changes availability masks, and removing deletes the input; these policies are not interchangeable. For TFS and TFS-DCMMOE, a supported intervention must preserve the selected computational branch and leave a configured directed pair for each supported sample. TOMAR requires its anchor modality, so removing or masking the anchor is unsupported; zeroing it follows the model's existing contract. RAAV requires at least one valid frame position.
+
+For temporal RAAV predictions, explicitly select the output mask from `ModelOutput.aux` with a callable. The callable mechanism is backward-compatible with string keys that read batch masks:
+
+```python
+raw = explain_batch(
+    model, batch,
+    score_fn=lambda output: output.preds[..., 0],
+    output_mask_key=lambda batch, output: output.aux["frame_mask"],
+)
+summary = summarize_explanations(raw, temporal_axis=1)
+```
+
+The engine intersects the baseline and intervened `frame_mask`, so invalid frame positions contribute `null` values and do not enter numerical summaries.

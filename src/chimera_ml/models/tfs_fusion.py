@@ -4,12 +4,13 @@ import torch.nn.functional as F
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.core.types import ModelOutput
+from chimera_ml.core.types import InterventionValidation, ModelOutput
 from chimera_ml.models._utils import (
     _attention,
     _features,
     _masked_softmax,
     _mean,
+    _modality_validity,
     _projections,
     _validate_input_dims,
 )
@@ -376,17 +377,33 @@ class TFSFusionModel(BaseModel):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return _directed_pair(left, right)
 
+    def _uses_triple_branch(self, batch: Batch) -> bool:
+        return (
+            self.triple_fusion is not None
+            and all(name in batch.inputs for name in self.names)
+            and self.groups == _normalize_groups(self.names, None)
+        )
+
+    def validate_intervention(
+        self, original: Batch, intervened: Batch, modality: str, policy: str
+    ) -> InterventionValidation:
+        if self._uses_triple_branch(original) != self._uses_triple_branch(intervened):
+            return InterventionValidation(False, "intervention changes the TFS computational branch")
+        size = next(iter(original.inputs.values())).shape[0]
+        supported = torch.zeros(size, dtype=torch.bool, device=next(iter(original.inputs.values())).device)
+        for group in self.groups:
+            for left, right in group:
+                if left in intervened.inputs and right in intervened.inputs:
+                    supported |= _modality_validity(intervened, left) & _modality_validity(intervened, right)
+        return InterventionValidation(supported, "no configured directed pair remains available")
+
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
         values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSFusionModel needs at least two available modalities.")
 
-        if (
-            self.triple_fusion is not None
-            and all(name in feats for name in self.names)
-            and self.groups == _normalize_groups(self.names, None)
-        ):
+        if self._uses_triple_branch(batch):
             fused, values, valid, pair_keys, pair_weights = self.triple_fusion(feats)
             group_weights = torch.stack(
                 [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],
@@ -453,17 +470,33 @@ class TFSDCMMOEFusionModel(BaseModel):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return _directed_pair(left, right)
 
+    def _uses_triple_branch(self, batch: Batch) -> bool:
+        return (
+            self.triple_fusion is not None
+            and all(name in batch.inputs for name in self.names)
+            and self.groups == _normalize_groups(self.names, None)
+        )
+
+    def validate_intervention(
+        self, original: Batch, intervened: Batch, modality: str, policy: str
+    ) -> InterventionValidation:
+        if self._uses_triple_branch(original) != self._uses_triple_branch(intervened):
+            return InterventionValidation(False, "intervention changes the TFS-DCMMOE computational branch")
+        size = next(iter(original.inputs.values())).shape[0]
+        supported = torch.zeros(size, dtype=torch.bool, device=next(iter(original.inputs.values())).device)
+        for group in self.groups:
+            for left, right in group:
+                if left in intervened.inputs and right in intervened.inputs:
+                    supported |= _modality_validity(intervened, left) & _modality_validity(intervened, right)
+        return InterventionValidation(supported, "no configured directed pair remains available")
+
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
         values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSDCMMOEFusionModel needs at least two available modalities.")
 
-        if (
-            self.triple_fusion is not None
-            and all(name in feats for name in self.names)
-            and self.groups == _normalize_groups(self.names, None)
-        ):
+        if self._uses_triple_branch(batch):
             fused, values, valid, pair_keys, pair_weights = self.triple_fusion(feats, gate=self.gates)
             group_weights = torch.stack(
                 [sum(pair_weights[:, pair_keys.index(_pair_name(pair))] for pair in group) for group in self.groups],

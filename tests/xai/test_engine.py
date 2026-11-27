@@ -599,3 +599,56 @@ def test_scalar_score_validity_fn_is_batch_aligned():
         validity_fn=lambda name, batch, output: torch.tensor([True, True]),
     )
     assert result["samples"][0]["modalities"]["audio"]["status"] == "evaluated"
+
+
+class ValidatedCountingModel(CountingModel):
+    def validate_intervention(self, original, intervened, modality, policy):
+        from chimera_ml.core.types import InterventionValidation
+
+        supported = torch.tensor([True, False])
+        return InterventionValidation(supported, "second sample is invalid")
+
+    def forward(self, batch):
+        if self.calls and batch.inputs["video"].shape[0] != 1:
+            raise RuntimeError("invalid rows reached forward")
+        return super().forward(batch)
+
+
+def test_pre_forward_validation_skips_unsupported_rows_and_preserves_order():
+    model = eval_model(ValidatedCountingModel())
+    batch = make_batch(mixed=False)
+    batch.masks["audio_temporal_mask"][:] = True
+    result = explain_batch(model, batch, modalities=("audio",))
+    assert model.calls == 2  # baseline plus the one supported row
+    entries = [sample["modalities"]["audio"] for sample in result["samples"]]
+    assert entries[0]["status"] == "evaluated"
+    assert entries[1]["status"] == "unsupported"
+    assert entries[1]["ablated"] is None
+    assert entries[1]["delta"] is None
+
+
+def test_output_mask_callable_reads_model_output_aux_and_intersects_masks():
+    class TemporalModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def forward(self, batch):
+            self.calls += 1
+            values = batch.inputs["audio"].squeeze(-1)
+            valid = torch.tensor([[True, True], [True, False]])[: values.shape[0]]
+            if self.calls > 1:
+                valid = valid.clone()
+                valid[:, 0] = False
+            return ModelOutput(values, {"frame_mask": valid})
+
+    model = eval_model(TemporalModel())
+    batch = Batch({"audio": torch.ones(2, 2, 1)}, None)
+    result = explain_batch(
+        model,
+        batch,
+        modalities=("audio",),
+        output_mask_key=lambda _, output: output.aux["frame_mask"],
+    )
+    assert result["samples"][0]["modalities"]["audio"]["delta"] == [None, 1.0]
+    assert result["samples"][1]["modalities"]["audio"]["delta"] is None

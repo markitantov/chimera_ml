@@ -81,6 +81,16 @@ def _sequence(x: torch.Tensor) -> torch.Tensor:
     raise ValueError(f"Expected [B, D] or [B, T, D], got {tuple(x.shape)}.")
 
 
+def _modality_validity(batch: Batch, name: str) -> torch.Tensor:
+    """Return sample-level availability using the model's mask semantics."""
+    value = batch.inputs.get(name)
+    if value is None:
+        for candidate in batch.inputs.values():
+            return torch.zeros(candidate.shape[0], dtype=torch.bool, device=candidate.device)
+        return torch.zeros(0, dtype=torch.bool)
+    return _mask(batch, name, _sequence(value)).any(dim=1)
+
+
 def _mean(x: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     """Pool a sequence over valid positions, returning zero for empty rows."""
     if x.ndim != 3:

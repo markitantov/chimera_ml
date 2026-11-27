@@ -3,8 +3,8 @@ import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.core.types import ModelOutput
-from chimera_ml.models._utils import _features, _masked_softmax, _projections, _validate_input_dims
+from chimera_ml.core.types import InterventionValidation, ModelOutput
+from chimera_ml.models._utils import _features, _masked_softmax, _modality_validity, _projections, _validate_input_dims
 from chimera_ml.models.base import BaseModel
 
 
@@ -103,6 +103,15 @@ class RAAVFusionModel(BaseModel):
         frame_valid = valid.any(1)
         fused = fused * frame_valid.to(fused.dtype).unsqueeze(-1)
         return fused, frame_valid, weights
+
+    def validate_intervention(
+        self, original: Batch, intervened: Batch, modality: str, policy: str
+    ) -> InterventionValidation:
+        size = next(iter(original.inputs.values())).shape[0]
+        frame_available = torch.zeros(size, dtype=torch.bool, device=next(iter(original.inputs.values())).device)
+        for name in self.frame_modalities:
+            frame_available |= _modality_validity(intervened, name)
+        return InterventionValidation(frame_available, "no valid frame positions remain")
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, (*self.frame_modalities, self.context_modality))
