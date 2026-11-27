@@ -50,8 +50,8 @@ def modality_available(batch: Batch, name: str) -> torch.Tensor:
 
 
 def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
-    if policy not in {"remove", "mask", "zero"}:
-        raise ValueError("ablation_policy must be one of: remove, mask, zero.")
+    if policy not in {"remove", "mask"}:
+        raise ValueError("ablation_policy must be one of: remove, mask.")
 
     changed = deepcopy(batch)
     if modality not in changed.inputs:
@@ -61,14 +61,18 @@ def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
     mask_maps: list[dict[str, Any]] = []
     if isinstance(changed.masks, dict):
         mask_maps.append(changed.masks)
+        nested_masks = changed.masks.get("mask")
+        if isinstance(nested_masks, dict):
+            mask_maps.append(nested_masks)
 
     legacy_masks = (changed.meta or {}).get("masks")
     if isinstance(legacy_masks, dict):
+        if legacy_masks is not changed.masks:
+            mask_maps.append(legacy_masks)
+
         nested_masks = legacy_masks.get("mask")
         if isinstance(nested_masks, dict):
             mask_maps.append(nested_masks)
-        elif legacy_masks is not changed.masks:
-            mask_maps.append(legacy_masks)
 
     if policy == "remove":
         changed.inputs.pop(modality)
@@ -77,19 +81,29 @@ def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
             for key in mask_keys:
                 masks.pop(key, None)
 
-    elif policy == "zero":
-        changed.inputs[modality] = torch.zeros_like(changed.inputs[modality])
+        return changed
 
-        for masks in mask_maps:
-            for key in mask_keys:
-                if key in masks:
-                    masks[key] = torch.zeros_like(masks[key], dtype=torch.bool)
-
+    values = changed.inputs[modality]
+    if values.ndim == 2:
+        mask_shape = (values.shape[0],)
+    elif values.ndim == 3:
+        mask_shape = (values.shape[0], values.shape[1])
     else:
-        for masks in mask_maps:
-            for key in mask_keys:
-                if key in masks:
-                    masks[key] = torch.zeros_like(masks[key], dtype=torch.bool)
+        raise ValueError(f"Expected [B, D] or [B, T, D], got {tuple(values.shape)}.")
+
+    changed_mask = False
+    for masks in mask_maps:
+        for key in mask_keys:
+            if key in masks:
+                masks[key] = torch.zeros_like(masks[key], dtype=torch.bool)
+                changed_mask = True
+
+    if not changed_mask:
+        if not mask_maps:
+            changed.masks = {}
+            mask_maps.append(changed.masks)
+
+        mask_maps[0][f"{modality}_mask"] = torch.zeros(mask_shape, dtype=torch.bool, device=values.device)
 
     return changed
 
@@ -151,6 +165,7 @@ def masked_value(value: torch.Tensor, valid: torch.Tensor) -> Any:
     return [masked_value(item, item_valid) for item, item_valid in zip(value, valid, strict=True)]
 
 
+@torch.inference_mode()
 def explain_batch(
     model: nn.Module,
     batch: Batch,
@@ -209,9 +224,6 @@ def explain_batch(
         validator = getattr(model, "validate_intervention", None)
         reason = validator(batch, intervention, name, ablation_policy) if callable(validator) else None
 
-        if reason is None and ablation_policy != "zero" and getattr(model, "anchor_modality", None) == name:
-            reason = "anchor modality cannot be removed"
-
         if reason is not None:
             for explanation in explanations:
                 explanation["modalities"][name] = {
@@ -265,42 +277,6 @@ def explain_batch(
     }
 
 
-def flatten_numbers(value: Any) -> list[float]:
-    if value is None:
-        return []
-
-    if isinstance(value, (int, float)):
-        return [float(value)]
-
-    if isinstance(value, list):
-        return [number for item in value for number in flatten_numbers(item)]
-
-    return []
-
-
-def summarize_explanations(artifact: dict[str, Any]) -> dict[str, Any]:
-    modalities = artifact.get("modalities", [])
-    samples = artifact.get("samples", [])
-    summary: dict[str, Any] = {"modalities": {}, "ranking": []}
-
-    for name in modalities:
-        values = [flatten_numbers(sample.get("modalities", {}).get(name, {}).get("delta")) for sample in samples]
-        values = [item for item in values if item]
-        signed = [number for item in values for number in item]
-        absolute = [abs(number) for number in signed]
-        summary["modalities"][name] = {
-            "mean_signed_delta": sum(signed) / len(signed) if signed else None,
-            "mean_absolute_delta": sum(absolute) / len(absolute) if absolute else None,
-        }
-
-    summary["ranking"] = sorted(
-        (name for name, values in summary["modalities"].items() if values["mean_absolute_delta"] is not None),
-        key=lambda name: summary["modalities"][name]["mean_absolute_delta"],
-        reverse=True,
-    )
-    return summary
-
-
 @dataclass
 class XAIStep:
     """Collect leave-one-modality-out prediction sensitivity."""
@@ -317,7 +293,13 @@ class XAIStep:
             raise TypeError("on_prediction must be callable or None.")
 
         samples: list[dict[str, Any]] = []
-        used_modalities: list[str] = list(self.modalities or ())
+        used_modalities: list[str] = []
+        seen_modalities: set[str] = set()
+        for name in self.modalities or ():
+            if name not in seen_modalities:
+                used_modalities.append(name)
+                seen_modalities.add(name)
+
         batch_index = 0
 
         def collect(model: nn.Module, batch: Batch, output: ModelOutput) -> None:
@@ -333,8 +315,10 @@ class XAIStep:
                 batch_index=batch_index,
             )
             samples.extend(result["samples"])
-            if not used_modalities:
-                used_modalities.extend(result["modalities"])
+            for name in result["modalities"]:
+                if name not in seen_modalities:
+                    used_modalities.append(name)
+                    seen_modalities.add(name)
 
             batch_index += 1
 

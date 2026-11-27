@@ -5,7 +5,13 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
-from chimera_ml.models.utils import build_projections, get_modality_mask, normalize_sequence, validate_input_dimensions
+from chimera_ml.models.utils import (
+    build_projections,
+    get_modality_mask,
+    get_modality_validity,
+    normalize_sequence,
+    validate_input_dimensions,
+)
 
 
 class TOMARFusionModel(BaseModel):
@@ -61,6 +67,19 @@ class TOMARFusionModel(BaseModel):
         )
         self.norm = nn.LayerNorm(shared_dim)
         self.prediction = nn.Linear(shared_dim, output_dim)
+
+    def validate_intervention(
+        self,
+        original: Batch,
+        intervened: Batch,
+        modality: str,
+        policy: str,
+    ) -> str | None:
+        if self.anchor_modality not in intervened.inputs:
+            return "anchor modality is unavailable"
+
+        anchor_available = get_modality_validity(intervened, self.anchor_modality)
+        return None if bool(anchor_available.all()) else "anchor modality is unavailable"
 
     def forward(self, batch: Batch) -> ModelOutput:
         if self.anchor_modality not in batch.inputs:

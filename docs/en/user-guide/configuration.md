@@ -44,7 +44,7 @@ model:
   name: "fusion_model"
   params:
     use_predictions: true
-    context_modality: "audio"
+    context_modalities: [audio]
     frame_modalities: ["face", "qwen_mm"]
     hidden: 256
     dropout: 0.1

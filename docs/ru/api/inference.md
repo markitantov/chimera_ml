@@ -48,15 +48,13 @@
 Компоненты XAI измеряют чувствительность зарегистрированного шага предсказания
 к исключению одной модальности. `XAIStep` оборачивает шаг, который вызывает
 `on_prediction` после каждого прямого прохода модели, `explain_batch` выполняет
-исходный прогон и вмешательства, `summarize_explanations` усредняет знаковые и
-абсолютные изменения, а `xai_step` является фабрикой из реестра. Подробности
+исходный прогон и вмешательства, `xai_step` является фабрикой из реестра. Подробности
 приведены в [руководстве по XAI](../user-guide/xai.md).
 
 ::: chimera_ml.inference.steps.xai_steps.XAIStep
 
 ::: chimera_ml.inference.steps.xai_steps.explain_batch
 
-::: chimera_ml.inference.steps.xai_steps.summarize_explanations
 
 ::: chimera_ml.inference.steps.xai_steps.xai_step
 

@@ -7,8 +7,14 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.models.base import BaseModel
-from chimera_ml.models.common_layers import SafeBatchNorm1d, StatPool
-from chimera_ml.models.utils import build_projections, get_modality_mask, normalize_sequence, validate_input_dimensions
+from chimera_ml.models.common_layers import SafeBatchNorm1d
+from chimera_ml.models.utils import (
+    build_projections,
+    get_modality_mask,
+    get_modality_validity,
+    normalize_sequence,
+    validate_input_dimensions,
+)
 
 
 class RAAVFusionModel(BaseModel):
@@ -21,6 +27,7 @@ class RAAVFusionModel(BaseModel):
         output_dim: int,
         frame_modalities: Sequence[str],
         context_modalities: Sequence[str],
+        num_context_latents: int = 4,
         gate_hidden: int | None = None,
         dropout: float = 0.1,
         num_heads: int = 4,
@@ -50,6 +57,9 @@ class RAAVFusionModel(BaseModel):
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
 
+        if num_context_latents <= 0:
+            raise ValueError(f"num_context_latents must be positive, got {num_context_latents}.")
+
         if num_heads <= 0:
             raise ValueError(f"num_heads must be positive, got {num_heads}.")
 
@@ -69,22 +79,31 @@ class RAAVFusionModel(BaseModel):
                 for name in self.frame_modalities
             }
         )
-        self.context_pool = StatPool()
-        self.context_projection = nn.ModuleDict(
-            {
-                name: nn.Sequential(
-                    nn.Linear(shared_dim * 2, shared_dim),
-                    SafeBatchNorm1d(shared_dim),
-                    nn.Tanh(),
-                )
-                for name in self.context_modalities
-            }
-        )
         heads = min(shared_dim, num_heads)
 
         while shared_dim % heads:
             heads -= 1
 
+        self.context_latents = nn.ParameterDict(
+            {
+                name: nn.Parameter(torch.randn(1, num_context_latents, shared_dim) * 0.02)
+                for name in self.context_modalities
+            }
+        )
+        self.context_compression = nn.ModuleDict(
+            {
+                name: nn.MultiheadAttention(
+                    shared_dim,
+                    heads,
+                    dropout=dropout,
+                    batch_first=True,
+                )
+                for name in self.context_modalities
+            }
+        )
+        self.context_compression_norm = nn.ModuleDict(
+            {name: nn.LayerNorm(shared_dim) for name in self.context_modalities}
+        )
         self.context_attention = nn.ModuleDict(
             {
                 name: nn.MultiheadAttention(
@@ -154,9 +173,10 @@ class RAAVFusionModel(BaseModel):
         self,
         batch: Batch,
         reference: torch.Tensor,
-    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         features: dict[str, torch.Tensor] = {}
         validities: dict[str, torch.Tensor] = {}
+        compression_attention: dict[str, torch.Tensor] = {}
         batch_size = reference.shape[0]
 
         for name in self.context_modalities:
@@ -169,17 +189,48 @@ class RAAVFusionModel(BaseModel):
 
             projected = self.proj[name](values)
             valid = get_modality_mask(batch, name, projected)
-            pooled = self.context_pool(projected, valid)
-            compact = self.context_projection[name](pooled)[:, None, :]
-            compact_valid = valid.any(dim=1, keepdim=True)
-            features[name] = compact * compact_valid.unsqueeze(-1).to(compact.dtype)
-            validities[name] = compact_valid
+            has_context = valid.any(dim=1)
+            latents = self.context_latents[name].expand(batch_size, -1, -1).clone()
+            attention = projected.new_zeros(batch_size, latents.shape[1], projected.shape[1])
 
-        return features, validities
+            if has_context.any():
+                updated, coefficients = self.context_compression[name](
+                    latents[has_context],
+                    projected[has_context],
+                    projected[has_context],
+                    key_padding_mask=~valid[has_context],
+                    need_weights=True,
+                )
+                latents[has_context] = self.context_compression_norm[name](latents[has_context] + updated)
+                attention[has_context] = coefficients
+
+            compact_valid = has_context[:, None].expand(-1, latents.shape[1])
+            features[name] = latents * compact_valid.unsqueeze(-1).to(latents.dtype)
+            validities[name] = compact_valid
+            compression_attention[name] = attention
+
+        return features, validities, compression_attention
+
+    def validate_intervention(
+        self,
+        original: Batch,
+        intervened: Batch,
+        modality: str,
+        policy: str,
+    ) -> str | None:
+        batch_size = next(iter(original.inputs.values())).shape[0]
+        device = next(iter(original.inputs.values())).device
+        supported = torch.zeros(batch_size, dtype=torch.bool, device=device)
+
+        for name in self.frame_modalities:
+            if name in intervened.inputs:
+                supported |= get_modality_validity(intervened, name)
+
+        return None if bool(supported.all()) else "no usable frame modality remains"
 
     def forward(self, batch: Batch) -> ModelOutput:
         frame, frame_valid, frame_weights, frame_values = self._frame_features(batch)
-        contexts, context_validities = self._context_features(batch, frame)
+        contexts, context_validities, compression_attention = self._context_features(batch, frame)
         refined = frame.clone()
         context_delta = torch.zeros_like(frame)
         aux: dict[str, torch.Tensor] = {
@@ -210,6 +261,7 @@ class RAAVFusionModel(BaseModel):
             aux[f"context_{name}"] = context
             aux[f"context_mask_{name}"] = context_valid
             aux[f"context_attention_{name}"] = attention
+            aux[f"context_compression_attention_{name}"] = compression_attention[name]
 
         refined = self.context_norm(frame + context_delta)
         refined = refined * frame_valid.unsqueeze(-1).to(refined.dtype)

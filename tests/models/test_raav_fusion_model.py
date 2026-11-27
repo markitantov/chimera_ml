@@ -43,8 +43,10 @@ def test_raav_fuses_frames_and_all_context_modalities():
     assert output.aux is not None
     assert output.aux["frame_weights"].shape == (2, 2, 3)
     assert output.aux["context_delta"].shape == (2, 3, 4)
-    assert output.aux["context_attention_audio"].shape == (2, 3, 1)
-    assert output.aux["context_attention_text"].shape == (2, 3, 1)
+    assert output.aux["context_attention_audio"].shape == (2, 3, 4)
+    assert output.aux["context_compression_attention_audio"].shape == (2, 4, 2)
+    assert output.aux["context_attention_text"].shape == (2, 3, 4)
+    assert output.aux["context_compression_attention_text"].shape == (2, 4, 4)
     assert torch.allclose(output.aux["frame_weights"].sum(dim=1), torch.ones(2, 3))
     assert torch.isfinite(output.preds).all()
 
@@ -80,6 +82,46 @@ def test_raav_uses_regular_multihead_attention():
     model = make_model()
 
     assert all(isinstance(block, nn.MultiheadAttention) for block in model.context_attention.values())
+    assert all(isinstance(block, nn.MultiheadAttention) for block in model.context_compression.values())
+    assert model.context_latents["audio"].shape == (1, 4, 4)
+
+
+def test_raav_validates_context_latent_count_and_handles_masked_context():
+    with pytest.raises(ValueError, match="num_context_latents must be positive"):
+        RAAVFusionModel(
+            {"frame": 2, "context": 2},
+            4,
+            1,
+            ("frame",),
+            ("context",),
+            num_context_latents=0,
+        )
+
+    model = make_model()
+    output = model(
+        Batch(
+            inputs={
+                "face": torch.randn(2, 3, 4),
+                "behavior": torch.randn(2, 3, 5),
+                "audio": torch.randn(2, 2, 6),
+                "text": torch.randn(2, 4, 7),
+            },
+            targets=None,
+            masks={
+                "face_mask": torch.ones(2, 3),
+                "behavior_mask": torch.ones(2, 3),
+                "audio_mask": torch.zeros(2, 2),
+                "text_mask": torch.zeros(2, 4),
+            },
+        )
+    )
+
+    assert torch.isfinite(output.preds).all()
+    assert torch.equal(output.aux["context_delta"], torch.zeros_like(output.aux["context_delta"]))
+    assert torch.equal(
+        output.aux["context_compression_attention_audio"],
+        torch.zeros_like(output.aux["context_compression_attention_audio"]),
+    )
 
 
 def test_raav_validates_frame_lengths_and_available_inputs():

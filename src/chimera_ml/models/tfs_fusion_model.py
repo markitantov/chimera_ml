@@ -89,7 +89,6 @@ class TFSFusionModel(BaseModel):
             TransformerCrossAttention(shared_dim, dropout, max_position_length) for _ in self.groups
         )
         self.stat_pool = StatPool()
-        self.group_projections = nn.ModuleList(nn.Linear(shared_dim * 2, shared_dim) for _ in self.groups)
         self.fusion = nn.Sequential(
             nn.Linear(shared_dim * 2, shared_dim),
             SafeBatchNorm1d(shared_dim),
@@ -181,10 +180,9 @@ class TFSFusionModel(BaseModel):
                 coefficients = query.new_zeros(query.shape[0], query.shape[1], 0)
 
             pooled = self.stat_pool(refined, query_valid)
-            current = self.group_projections[group_index](pooled)
             available = query_valid.any(dim=1)
-            current = current * available.unsqueeze(-1).to(current.dtype)
-            group_values.append(current)
+            pooled = pooled * available.unsqueeze(-1).to(pooled.dtype)
+            group_values.append(pooled)
             group_valid.append(available)
             group_attention[f"group_attention_{group_index}"] = coefficients
 
@@ -193,8 +191,8 @@ class TFSFusionModel(BaseModel):
 
         stacked = torch.stack(group_values, dim=1)
         available = torch.stack(group_valid, dim=1)
-        fused = self.stat_pool(stacked, available)
-        count = available.sum(dim=1, keepdim=True).clamp_min(1)
+        count = available.sum(dim=1, keepdim=True).clamp_min(1).to(stacked.dtype)
+        fused = (stacked * available.unsqueeze(-1).to(stacked.dtype)).sum(dim=1) / count
         group_weights = available.to(stacked.dtype) / count
         return fused, group_weights, group_attention
 

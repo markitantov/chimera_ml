@@ -2,9 +2,10 @@
 
 RAAVFusionModel performs frame-level fusion with contextual refinement. Frame
 modalities are combined at every time position using learned reliability
-weights. Each configured context modality is pooled, projected, and used to
-produce a cross-modal correction for every frame. The result remains a
-sequence.
+weights. Each context modality has its own learnable bottleneck latents. A
+compression attention block updates those latents from the context sequence;
+frame attention then uses them as keys and values to produce a correction for
+every frame. The result remains a sequence.
 
 ## Constructor
 
@@ -15,6 +16,7 @@ RAAVFusionModel(
     output_dim: int,
     frame_modalities: Sequence[str],
     context_modalities: Sequence[str],
+    num_context_latents: int = 4,
     gate_hidden: int | None = None,
     dropout: float = 0.1,
     num_heads: int = 4,
@@ -22,8 +24,9 @@ RAAVFusionModel(
 ~~~
 
 frame_modalities and context_modalities must be non-empty and disjoint.
-gate_hidden=None uses shared_dim. Context streams may have different lengths
-from frame streams. Frame streams must share the same temporal length.
+num_context_latents must be positive and is applied independently to every
+context modality. Context streams may have different lengths from frame
+streams. Frame streams must share the same temporal length.
 
 ## Inputs and outputs
 
@@ -33,8 +36,11 @@ and sequence masks determine valid positions. Frame reliability coefficients
 are returned as aux["frame_weights"].
 
 Other useful auxiliary values are frame_mask, fused, context_delta,
-context_<name>, context_mask_<name>, and context_attention_<name>. Missing
-context contributes zero. At least one frame modality must be present.
+context_<name>, context_mask_<name>, context_attention_<name>, and
+context_compression_attention_<name>. Missing or fully masked context
+contributes zero and produces no attention weights. At least one frame modality
+must be present. Checkpoints from the previous pooled-context implementation
+are not compatible with the learnable-latent parameter structure.
 
 ## Example
 

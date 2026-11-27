@@ -10,62 +10,103 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, build_inference_step
-from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, summarize_explanations
+from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch
 
 
-class SumModel(nn.Module):
+class MaskedSumModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.calls = 0
+        self.grad_enabled: list[bool] = []
 
     def forward(self, batch: Batch) -> ModelOutput:
         self.calls += 1
-        audio = batch.inputs.get("audio")
-        video = batch.inputs.get("video")
-        reference = audio if audio is not None else video
-        assert reference is not None
-        audio = torch.zeros_like(reference) if audio is None else audio
-        video = torch.zeros_like(reference) if video is None else video
-        return ModelOutput(preds=audio + video, aux={"attention": video, "beta_audio": audio})
+        self.grad_enabled.append(torch.is_grad_enabled())
+        total = None
+
+        for name, values in batch.inputs.items():
+            mask = batch.get_masks(f"{name}_mask")
+            if mask is None:
+                valid = torch.ones(values.shape[0], dtype=values.dtype, device=values.device)
+            else:
+                valid = torch.as_tensor(mask, device=values.device).to(values.dtype)
+
+            current = values * valid[:, None]
+            total = current if total is None else total + current
+
+        assert total is not None
+        return ModelOutput(preds=total, aux={"inputs": total})
 
 
-def make_batch() -> Batch:
+def make_batch(names: tuple[str, ...] = ("audio", "video")) -> Batch:
+    values = {
+        "audio": torch.tensor([[2.0], [4.0]]),
+        "video": torch.tensor([[1.0], [3.0]]),
+        "text": torch.tensor([[5.0], [6.0]]),
+    }
     return Batch(
-        inputs={"audio": torch.tensor([[2.0], [4.0]]), "video": torch.tensor([[1.0], [3.0]])},
+        inputs={name: values[name] for name in names},
         targets=None,
         meta={"sample_ids": ["first", "second"]},
     )
 
 
-def test_explain_batch_computes_leave_one_modality_delta() -> None:
-    model = SumModel().eval()
+def test_remove_intervention_computes_signed_delta_and_preserves_batch() -> None:
+    model = MaskedSumModel().eval()
     batch = make_batch()
+    original = {name: value.clone() for name, value in batch.inputs.items()}
+
     artifact = explain_batch(model, batch, modalities=("audio", "video"))
 
     assert model.calls == 3
+    assert model.grad_enabled == [False, False, False]
     assert artifact["samples"][0]["baseline"] == [3.0]
     assert artifact["samples"][0]["modalities"]["audio"]["delta"] == [2.0]
     assert artifact["samples"][0]["modalities"]["video"]["delta"] == [1.0]
-    assert artifact["samples"][0]["aux"]["beta_audio"] == [2.0]
-    assert torch.equal(batch.inputs["audio"], torch.tensor([[2.0], [4.0]]))
+    assert torch.equal(batch.inputs["audio"], original["audio"])
+    assert batch.masks is None
 
 
-def test_score_selector_and_output_mask_are_applied() -> None:
-    model = SumModel().eval()
+def test_mask_intervention_creates_availability_mask_and_excludes_values() -> None:
+    model = MaskedSumModel().eval()
     batch = make_batch()
-    artifact = explain_batch(model, batch, modalities=("audio",), score_fn=lambda output: output.preds[:, 0])
+    changed = intervene_batch(batch, "audio", "mask")
 
-    assert artifact["samples"][0]["baseline"] == 3.0
-    assert artifact["samples"][0]["modalities"]["audio"]["delta"] == 2.0
+    assert changed.inputs["audio"].equal(batch.inputs["audio"])
+    assert changed.get_masks("audio_mask").tolist() == [False, False]
+    assert batch.get_masks("audio_mask") is None
 
-    with pytest.raises(TypeError, match=r"torch\.Tensor"):
-        explain_batch(model, batch, score_fn=lambda output: [1, 2])
+    artifact = explain_batch(model, batch, modalities=("audio",), ablation_policy="mask")
+    assert artifact["samples"][0]["modalities"]["audio"]["delta"] == [2.0]
+
+
+def test_mask_intervention_preserves_existing_unrelated_masks() -> None:
+    batch = make_batch()
+    batch.masks = {
+        "audio_mask": torch.tensor([True, True]),
+        "video_mask": torch.tensor([True, False]),
+    }
+
+    changed = intervene_batch(batch, "audio", "mask")
+
+    assert changed.get_masks("audio_mask").tolist() == [False, False]
+    assert changed.get_masks("video_mask").tolist() == [True, False]
+    assert batch.get_masks("audio_mask").tolist() == [True, True]
+
+
+def test_zero_intervention_is_rejected() -> None:
+    with pytest.raises(ValueError, match="remove, mask"):
+        intervene_batch(make_batch(), "audio", "zero")
+
+    with pytest.raises(ValueError, match="remove, mask"):
+        explain_batch(MaskedSumModel().eval(), make_batch(), ablation_policy="zero")
 
 
 def test_missing_samples_are_not_recomputed() -> None:
-    model = SumModel().eval()
+    model = MaskedSumModel().eval()
     batch = make_batch()
     batch.masks = {"audio_mask": torch.tensor([True, False])}
+
     artifact = explain_batch(model, batch, modalities=("audio",))
 
     assert artifact["samples"][0]["modalities"]["audio"]["status"] == "evaluated"
@@ -73,25 +114,30 @@ def test_missing_samples_are_not_recomputed() -> None:
     assert model.calls == 2
 
 
-def test_anchor_ablation_is_marked_unsupported() -> None:
-    model = SumModel().eval()
-    model.anchor_modality = "audio"
-    artifact = explain_batch(model, make_batch(), modalities=("audio",))
+def test_score_selector_and_output_mask_are_applied() -> None:
+    model = MaskedSumModel().eval()
+    artifact = explain_batch(
+        model,
+        make_batch(),
+        modalities=("audio",),
+        score_fn=lambda output: output.preds[:, 0],
+    )
 
-    record = artifact["samples"][0]["modalities"]["audio"]
-    assert record["status"] == "unsupported"
-    assert record["reason"] == "anchor modality cannot be removed"
+    assert artifact["samples"][0]["baseline"] == 3.0
+    assert artifact["samples"][0]["modalities"]["audio"]["delta"] == 2.0
+
+    with pytest.raises(TypeError, match=r"torch\.Tensor"):
+        explain_batch(model, make_batch(), score_fn=lambda output: [1, 2])
 
 
 def test_model_must_be_in_evaluation_mode() -> None:
-    model = SumModel()
     with pytest.raises(ValueError, match="evaluation mode"):
-        explain_batch(model, make_batch())
+        explain_batch(MaskedSumModel(), make_batch())
 
 
 @dataclass
 class CallbackStep:
-    model: SumModel
+    model: MaskedSumModel
     batches: list[Batch]
     on_prediction: Any = None
 
@@ -106,20 +152,30 @@ class CallbackStep:
 
 
 def test_xai_step_collects_callback_and_restores_previous_callback(tmp_path: Path) -> None:
-    model = SumModel().eval()
-    previous_calls: list[ModelOutput] = []
+    model = MaskedSumModel().eval()
+    previous_outputs: list[ModelOutput] = []
 
     def previous(model_arg: nn.Module, batch: Batch, output: ModelOutput) -> None:
-        previous_calls.append(output)
+        previous_outputs.append(output)
 
     step = CallbackStep(model, [make_batch()], previous)
     result = XAIStep(step).run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
 
     assert result.get_artifact("predictions") == {"ok": True}
     assert result.get_artifact("xai")["samples"]
-    assert len(previous_calls) == 1
+    assert len(previous_outputs) == 1
     assert step.on_prediction is previous
-    assert model.calls == 3
+
+
+def test_xai_step_collects_union_of_modalities_across_batches(tmp_path: Path) -> None:
+    model = MaskedSumModel().eval()
+    step = CallbackStep(model, [make_batch(("audio", "video")), make_batch(("video", "text"))])
+
+    result = XAIStep(step).run(InferenceContext(tmp_path, tmp_path, "cpu", {}))
+    artifact = result.get_artifact("xai")
+
+    assert artifact["modalities"] == ["audio", "video", "text"]
+    assert len(artifact["samples"]) == 4
 
 
 def test_xai_step_accepts_nested_registered_callback_step(tmp_path: Path) -> None:
@@ -129,7 +185,7 @@ def test_xai_step_accepts_nested_registered_callback_step(tmp_path: Path) -> Non
     def create_step(**params: Any) -> CallbackStep:
         return CallbackStep(**params)
 
-    model = SumModel().eval()
+    model = MaskedSumModel().eval()
     wrapped = build_inference_step(
         {
             "name": "xai_step",
@@ -143,25 +199,6 @@ def test_xai_step_accepts_nested_registered_callback_step(tmp_path: Path) -> Non
     assert result.get_artifact("xai")["samples"]
 
 
-def test_summary_ranks_modalities_by_absolute_delta() -> None:
-    artifact = explain_batch(SumModel().eval(), make_batch(), modalities=("audio", "video"))
-    summary = summarize_explanations(artifact)
-
-    assert summary["modalities"]["audio"]["mean_absolute_delta"] == 3.0
-    assert summary["modalities"]["video"]["mean_absolute_delta"] == 2.0
-    assert summary["ranking"] == ["audio", "video"]
-
-
-def test_intervention_updates_nested_legacy_masks() -> None:
-    batch = Batch(
-        inputs={"audio": torch.ones(1, 1), "video": torch.ones(1, 1)},
-        targets=None,
-        meta={"masks": {"mask": {"audio": torch.ones(1, dtype=torch.bool)}}},
-    )
-
-    from chimera_ml.inference.steps.xai_steps import intervene_batch
-
-    changed = intervene_batch(batch, "audio", "mask")
-
-    assert changed.get_masks("audio_mask").tolist() == [False]
-    assert batch.get_masks("audio_mask").tolist() == [True]
+def test_model_without_intervention_validator_is_supported() -> None:
+    artifact = explain_batch(MaskedSumModel().eval(), make_batch(), modalities=("audio",))
+    assert artifact["samples"][0]["modalities"]["audio"]["status"] == "evaluated"
