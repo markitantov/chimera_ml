@@ -36,7 +36,7 @@ BuildContext добавлен в 0.2.1. Функция построения, к�
 реализации `main`, поэтому его нельзя использовать как исторический пример миграции.
 
 Поля конструкторов описаны в руководствах конкретных моделей. RAAV также
-требует `frame_modalities` и `context_modality`; у TFS-DCMMOE можно задать
+требует `frame_modalities` и `context_modalities`; у TFS можно задать
 `gate_hidden`, у TFS — `groups`, у TOMAR — `gate_hidden`.
 
 ## Намеренное удаление legacy fusion-моделей

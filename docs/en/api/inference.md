@@ -46,17 +46,15 @@ accepts \`auto\`, \`cpu\`, or \`cuda\` through \`resolve_inference_device\`.
 ## Explainable AI
 
 The XAI components measure leave-one-modality-out sensitivity for a registered
-prediction step. `XAIStep` wraps the step, `explain_batch` performs the baseline
-and modality interventions, `summarize_explanations` builds sample/global or
-temporal summaries, and `xai_step` is the registry factory used in inference
-configuration. See the [XAI guide](../user-guide/xai.md) for the callback
-contract, intervention policies, and artifact schemas.
+prediction step. `XAIStep` wraps a step that calls `on_prediction` after each
+model forward, `explain_batch` performs the baseline and modality interventions,
+`xai_step` is the registry factory. See the [XAI guide](../user-guide/xai.md) for the
+callback contract, intervention policies, and artifact schema.
 
 ::: chimera_ml.inference.steps.xai_steps.XAIStep
 
 ::: chimera_ml.inference.steps.xai_steps.explain_batch
 
-::: chimera_ml.inference.steps.xai_steps.summarize_explanations
 
 ::: chimera_ml.inference.steps.xai_steps.xai_step
 

@@ -39,7 +39,7 @@ of an earlier `TOMARFusionModel(encoders=..., head=...)` public API; that
 example is not a valid migration from a released `main` implementation.
 
 Use the model-specific guides for the current constructor fields. RAAV also
-requires `frame_modalities` and `context_modality`; TFS-DCMMOE may set
+requires `frame_modalities` and `context_modalities`; TFS may set
 `gate_hidden`, TFS may set `groups`, and TOMAR may set `gate_hidden`.
 
 ## Intentional removal of legacy fusion models

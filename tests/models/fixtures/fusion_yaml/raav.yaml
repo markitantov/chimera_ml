@@ -8,6 +8,7 @@ model:
     output_dim: 2
     frame_modalities:
       - frame
-    context_modality: context
+    context_modalities:
+      - context
     num_latents: 2
     gate_hidden: 3

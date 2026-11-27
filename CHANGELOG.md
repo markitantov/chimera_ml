@@ -4,14 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+## [0.3.2] - 2026-11-27
+
+### Added
+
+- Completed the registry-backed XAI step with signed per-observation modality sensitivity, callback integration, and model-specific intervention validation.
+- Added focused regression coverage for mask resolution, mixed-validity interventions, TFS pooling, and RAAV contextual attention.
+
+### Changed
+
+- TFS now concatenates directed pair sequences within groups, applies mask-aware statistical pooling to each refined group, and averages available group representations arithmetically.
+- RAAV uses configurable learnable context latents with separate context compression and frame-to-context attention for each context modality.
+- Updated English and Russian documentation for TFS, RAAV, and XAI, including checkpoint compatibility notes.
+
+### Fixed
+
+- XAI mask interventions now follow the effective Batch mask container and preserve unrelated and legacy masks.
+- XAI evaluates supported observations independently when a batch contains mixed intervention validity.
+- Fully masked and missing context or modality inputs no longer produce invalid attention or prediction values.
+
 ## [0.3.1] - 2026-11-24
 
 ### Added
 
 - Research-aligned leave-one-modality-out XAI engine, registered `xai_step`, and modality influence summaries.
-
-### Added
-
 - Four built-in feature-only fusion architectures: MASAI-style hierarchical TFS, adaptive TFS-DCMMOE, frame/context RAAV, and anchor-conditioned residual TOMAR.
 - Public fusion model classes and YAML/registry construction for all four architectures.
 - MultimodalSequenceCollate with independent modality padding, presence masks, and dedicated temporal masks; the legacy MaskingCollate remains available.

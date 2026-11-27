@@ -224,9 +224,7 @@ steps:
 
 ## Explainable AI (XAI)
 
-Chimera ML provides leave-one-modality-out sensitivity analysis through the registered `xai_step`. It reuses the original model prediction as the baseline and applies one intervention per selected modality using `zero`, `mask`, or `remove`. A wrapped prediction step may expose the optional `on_prediction` callback; XAI temporarily collects that callback and restores the previous value afterward.
-
-The resulting artifacts support per-sample, global, and temporal summaries. This is intervention sensitivity, not causal attribution, SHAP, calibrated confidence, or a reliability guarantee. Existing ORAGEN and Affective States prediction steps do not expose the required callback and therefore do not support XAI as currently documented. See the full [English XAI guide](https://chimera-ml.readthedocs.io/en/latest/user-guide/xai/) and [Russian XAI guide](https://chimera-ml.readthedocs.io/ru/latest/user-guide/xai/).
+Chimera ML provides leave-one-modality-out sensitivity analysis through the registered `xai_step`. It reuses the original model prediction as the baseline and applies one intervention per selected modality using `remove` or `mask`. A prediction step must expose `on_prediction` and call it after each model forward to use XAI. XAI temporarily collects that callback, computes one signed leave-one-modality-out delta per selected modality, and restores the previous callback afterward. The result is intervention sensitivity, not causal attribution, SHAP, calibrated confidence, or a reliability guarantee. The example ORAGEN and Affective States steps do not expose this callback by default. See the full [English XAI guide](https://chimera-ml.readthedocs.io/en/latest/user-guide/xai/) and [Russian XAI guide](https://chimera-ml.readthedocs.io/ru/latest/user-guide/xai/).
 
 ## YAML Config Model
 
@@ -436,8 +434,7 @@ constructors do not receive external encoder dictionaries or prediction heads.
 
 | Model | Use it for | Prediction |
 | --- | --- | --- |
-| tfs_fusion_model | MASAI-style directed hierarchical fusion | [B, output_dim] |
-| tfs_dcmmmoe_fusion_model | TFS with adaptive masked pair gates | [B, output_dim] |
+| tfs_fusion_model | Directed hierarchical fusion | [B, output_dim] |
 | raav_fusion_model | Aligned frame streams with context latents | [B, T, output_dim] |
 | tomar_fusion_model | Anchor-conditioned gated residual fusion | [B, output_dim] |
 
@@ -547,7 +544,6 @@ Datamodules are intentionally project-specific. Built-in `DATAMODULES` is empty 
 `MODELS`:
 
 - `tfs_fusion_model`
-- `tfs_dcmmmoe_fusion_model`
 - `raav_fusion_model`
 - `tomar_fusion_model`
 

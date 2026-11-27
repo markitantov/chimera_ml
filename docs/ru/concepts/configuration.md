@@ -49,7 +49,7 @@ model:
     shared_dim: 256
     output_dim: 2
     frame_modalities: [video, audio]
-    context_modality: text
+    context_modalities: [text]
 
 collate:
   name: multimodal_sequence_collate

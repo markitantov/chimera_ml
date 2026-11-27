@@ -6,11 +6,11 @@ import numpy as np
 import torch
 from common.utils import classification_metrics, cmu_multilabel_metrics
 
-from chimera_ml.callbacks._utils import resolve_splits
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.callbacks.plot_confusion_matrix_callback import _fig_to_png_bytes, _plot_confusion_matrix
+from chimera_ml.callbacks.utils import resolve_splits
 from chimera_ml.core.registry import CALLBACKS
-from chimera_ml.metrics._utils import compute_confusion_matrix
+from chimera_ml.metrics.utils import compute_confusion_matrix
 from chimera_ml.training.cached_split_outputs import CachedSplitOutputs
 
 

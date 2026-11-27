@@ -7,8 +7,8 @@ import torch
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import METRICS
 from chimera_ml.core.types import ModelOutput
-from chimera_ml.metrics._utils import compute_confusion_matrix
 from chimera_ml.metrics.base import BaseMetric
+from chimera_ml.metrics.utils import compute_confusion_matrix
 
 
 def _safe_divide(num: np.ndarray, den: np.ndarray, zero_division: float) -> np.ndarray:

@@ -13,18 +13,14 @@ task-oriented examples.
 
 ## Fusion models
 
-::: chimera_ml.models.tfs_fusion.TFSFusionModel
+::: chimera_ml.models.tfs_fusion_model.TFSFusionModel
 
-::: chimera_ml.models.tfs_fusion.tfs_fusion_model
+::: chimera_ml.models.tfs_fusion_model.tfs_fusion_model
 
-::: chimera_ml.models.tfs_fusion.TFSDCMMOEFusionModel
+::: chimera_ml.models.raav_fusion_model.RAAVFusionModel
 
-::: chimera_ml.models.tfs_fusion.tfs_dcmmmoe_fusion_model
+::: chimera_ml.models.raav_fusion_model.raav_fusion_model
 
-::: chimera_ml.models.raav_fusion.RAAVFusionModel
+::: chimera_ml.models.tomar_fusion_model.TOMARFusionModel
 
-::: chimera_ml.models.raav_fusion.raav_fusion_model
-
-::: chimera_ml.models.tomar_fusion.TOMARFusionModel
-
-::: chimera_ml.models.tomar_fusion.tomar_fusion_model
+::: chimera_ml.models.tomar_fusion_model.tomar_fusion_model

@@ -312,17 +312,13 @@ def test_build_logger_passes_context_when_supported():
             {"input_dims": {"text": 4, "audio": 4, "video": 4}, "shared_dim": 4, "output_dim": 2},
         ),
         (
-            "tfs_dcmmmoe_fusion_model",
-            {"input_dims": {"text": 4, "audio": 4, "video": 4}, "shared_dim": 4, "output_dim": 2},
-        ),
-        (
             "raav_fusion_model",
             {
                 "input_dims": {"frame": 4, "context": 4},
                 "shared_dim": 4,
                 "output_dim": 2,
                 "frame_modalities": ("frame",),
-                "context_modality": "context",
+                "context_modalities": ["context"],
             },
         ),
         (
@@ -336,6 +332,7 @@ def test_build_model_constructs_feature_only_fusion_models(name, params):
 
     assert tuple(model.input_dims) == tuple(params["input_dims"])
     assert not hasattr(model, "encoders")
-    assert model.prediction.out_features == params["output_dim"]
+    prediction = model.prediction[-1] if isinstance(model.prediction, torch.nn.Sequential) else model.prediction
+    assert prediction.out_features == params["output_dim"]
     assert callable(MODELS.get(name))
     assert hasattr(fusion_models, name)

@@ -6,8 +6,8 @@ from typing import Any, Literal
 import torch
 from torch.utils.data import DataLoader
 
-from chimera_ml.callbacks._utils import resolve_splits
 from chimera_ml.callbacks.base import BaseCallback
+from chimera_ml.callbacks.utils import resolve_splits
 from chimera_ml.core.registry import CALLBACKS
 
 

@@ -1,90 +1,75 @@
 # Слияние RAAV
 
-`RAAVFusionModel` объединяет выровненные кадровые модальности и использует отдельную контекстную модальность как узкое контекстное представление. Сначала модель вычисляет веса модальностей для каждого кадра с учётом масок, затем обучаемые латентные векторы получают информацию из контекстной последовательности. Каждый кадр обращается к этим латентным векторам, получает контекстную поправку, а затем при необходимости проходит через временной модуль.
+RAAVFusionModel выполняет покадровое слияние с уточнением контекстом.
+Кадровые модальности объединяются на каждой временной позиции с помощью
+обучаемых коэффициентов надёжности. У каждой контекстной модальности есть
+собственные обучаемые скрытые представления. Блок сжатия уточняет их по
+контекстной последовательности, после чего кадровое внимание использует эти
+представления как ключи и значения для вычисления поправки к каждому кадру.
+Результатом остаётся последовательность.
 
-## Параметры
+## Конструктор
 
 ~~~python
 RAAVFusionModel(
     input_dims: dict[str, int],
     shared_dim: int,
     output_dim: int,
-    frame_modalities: tuple[str, ...],
-    context_modality: str,
-    num_latents: int = 4,
-    gate_hidden: int = 64,
-    temporal: nn.Module | None = None,
+    frame_modalities: Sequence[str],
+    context_modalities: Sequence[str],
+    num_context_latents: int = 4,
+    gate_hidden: int | None = None,
+    dropout: float = 0.1,
+    num_heads: int = 4,
 )
 ~~~
 
-- `input_dims` задаёт ширину признаков каждой кадровой и контекстной модальности; внутренние проекции переводят их в `shared_dim`.
-- `shared_dim` — общая ширина механизма внимания, `output_dim` — ширина предсказания.
-- `frame_modalities` — непустой кортеж имён выровненных временных модальностей.
-- `context_modality` — имя независимого контекстного потока.
-- `num_latents` задаёт размер узкого контекстного блока и должен быть положительным.
-- `gate_hidden` — ширина скрытого слоя шлюза модальностей.
-- `temporal` — необязательный модуль Python, сохраняющий форму `[B, T, shared_dim]`; `TransformerEncoder` получает маску дополнения кадров.
+frame_modalities и context_modalities должны быть непустыми и не должны
+пересекаться. num_context_latents должен быть положительным; такое число
+представлений создаётся отдельно для каждой контекстной модальности. Длины
+контекстных последовательностей могут отличаться от длины кадровых
+последовательностей. Кадровые потоки должны иметь одинаковую длину.
 
 ## Входы и выходы
 
-Входы кадров после формирования пакета имеют форму `[B, T, D]`, причём `T` должен быть одинаковым для присутствующих кадровых модальностей. У контекстного входа может быть другая длина последовательности. Предсказания имеют форму `[B, T, output_dim]`, а невалидные позиции кадров обнуляются.
+Кадровые признаки имеют форму [B, T, D]; двумерные признаки считаются
+признаками одной временной позиции. Предсказания имеют форму [B, T, output_dim].
+Маски наличия, времени и последовательности определяют допустимые позиции.
+Коэффициенты надёжности кадров возвращаются в aux["frame_weights"].
 
-Приоритет имеет `<modality>_temporal_mask`, затем `<modality>_mask` и совместимая `sequence_mask`. Отсутствующая кадровая модальность пропускается, а отсутствие для отдельного образца учитывается через маски. Отсутствующий или полностью замаскированный контекст даёт нулевые контекстные латенты и нулевую контекстную поправку. Пустой контекст поддерживается. Пустая последовательность кадров даёт пустую последовательность предсказаний; в пакете должна присутствовать хотя бы одна кадровая модальность.
+Дополнительно возвращаются frame_mask, fused, context_delta,
+context_<name>, context_mask_<name>, context_attention_<name> и
+context_compression_attention_<name>. Отсутствующий или полностью замаскированный
+контекст даёт нулевую поправку и не даёт коэффициентов внимания. Должна
+присутствовать хотя бы одна кадровая модальность. Контрольные точки старой
+реализации со свёрнутым контекстом несовместимы с текущими обучаемыми
+представлениями.
 
-Полезные значения ModelOutput.aux: frame_weights, frame_mask, fused, context,
-context_mask, context_latent_attention, frame_to_context_attention,
-context_delta и refined.
-
-## Python API
+## Пример
 
 ~~~python
-from chimera_ml.models import RAAVFusionModel
-
-model = RAAVFusionModel(
-    input_dims={"video": 512, "audio": 768, "text": 1024},
-    shared_dim=256,
-    output_dim=2,
-    frame_modalities=("video", "audio"),
-    context_modality="text",
-    num_latents=4,
-)
-~~~
-
-## Конфигурация YAML
-
-~~~yaml
-model:
-  name: raav_fusion_model
-  params:
-    input_dims:
-      video: 512
-      audio: 768
-      text: 1024
-    shared_dim: 256
-    output_dim: 2
-    frame_modalities:
-      - video
-      - audio
-    context_modality: text
-    num_latents: 4
-    gate_hidden: 64
-~~~
-
-Collate-функция не выполняет автоматического выравнивания временных шкал. Подготовьте кадровые потоки на общей временной шкале в наборе данных или заранее проверьте их длины.
-
-## Синтетический forward
-
-Кадровые модальности должны иметь общий `T`, а контекст может иметь другую длину:
-
-```python
 import torch
 from chimera_ml.core import Batch
 from chimera_ml.models import RAAVFusionModel
-model = RAAVFusionModel({"video": 4, "audio": 5, "text": 6}, shared_dim=8, output_dim=2, frame_modalities=("video", "audio"), context_modality="text").eval()
-batch = Batch(inputs={"video": torch.randn(2, 3, 4), "audio": torch.randn(2, 3, 5), "text": torch.randn(2, 5, 6)}, targets=None)
+
+model = RAAVFusionModel(
+    {"video": 4, "audio": 5, "text": 6},
+    shared_dim=8,
+    output_dim=2,
+    frame_modalities=("video", "audio"),
+    context_modalities=("text",),
+).eval()
+
+batch = Batch(
+    inputs={
+        "video": torch.randn(2, 3, 4),
+        "audio": torch.randn(2, 3, 5),
+        "text": torch.randn(2, 5, 6),
+    },
+    targets=None,
+)
 output = model(batch)
 assert output.preds.shape == (2, 3, 2)
-assert output.aux["frame_mask"].shape == (2, 3)
-```
+~~~
 
-Разная длина `audio`/`video` приводит к `ValueError`, а другая длина `text` разрешена.
+Ключ в реестре: raav_fusion_model.
