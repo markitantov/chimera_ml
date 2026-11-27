@@ -132,7 +132,7 @@ delta          = baseline_score - ablated_score
 absolute_delta = abs(delta)
 ```
 
-Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample. Models may additionally implement the optional pre-forward `validate_intervention(original, intervened, modality, policy)` method, returning `InterventionValidation(supported, reason)`. `supported` may be a per-sample boolean tensor; a mixed-validity intervention is conservatively marked unsupported for the affected batch. `diagnostic_keys` copies selected batch-aligned tensor values from `ModelOutput.aux` into each raw sample. For mixed-validity batches, the implementation conservatively marks the intervention unsupported and does not run a partial-batch forward.
+Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample. Models may additionally implement the optional pre-forward `validate_intervention(original, intervened, modality, policy)` method, returning `None` when the complete batch is supported or a string explaining why it is unsupported. Validation is conservative: a mixed-validity batch is rejected before a partial forward. `diagnostic_keys` copies selected batch-aligned tensor values from `ModelOutput.aux` into each raw sample.
 
 ## Correct score-shape examples
 
@@ -182,7 +182,7 @@ The selected score has `[B, T]`: axis 1 is time. If a score function instead ret
 
 ## Minimal artifact schema and interpretation
 
-`explain_batch` returns schema version 1. `xai_step` returns schema version 2 with `samples` and `summary`. Raw modality entries contain only `status`, optional `reason`, `ablated`, signed `delta`, and `absolute_delta`; selected baseline `diagnostics` are copied from `ModelOutput.aux`. Summary modality entries contain only `mean_signed_delta`, `mean_absolute_delta`, `relative_sensitivity`, and `rank`, plus a simple `ranking` list. Historical coverage counters, tie groups, dominant-modality fields, and automatic metadata are intentionally removed.
+`explain_batch` returns schema version 2. `xai_step` returns schema version 3 with `samples` and `summary`. Raw modality entries contain only `status`, optional `reason`, `ablated`, signed `delta`, and `absolute_delta`; selected baseline `diagnostics` are copied from `ModelOutput.aux`. Summary modality entries contain only `mean_signed_delta`, `mean_absolute_delta`, `relative_sensitivity`, and `rank`, plus a simple `ranking` list. Historical coverage counters, tie groups, dominant-modality fields, and automatic metadata are intentionally removed.
 
 Relative sensitivity is descriptive:
 
@@ -192,7 +192,7 @@ mean_absolute_delta(modality)
 sum(mean_absolute_delta(all comparable modalities))
 ```
 
-Samples receive equal weight. Unsupported and unavailable comparisons are excluded, never converted to zero. Temporal summaries aggregate all comparable observations at each output position; they do not infer original input timestamps. This schema change is intentional and is not backward-compatible with the removed reporting fields.
+Samples receive equal weight. Unsupported and unavailable comparisons are excluded, never converted to zero. Temporal summaries aggregate all comparable observations at each output position; they do not infer original input timestamps. The schema versions were bumped because earlier public reporting fields were intentionally removed; consumers should treat the new artifact shape as a compatibility change.
 
 ## Optional diagnostics and temporal summaries
 
@@ -284,11 +284,8 @@ Results depend on the ablation policy, score function, masks, validity checks, m
 Pre-forward validation is optional, so custom models without it continue to work. A custom model that has intervention-specific input requirements can implement:
 
 ```python
-from chimera_ml.core.types import InterventionValidation
-
 def validate_intervention(self, original, intervened, modality, policy):
-    supported = ...  # bool or [B] boolean tensor
-    return InterventionValidation(supported, "why unsupported rows cannot be compared")
+    return None  # or a string explaining why the complete batch is unsupported
 ```
 
 `unsupported` means the proposed intervention cannot produce a valid comparison; `already_missing` means the modality was unavailable in the original sample. Both have null numerical fields, and unsupported rows are excluded from summaries. Zeroing changes tensor values, masking changes availability masks, and removing deletes the input; these policies are not interchangeable. For TFS and TFS-DCMMOE, a supported intervention must preserve the selected computational branch and leave a configured directed pair for each supported sample. TOMAR requires its anchor modality, so removing or masking the anchor is unsupported; zeroing it follows the model's existing contract. RAAV requires at least one valid frame position.

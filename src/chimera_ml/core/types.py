@@ -4,14 +4,6 @@ import torch
 
 
 @dataclass
-class InterventionValidation:
-    """Optional pre-forward validation result for a proposed intervention."""
-
-    supported: bool | torch.Tensor
-    reason: str
-
-
-@dataclass
 class ModelOutput:
     """Standard model result consumed by losses, metrics, and callbacks.
 

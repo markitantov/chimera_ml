@@ -585,10 +585,7 @@ def test_scalar_score_validity_fn_is_batch_aligned():
 
 class ValidatedCountingModel(CountingModel):
     def validate_intervention(self, original, intervened, modality, policy):
-        from chimera_ml.core.types import InterventionValidation
-
-        supported = torch.tensor([True, False])
-        return InterventionValidation(supported, "second sample is invalid")
+        return "second sample is invalid"
 
     def forward(self, batch):
         if self.calls and batch.inputs["video"].shape[0] != 1:

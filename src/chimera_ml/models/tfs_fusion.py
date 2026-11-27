@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.core.types import InterventionValidation, ModelOutput
+from chimera_ml.core.types import ModelOutput
 from chimera_ml.models._utils import (
     _attention,
     _features,
@@ -384,18 +384,16 @@ class TFSFusionModel(BaseModel):
             and self.groups == _normalize_groups(self.names, None)
         )
 
-    def validate_intervention(
-        self, original: Batch, intervened: Batch, modality: str, policy: str
-    ) -> InterventionValidation:
+    def validate_intervention(self, original: Batch, intervened: Batch, modality: str, policy: str) -> str | None:
         if self._uses_triple_branch(original) != self._uses_triple_branch(intervened):
-            return InterventionValidation(False, "intervention changes the TFS computational branch")
+            return "intervention changes the TFS computational branch"
         size = next(iter(original.inputs.values())).shape[0]
         supported = torch.zeros(size, dtype=torch.bool, device=next(iter(original.inputs.values())).device)
         for group in self.groups:
             for left, right in group:
                 if left in intervened.inputs and right in intervened.inputs:
                     supported |= _modality_validity(intervened, left) & _modality_validity(intervened, right)
-        return InterventionValidation(supported, "no configured directed pair remains available")
+        return None if bool(supported.all()) else "no configured directed pair remains available"
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
@@ -477,18 +475,16 @@ class TFSDCMMOEFusionModel(BaseModel):
             and self.groups == _normalize_groups(self.names, None)
         )
 
-    def validate_intervention(
-        self, original: Batch, intervened: Batch, modality: str, policy: str
-    ) -> InterventionValidation:
+    def validate_intervention(self, original: Batch, intervened: Batch, modality: str, policy: str) -> str | None:
         if self._uses_triple_branch(original) != self._uses_triple_branch(intervened):
-            return InterventionValidation(False, "intervention changes the TFS-DCMMOE computational branch")
+            return "intervention changes the TFS-DCMMOE computational branch"
         size = next(iter(original.inputs.values())).shape[0]
         supported = torch.zeros(size, dtype=torch.bool, device=next(iter(original.inputs.values())).device)
         for group in self.groups:
             for left, right in group:
                 if left in intervened.inputs and right in intervened.inputs:
                     supported |= _modality_validity(intervened, left) & _modality_validity(intervened, right)
-        return InterventionValidation(supported, "no configured directed pair remains available")
+        return None if bool(supported.all()) else "no configured directed pair remains available"
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)

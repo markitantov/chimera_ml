@@ -8,7 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 
-- Simplified XAI aggregation and reporting to essential prediction sensitivity, correcting multidimensional output-mask intersection, global temporal aggregation, and signed/absolute modality ranking.
+- Finalized the minimal tensor-based XAI implementation: one-pass baseline diagnostics, cached delta decoding, conservative whole-batch intervention validation, and unified sample/global/temporal sensitivity aggregation.
+- Bumped XAI artifact schemas to `explain_batch` v2 and `xai_step` v3 after removing reporting fields; validators now return `str | None`.
 
 ## [0.3.1] - 2026-11-24
 

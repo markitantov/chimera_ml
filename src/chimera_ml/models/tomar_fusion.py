@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.core.types import InterventionValidation, ModelOutput
+from chimera_ml.core.types import ModelOutput
 from chimera_ml.models._utils import _features, _mean, _modality_validity, _projections, _validate_input_dims
 from chimera_ml.models.base import BaseModel
 
@@ -45,13 +45,11 @@ class TOMARFusionModel(BaseModel):
         self.delta = nn.ModuleDict({name: nn.Linear(shared_dim, shared_dim) for name in extras})
         self.norm = nn.LayerNorm(shared_dim)
 
-    def validate_intervention(
-        self, original: Batch, intervened: Batch, modality: str, policy: str
-    ) -> InterventionValidation:
+    def validate_intervention(self, original: Batch, intervened: Batch, modality: str, policy: str) -> str | None:
         supported = _modality_validity(intervened, self.anchor_modality)
         if modality == self.anchor_modality and policy in {"remove", "mask"}:
-            return InterventionValidation(torch.zeros_like(supported), "anchor modality cannot be removed or masked")
-        return InterventionValidation(supported, "anchor modality is unavailable")
+            return "anchor modality cannot be removed or masked"
+        return None if bool(supported.all()) else "anchor modality is unavailable"
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
