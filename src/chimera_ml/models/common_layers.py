@@ -18,6 +18,7 @@ class SafeBatchNorm1d(nn.BatchNorm1d):
                 momentum=self.momentum,
                 eps=self.eps,
             )
+
         return super().forward(input)
 
 
@@ -38,6 +39,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, values: torch.Tensor) -> torch.Tensor:
         if values.shape[1] > self.encoding.shape[1]:
             raise ValueError(f"Sequence length exceeds positional encoding max_len {self.encoding.shape[1]}.")
+
         return self.dropout(values + self.encoding[:, : values.shape[1]].to(values))
 
 
@@ -49,6 +51,7 @@ class TransformerCrossAttention(nn.Module):
         heads = min(8, dim)
         while dim % heads:
             heads -= 1
+
         self.position = PositionalEncoding(dim, dropout, max_len)
         self.attention = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)

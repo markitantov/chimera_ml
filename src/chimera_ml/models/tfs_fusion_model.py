@@ -70,8 +70,10 @@ class TFSFusionModel(BaseModel):
         self.input_dims = validate_input_dimensions(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
+
         if output_dim <= 0:
             raise ValueError(f"output_dim must be positive, got {output_dim}.")
+
         if max_position_length <= 0:
             raise ValueError(f"max_position_length must be positive, got {max_position_length}.")
 
@@ -129,6 +131,7 @@ class TFSFusionModel(BaseModel):
                 key = pair_name(pair)
                 if pair[0] not in feature_map or pair[1] not in feature_map:
                     continue
+
                 values[key], valid[key], attention[key] = self._pair(
                     feature_map[pair[0]],
                     feature_map[pair[1]],
@@ -208,6 +211,7 @@ class TFSFusionModel(BaseModel):
             for left, right in group:
                 if left in intervened.inputs and right in intervened.inputs:
                     supported |= get_modality_validity(intervened, left) & get_modality_validity(intervened, right)
+
         return None if bool(supported.all()) else "no configured directed pair remains available"
 
     def forward(self, batch: Batch) -> ModelOutput:
@@ -224,6 +228,7 @@ class TFSFusionModel(BaseModel):
             aux[f"pair_{key}"] = value
             aux[f"pair_valid_{key}"] = valid[key]
             aux[f"pair_attention_{key}"] = pair_attention[key]
+
         aux.update(group_attention)
         return ModelOutput(preds=self.prediction(fused), aux=aux)
 

@@ -31,6 +31,7 @@ def get_modality_mask(batch: Batch, name: str, values: torch.Tensor) -> torch.Te
         sequence = torch.as_tensor(sequence, device=values.device).bool()
         if sequence.ndim == 1 and sequence.shape[0] == batch_size:
             sequence = sequence[:, None]
+
         if sequence.shape == result.shape:
             result = result & sequence
 
