@@ -3,7 +3,7 @@ import torch
 from chimera_ml.core.batch import Batch
 from chimera_ml.inference.steps.xai_steps import explain_batch
 from chimera_ml.models.raav_fusion import RAAVFusionModel
-from chimera_ml.models.tfs_fusion import TFSFusionModel
+from chimera_ml.models.tfs_fusion_model import TFSFusionModel
 from chimera_ml.models.tomar_fusion import TOMARFusionModel
 
 

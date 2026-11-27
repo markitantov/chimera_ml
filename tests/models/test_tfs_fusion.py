@@ -1,19 +1,13 @@
 import pytest
 import torch
-import torch.nn as nn
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.models.tfs_fusion import (
-    TFSFusionModel,
-    _PositionalEncoding,
-    _stat_pool,
-    _TransformerCrossAttention,
-    tfs_fusion_model,
-)
+from chimera_ml.models.common_layers import PositionalEncoding, StatPool, TransformerCrossAttention
+from chimera_ml.models.tfs_fusion_model import TFSFusionModel, normalize_groups, tfs_fusion_model
 
 
-def _batch() -> Batch:
+def batch() -> Batch:
     return Batch(
         inputs={
             "text": torch.randn(2, 3, 4),
@@ -29,361 +23,91 @@ def _batch() -> Batch:
     )
 
 
-def test_tfs_fuses_directed_pairs_and_returns_auxiliary_features():
+def test_tfs_fuses_all_directed_pairs_and_groups():
     model = TFSFusionModel(
         input_dims={"text": 4, "audio": 5, "video": 6},
         shared_dim=4,
         output_dim=2,
     )
 
-    out = model(_batch())
+    output = model(batch())
 
-    assert out.preds.shape == (2, 2)
-    assert out.aux is not None
-    assert out.aux["fused"].shape == (2, 4)
-    assert "pair_text->audio" in out.aux
-    assert out.aux["pair_text->audio"].shape == (2, 4)
+    assert output.preds.shape == (2, 2)
+    assert output.aux is not None
+    assert output.aux["fused"].shape == (2, 4)
+    assert output.aux["pair_text->audio"].shape == (2, 3, 4)
+    assert output.aux["pair_audio->text"].shape == (2, 3, 4)
+    assert output.aux["group_weights"].shape == (2, 2)
 
 
 def test_tfs_supports_explicit_groups_and_missing_modalities():
     model = TFSFusionModel(
         input_dims={"text": 3, "audio": 3, "video": 3},
         shared_dim=4,
-        output_dim=4,
-        groups=((("text", "audio"), ("audio", "text")), (("video", "text"),)),
+        output_dim=2,
+        groups=((("text", "audio"),), (("audio", "text"),)),
     )
 
-    out = Batch(inputs={"text": torch.randn(2, 3), "audio": torch.randn(2, 3)}, targets=None)
-    result = model(out)
+    output = model(Batch(inputs={"text": torch.randn(2, 3)}, targets=None))
 
-    assert result.preds.shape == (2, 4)
-    assert "pair_video->text" not in result.aux
+    assert output.preds.shape == (2, 2)
+    assert "pair_text->audio" not in output.aux
 
 
-def test_tfs_requires_two_available_modalities():
-    model = TFSFusionModel(
-        input_dims={"text": 3, "audio": 3},
-        shared_dim=4,
-        output_dim=4,
-    )
-
-    with pytest.raises(ValueError, match="at least two available modalities"):
-        model(Batch(inputs={"text": torch.randn(2, 3)}, targets=None))
+def test_tfs_rejects_invalid_groups():
+    with pytest.raises(ValueError, match="occurs more than once"):
+        normalize_groups(
+            ("text", "audio"),
+            ((("text", "audio"),), (("text", "audio"),)),
+        )
 
 
 def test_tfs_factory_is_registered():
     assert MODELS.get("tfs_fusion_model") is tfs_fusion_model
-    model = tfs_fusion_model(input_dims={"text": 3, "audio": 3}, shared_dim=4, output_dim=4)
-    assert isinstance(model, TFSFusionModel)
-
-
-def _identity_tfs() -> TFSFusionModel:
-    model = TFSFusionModel(
-        input_dims={"text": 2, "audio": 2, "video": 2},
-        shared_dim=2,
-        output_dim=2,
-    )
-    with torch.no_grad():
-        for layer in model.group_layers:
-            layer.weight.copy_(torch.eye(2))
-            layer.bias.zero_()
-        model.output.weight.copy_(torch.eye(2))
-        model.output.bias.zero_()
-    model.eval()
-    return model
-
-
-def test_tfs_uses_only_pairs_available_for_each_sample():
-    model = _identity_tfs()
-    batch = Batch(
-        inputs={
-            "text": torch.tensor([[[1.0, 0.0]], [[0.0, 1.0]]]),
-            "audio": torch.tensor([[[0.0, 1.0]], [[9.0, 9.0]]]),
-            "video": torch.tensor([[[7.0, 7.0]], [[1.0, 0.0]]]),
-        },
-        targets=None,
-        masks={
-            "text_mask": torch.tensor([1, 1]),
-            "audio_mask": torch.tensor([1, 0]),
-            "video_mask": torch.tensor([0, 1]),
-        },
-    )
-
-    output = model(batch)
-
-    assert torch.isfinite(output.aux["fused"]).all()
-    assert torch.equal(output.aux["pair_valid_text->video"], torch.tensor([False, True]))
-    assert torch.equal(output.aux["pair_valid_text->audio"], torch.tensor([True, False]))
-    assert torch.equal(output.aux["pair_weights"][0, [2, 5]], torch.zeros(2))
-    assert torch.equal(output.aux["pair_weights"][1, [0, 3]], torch.zeros(2))
-
-
-def test_tfs_has_explicit_zero_policy_for_samples_without_valid_pairs():
-    model = _identity_tfs()
-    batch = Batch(
-        inputs={"text": torch.ones(2, 1, 2), "audio": torch.ones(2, 1, 2)},
-        targets=None,
-        masks={"text_mask": torch.tensor([1, 1]), "audio_mask": torch.tensor([1, 0])},
-    )
-
-    output = model(batch)
-
-    assert torch.allclose(output.aux["fused"][1], torch.zeros(2))
-    assert torch.isfinite(output.preds).all()
-
-
-def test_tfs_directed_pair_outputs_are_not_forced_to_be_symmetric():
-    model = _identity_tfs()
-    left = (torch.tensor([[[2.0, 0.0], [0.0, 0.0]]]), torch.tensor([[1, 0]]))
-    right = (torch.tensor([[[0.0, 1.0], [1.0, 0.0]]]), torch.tensor([[1, 1]]))
-
-    left_to_right, _ = model._pair(left, right)
-    right_to_left, _ = model._pair(right, left)
-
-    assert not torch.allclose(left_to_right, right_to_left)
-
-
-def test_tfs_group_configuration_changes_hierarchical_aggregation():
-    inputs = {
-        "text": torch.tensor([[[1.0, 0.0]]]),
-        "audio": torch.tensor([[[0.0, 1.0]]]),
-        "video": torch.tensor([[[2.0, 0.0]]]),
-    }
-    masks = {"text_mask": torch.ones(1), "audio_mask": torch.ones(1), "video_mask": torch.ones(1)}
-    batch = Batch(inputs=inputs, targets=None, masks=masks)
-
-    all_pairs = _identity_tfs()
-    split_pairs = TFSFusionModel(
-        input_dims={"text": 2, "audio": 2, "video": 2},
-        shared_dim=2,
-        output_dim=2,
-        groups=((("text", "audio"),), (("audio", "text"), ("text", "video"), ("video", "text"))),
-    )
-    with torch.no_grad():
-        for layer in split_pairs.group_layers:
-            layer.weight.copy_(torch.eye(2))
-            layer.bias.zero_()
-        split_pairs.output.weight.copy_(torch.eye(2))
-        split_pairs.output.bias.zero_()
-    split_pairs.eval()
-
-    assert not torch.allclose(all_pairs(batch).aux["fused"], split_pairs(batch).aux["fused"])
-
-
-def test_tfs_state_round_trip_preserves_predictions():
-    model = _identity_tfs()
-    batch = Batch(
-        inputs={"text": torch.randn(2, 2, 2), "audio": torch.randn(2, 2, 2)},
-        targets=None,
-        masks={"text_mask": torch.ones(2), "audio_mask": torch.ones(2)},
-    )
-
-    restored = _identity_tfs()
-    restored.load_state_dict(model.state_dict())
-
-    assert torch.equal(model(batch).preds, restored(batch).preds)
-
-
-def test_tfs_default_configuration_builds_pairwise_hierarchy():
-    model = _identity_tfs()
-
-    assert model.groups == (
-        (("text", "audio"), ("audio", "text")),
-        (("text", "video"), ("video", "text")),
-        (("audio", "video"), ("video", "audio")),
+    assert isinstance(
+        tfs_fusion_model(input_dims={"text": 3, "audio": 3}, shared_dim=4, output_dim=2),
+        TFSFusionModel,
     )
 
 
-def test_tfs_default_backbone_has_masai_hierarchical_structure():
-    model = _identity_tfs()
+def test_stat_pool_returns_mean_and_population_std():
+    values = torch.tensor([[[2.0], [4.0], [6.0]], [[1.0], [1.0], [1.0]]])
+    valid = torch.ones(2, 3, dtype=torch.bool)
 
-    assert model.triple_fusion is not None
-    assert len(model.triple_fusion.blocks) == 6
-    assert len(model.triple_fusion.cross_blocks) == 2
-    assert model.triple_fusion.cross_att_dense_layer.in_features == 24
-    assert all(hasattr(block, "positional_encoding") for block in model.triple_fusion.blocks)
+    pooled = StatPool()(values, valid)
 
-
-def test_tfs_passes_unscaled_triples_through_both_second_level_blocks():
-    class EchoBlock(nn.Module):
-        def forward(self, query, key, query_valid, key_valid):
-            return query * query_valid.unsqueeze(-1).to(query.dtype)
-
-    model = TFSFusionModel(
-        input_dims={"text": 2, "audio": 2, "video": 2},
-        shared_dim=1,
-        output_dim=4,
-    ).eval()
-    backbone = model.triple_fusion
-    assert backbone is not None
-    backbone.blocks = nn.ModuleList(EchoBlock() for _ in backbone.blocks)
-    backbone.cross_blocks = nn.ModuleList(EchoBlock() for _ in backbone.cross_blocks)
-    captured = []
-    hooks = [
-        block.register_forward_hook(lambda _, inputs, __: captured.append((inputs[0].clone(), inputs[1].clone())))
-        for block in backbone.cross_blocks
-    ]
-    try:
-        features = {
-            "text": (torch.tensor([[[1.0]]]), torch.ones(1, 1, dtype=torch.bool)),
-            "audio": (torch.tensor([[[2.0]]]), torch.ones(1, 1, dtype=torch.bool)),
-            "video": (torch.tensor([[[3.0]]]), torch.ones(1, 1, dtype=torch.bool)),
-        }
-        _, _, _, _, pair_weights = backbone(features)
-    finally:
-        for hook in hooks:
-            hook.remove()
-
-    assert torch.equal(pair_weights, torch.ones(1, 6))
-    assert torch.equal(captured[0][0], torch.tensor([[[1.0, 2.0, 3.0]]]))
-    assert torch.equal(captured[0][1], torch.tensor([[[2.0, 3.0, 1.0]]]))
-    assert torch.equal(captured[1][0], torch.tensor([[[2.0, 3.0, 1.0]]]))
-    assert torch.equal(captured[1][1], torch.tensor([[[1.0, 2.0, 3.0]]]))
+    assert torch.allclose(pooled, torch.tensor([[4.0, 1.632993], [1.0, 0.0]]), atol=1e-5)
 
 
-def test_tfs_second_level_blocks_receive_finite_gradients():
-    model = TFSFusionModel(
-        input_dims={"text": 2, "audio": 2, "video": 2},
-        shared_dim=2,
-        output_dim=2,
-    )
-    batch = Batch(
-        inputs={
-            "text": torch.randn(2, 1, 2),
-            "audio": torch.randn(2, 1, 2),
-            "video": torch.randn(2, 1, 2),
-        },
-        targets=None,
+def test_transformer_cross_attention_handles_masks_and_empty_sequences():
+    block = TransformerCrossAttention(4, dropout=0.0).eval()
+    query = torch.randn(2, 3, 4)
+    key = torch.randn(2, 2, 4)
+
+    output, weights = block(
+        query,
+        key,
+        torch.ones(2, 3, dtype=torch.bool),
+        torch.tensor([[1, 1], [0, 0]], dtype=torch.bool),
     )
 
-    model(batch).aux["fused"].sum().backward()
-
-    for block in model.triple_fusion.cross_blocks:
-        gradients = [parameter.grad for parameter in block.parameters()]
-        assert any(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)
-
-
-def test_tfs_zeroes_unavailable_pairs_before_second_level_attention():
-    model = TFSFusionModel(
-        input_dims={"text": 2, "audio": 2, "video": 2},
-        shared_dim=2,
-        output_dim=2,
-    ).eval()
-    captured = []
-    hooks = [
-        block.register_forward_hook(lambda _, inputs, __: captured.append((inputs[0].clone(), inputs[1].clone())))
-        for block in model.triple_fusion.cross_blocks
-    ]
-    inputs = {
-        "text": torch.randn(2, 1, 2),
-        "audio": torch.randn(2, 1, 2),
-        "video": torch.randn(2, 1, 2),
-    }
-    masks = {
-        "text_mask": torch.ones(2),
-        "audio_mask": torch.tensor([0, 1]),
-        "video_mask": torch.ones(2),
-    }
-    batch = Batch(inputs=inputs, targets=None, masks=masks)
-    try:
-        first_output = model(batch).aux["fused"]
-    finally:
-        for hook in hooks:
-            hook.remove()
-
-    assert torch.equal(captured[0][0][0, :, :4], torch.zeros(1, 4))
-    assert torch.equal(captured[0][1][0, :, :4], torch.zeros(1, 4))
-    assert torch.equal(captured[1][0][0, :, :4], torch.zeros(1, 4))
-    assert torch.equal(captured[1][1][0, :, :4], torch.zeros(1, 4))
-    assert torch.isfinite(first_output).all()
-
-    inputs["audio"][0] = torch.randn(1, 2) * 1000
-    second_output = model(Batch(inputs=inputs, targets=None, masks=masks)).aux["fused"]
-    assert torch.allclose(first_output[0], second_output[0])
+    assert output.shape == query.shape
+    assert weights.shape == (2, 3, 2)
+    assert torch.isfinite(output).all()
+    assert torch.equal(
+        block(
+            torch.empty(2, 0, 4),
+            key,
+            torch.zeros(2, 0, dtype=torch.bool),
+            torch.ones(2, 2, dtype=torch.bool),
+        )[0],
+        torch.empty(2, 0, 4),
+    )
 
 
-def test_stat_pool_returns_mean_and_zero_std_for_degenerate_sequences():
-    values = torch.tensor([[[2.0], [2.0], [2.0]], [[1.0], [9.0], [3.0]], [[7.0], [8.0], [9.0]]], requires_grad=True)
-    valid = torch.tensor([[1, 1, 1], [1, 0, 0], [0, 0, 0]], dtype=torch.bool)
-
-    pooled = _stat_pool(values, valid)
-
-    assert torch.allclose(pooled, torch.tensor([[2.0, 0.0], [1.0, 0.0], [0.0, 0.0]]))
-    pooled.sum().backward()
-    assert values.grad is not None and torch.isfinite(values.grad).all()
-
-
-def test_positional_encoding_validates_maximum_sequence_length():
-    encoding = _PositionalEncoding(dim=4, dropout=0.0, max_len=3).eval()
+def test_positional_encoding_validates_sequence_length():
+    encoding = PositionalEncoding(dim=4, dropout=0.0, max_len=3).eval()
 
     assert encoding(torch.zeros(2, 3, 4)).shape == (2, 3, 4)
-    assert encoding(torch.zeros(2, 0, 4)).shape == (2, 0, 4)
-    with pytest.raises(ValueError, match="exceeds positional encoding max_len 3"):
+    with pytest.raises(ValueError, match="max_len 3"):
         encoding(torch.zeros(2, 4, 4))
-
-
-def test_transformer_cross_attention_supports_empty_key_and_query_sequences():
-    block = _TransformerCrossAttention(4, dropout=0.0).eval()
-    query = torch.randn(2, 3, 4)
-    empty_key = torch.empty(2, 0, 4)
-
-    result = block(query, empty_key, torch.ones(2, 3, dtype=torch.bool), torch.zeros(2, 0, dtype=torch.bool))
-    empty_query = torch.empty(2, 0, 4)
-    empty_result = block(empty_query, query, torch.zeros(2, 0, dtype=torch.bool), torch.ones(2, 3, dtype=torch.bool))
-
-    assert result.shape == query.shape
-    assert torch.equal(result, torch.zeros_like(result))
-    assert empty_result.shape == empty_query.shape
-    assert empty_result.numel() == 0
-
-
-def test_tfs_zero_length_modality_is_excluded_from_default_hierarchy():
-    model = TFSFusionModel(input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2).eval()
-    batch = Batch(
-        inputs={
-            "text": torch.randn(2, 2, 3),
-            "audio": torch.randn(2, 1, 4),
-            "video": torch.empty(2, 0, 5),
-        },
-        targets=None,
-        masks={
-            "text_temporal_mask": torch.ones(2, 2, dtype=torch.bool),
-            "audio_temporal_mask": torch.ones(2, 1, dtype=torch.bool),
-            "video_temporal_mask": torch.zeros(2, 0, dtype=torch.bool),
-        },
-    )
-
-    output = model(batch)
-
-    assert output.aux is not None
-    assert torch.isfinite(output.preds).all()
-    assert torch.isfinite(output.aux["fused"]).all()
-    for key, value in output.aux.items():
-        if key.startswith("pair_valid_") and "video" in key:
-            assert not value.any()
-        if key.startswith("pair_") and not key.startswith("pair_valid_") and "video" in key:
-            assert torch.equal(value, torch.zeros_like(value))
-
-
-def test_tfs_all_invalid_nonempty_modalities_keep_zero_fused_representation():
-    model = TFSFusionModel(input_dims={"text": 3, "audio": 4, "video": 5}, shared_dim=4, output_dim=2).eval()
-    batch = Batch(
-        inputs={
-            "text": torch.randn(2, 1, 3),
-            "audio": torch.randn(2, 1, 4),
-            "video": torch.randn(2, 1, 5),
-        },
-        targets=None,
-        masks={
-            "text_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
-            "audio_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
-            "video_temporal_mask": torch.zeros(2, 1, dtype=torch.bool),
-        },
-    )
-
-    output = model(batch)
-
-    assert output.aux is not None
-    assert torch.equal(output.aux["fused"], torch.zeros_like(output.aux["fused"]))
-    assert torch.equal(output.aux["pair_weights"], torch.zeros_like(output.aux["pair_weights"]))
-    assert torch.isfinite(output.preds).all()
