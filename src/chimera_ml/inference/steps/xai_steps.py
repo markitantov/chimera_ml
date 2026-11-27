@@ -13,6 +13,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference.context import InferenceContext
+from chimera_ml.models._utils import _modality_validity
 
 
 def _batch_size(batch: Batch) -> int:
@@ -23,6 +24,8 @@ def _availability(batch: Batch, modality: str, size: int) -> Tensor:
     if modality not in batch.inputs:
         return torch.zeros(size, dtype=torch.bool)
     value = batch.inputs[modality]
+    if value.ndim in (2, 3):
+        return _modality_validity(batch, modality)
     width = value.shape[1] if value.ndim > 2 else 1
     temporal = batch.get_masks(f"{modality}_temporal_mask")
     if temporal is not None:
@@ -79,7 +82,7 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
     meta = deepcopy(batch.meta)
     if policy == "remove" and isinstance(meta, dict) and isinstance(meta.get("masks"), Mapping):
         _remove_masks(meta["masks"], modality)
-    return Batch(inputs, batch.targets, masks or None, meta)
+    return Batch(inputs, batch.targets, masks if isinstance(batch.masks, dict) or masks else None, meta)
 
 
 def _score(output: ModelOutput, size: int, score_fn: Callable[[ModelOutput], Tensor] | None) -> Tensor:

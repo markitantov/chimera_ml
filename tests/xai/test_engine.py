@@ -330,6 +330,18 @@ def test_validity_rejection_and_no_common_positions_are_unsupported():
     assert "common valid" in no_common["samples"][0]["modalities"]["audio"]["reason"]
 
 
+def test_intervention_preserves_empty_canonical_masks_over_legacy_metadata():
+    batch = Batch(
+        {"audio": torch.ones(1, 1)},
+        None,
+        {},
+        {"masks": {"audio_mask": torch.ones(1, dtype=torch.bool)}},
+    )
+    changed = _intervene(batch, "audio", "zero")
+    assert changed.masks == {}
+    assert changed.get_masks("audio_mask") is None
+
+
 def test_remove_intervention_clears_nested_legacy_metadata_masks():
     batch = Batch(
         {"audio": torch.ones(1, 1), "video": torch.ones(1, 1)},
