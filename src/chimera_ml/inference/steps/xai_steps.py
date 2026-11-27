@@ -17,10 +17,6 @@ class ScoreFunction(Protocol):
     def __call__(self, output: ModelOutput) -> torch.Tensor: ...
 
 
-def modality_available(batch: Batch, name: str) -> torch.Tensor:
-    return get_modality_validity(batch, name)
-
-
 def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
     if policy not in {"remove", "mask"}:
         raise ValueError("ablation_policy must be one of: remove, mask.")
@@ -189,7 +185,7 @@ def explain_batch(
                 explanations[index]["aux"][key] = json_value(value[index])
 
     for name in selected:
-        available = modality_available(batch, name)
+        available = get_modality_validity(batch, name)
         intervention = intervene_batch(batch, name, ablation_policy)
         validator = getattr(model, "validate_intervention", None)
 

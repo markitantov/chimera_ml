@@ -10,7 +10,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, build_inference_step
-from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch, modality_available
+from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch
 from chimera_ml.models.utils import get_modality_validity
 
 
@@ -124,11 +124,11 @@ def test_mask_intervention_preserves_existing_unrelated_masks() -> None:
 
 def test_modality_availability_matches_fusion_mask_resolution() -> None:
     temporal_batch = Batch(
-        inputs={"audio": torch.ones(2, 2, 1)},
+        inputs={"audio": torch.ones(2, 1, 1)},
         targets=None,
         masks={
-            "audio_temporal_mask": torch.tensor([[True, False], [False, True]]),
-            "sequence_mask": torch.tensor([[False, False], [True, True]]),
+            "audio_temporal_mask": torch.tensor([[True], [False]]),
+            "sequence_mask": torch.tensor([[False], [True]]),
         },
     )
     rank_two_batch = Batch(
@@ -138,18 +138,46 @@ def test_modality_availability_matches_fusion_mask_resolution() -> None:
     )
     missing_batch = Batch(inputs={"video": torch.ones(2, 1)}, targets=None)
 
-    assert modality_available(temporal_batch, "audio").tolist() == [True, True]
-    assert torch.equal(
-        modality_available(temporal_batch, "audio"),
-        get_modality_validity(temporal_batch, "audio"),
-    )
-    assert modality_available(rank_two_batch, "audio").tolist() == [True, False]
-    assert torch.equal(
-        modality_available(rank_two_batch, "audio"),
-        get_modality_validity(rank_two_batch, "audio"),
-    )
-    assert modality_available(missing_batch, "audio").numel() == 0
+    assert get_modality_validity(temporal_batch, "audio").tolist() == [True, False]
+    assert get_modality_validity(rank_two_batch, "audio").tolist() == [True, False]
     assert get_modality_validity(missing_batch, "audio").numel() == 0
+
+    temporal_result = explain_batch(
+        MaskedSumModel().eval(),
+        Batch(
+            inputs={"audio": torch.ones(2, 1), "video": torch.ones(2, 1)},
+            targets=None,
+            masks=temporal_batch.masks | {"video_mask": torch.ones(2, dtype=torch.bool)},
+        ),
+        modalities=("audio",),
+    )
+    rank_two_result = explain_batch(
+        MaskedSumModel().eval(),
+        Batch(
+            inputs={"audio": torch.ones(2, 1), "video": torch.ones(2, 1)},
+            targets=None,
+            masks=rank_two_batch.masks | {"video_mask": torch.ones(2, dtype=torch.bool)},
+        ),
+        modalities=("audio",),
+    )
+    missing_result = explain_batch(
+        MaskedSumModel().eval(),
+        missing_batch,
+        modalities=("audio",),
+    )
+
+    assert [sample["modalities"]["audio"]["status"] for sample in temporal_result["samples"]] == [
+        "evaluated",
+        "already_missing",
+    ]
+    assert [sample["modalities"]["audio"]["status"] for sample in rank_two_result["samples"]] == [
+        "evaluated",
+        "already_missing",
+    ]
+    assert [sample["modalities"]["audio"]["status"] for sample in missing_result["samples"]] == [
+        "already_missing",
+        "already_missing",
+    ]
 
 
 def test_zero_intervention_is_rejected() -> None:
