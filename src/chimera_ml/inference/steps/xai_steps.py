@@ -10,6 +10,7 @@ from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference.context import InferenceContext
+from chimera_ml.models.utils import get_modality_validity
 
 
 class ScoreFunction(Protocol):
@@ -17,36 +18,7 @@ class ScoreFunction(Protocol):
 
 
 def modality_available(batch: Batch, name: str) -> torch.Tensor:
-    values = batch.inputs.get(name)
-    if values is None:
-        return torch.zeros(0, dtype=torch.bool)
-
-    batch_size = values.shape[0]
-    time_steps = 1 if values.ndim == 2 else values.shape[1]
-    temporal = batch.get_masks(f"{name}_temporal_mask")
-
-    if temporal is not None:
-        mask = torch.as_tensor(temporal, device=values.device).bool()
-        if mask.shape != (batch_size, time_steps):
-            raise ValueError(f"Temporal mask for '{name}' must have shape {(batch_size, time_steps)}.")
-    else:
-        presence = batch.get_masks(f"{name}_mask")
-        if presence is None:
-            mask = torch.ones((batch_size, time_steps), dtype=torch.bool, device=values.device)
-        else:
-            mask = torch.as_tensor(presence, device=values.device).bool()
-            if mask.ndim == 1 and mask.shape[0] == batch_size:
-                mask = mask[:, None].expand(-1, time_steps)
-            elif mask.shape != (batch_size, time_steps):
-                raise ValueError(f"Mask for '{name}' must have shape (B,) or (B, T).")
-
-    sequence = batch.get_masks("sequence_mask")
-    if sequence is not None:
-        sequence = torch.as_tensor(sequence, device=values.device).bool()
-        if sequence.shape == mask.shape:
-            mask = mask & sequence
-
-    return mask.any(dim=1)
+    return get_modality_validity(batch, name)
 
 
 def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:

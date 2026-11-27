@@ -11,6 +11,7 @@ from chimera_ml.core.registry import INFERENCE_STEPS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.inference import InferenceContext, build_inference_step
 from chimera_ml.inference.steps.xai_steps import XAIStep, explain_batch, intervene_batch, modality_available
+from chimera_ml.models.utils import get_modality_validity
 
 
 class MaskedSumModel(nn.Module):
@@ -121,17 +122,34 @@ def test_mask_intervention_preserves_existing_unrelated_masks() -> None:
     assert batch.get_masks("audio_mask").tolist() == [True, True]
 
 
-def test_modality_availability_uses_temporal_and_sequence_masks() -> None:
-    batch = Batch(
+def test_modality_availability_matches_fusion_mask_resolution() -> None:
+    temporal_batch = Batch(
         inputs={"audio": torch.ones(2, 2, 1)},
         targets=None,
         masks={
-            "audio_temporal_mask": torch.tensor([[True, False], [False, False]]),
-            "sequence_mask": torch.tensor([[True, True], [True, True]]),
+            "audio_temporal_mask": torch.tensor([[True, False], [False, True]]),
+            "sequence_mask": torch.tensor([[False, False], [True, True]]),
         },
     )
+    rank_two_batch = Batch(
+        inputs={"audio": torch.ones(2, 1)},
+        targets=None,
+        masks={"sequence_mask": torch.tensor([True, False])},
+    )
+    missing_batch = Batch(inputs={"video": torch.ones(2, 1)}, targets=None)
 
-    assert modality_available(batch, "audio").tolist() == [True, False]
+    assert modality_available(temporal_batch, "audio").tolist() == [True, True]
+    assert torch.equal(
+        modality_available(temporal_batch, "audio"),
+        get_modality_validity(temporal_batch, "audio"),
+    )
+    assert modality_available(rank_two_batch, "audio").tolist() == [True, False]
+    assert torch.equal(
+        modality_available(rank_two_batch, "audio"),
+        get_modality_validity(rank_two_batch, "audio"),
+    )
+    assert modality_available(missing_batch, "audio").numel() == 0
+    assert get_modality_validity(missing_batch, "audio").numel() == 0
 
 
 def test_zero_intervention_is_rejected() -> None:

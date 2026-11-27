@@ -2,9 +2,12 @@
 
 TFSFusionModel implements hierarchical bidirectional fusion. Each configured
 modality is projected to shared_dim. Every configured ordered pair is processed
-with cross-modal attention. Pair results are grouped, refined by group-level
-attention, pooled with a masked mean and population standard deviation, and
-passed through Linear, BatchNorm, and Tanh before prediction.
+with cross-modal attention. In `A->B`, queries come from A and keys and values
+come from B. Pair results are concatenated along the sequence axis (`dim=1`)
+inside each group, so different modality sequence lengths are supported. Each
+refined group is processed by mask-aware StatPool, which returns its population
+mean and standard deviation. Available group representations are then averaged
+arithmetically and passed through Linear, BatchNorm, and Tanh before prediction.
 
 ## Constructor
 
@@ -22,6 +25,15 @@ TFSFusionModel(
 groups defaults to two groups containing both directions of every unordered
 pair. Each directed pair must occur once. Empty groups, unknown modalities,
 self-pairs, and repeated pairs raise ValueError.
+
+Custom groups may contain any non-empty subset of directed interactions; omitted
+pairs are not computed. With no custom groups, the model creates the complete
+forward group and complete reverse group for every unordered modality pair.
+
+TFS first applies mask-aware StatPool to each refined group. It then averages
+the available group vectors arithmetically, without a second statistical pool.
+Checkpoints from the previous double-pooling implementation are incompatible
+with the current parameter structure; no automatic migration is provided.
 
 ## Inputs and outputs
 
