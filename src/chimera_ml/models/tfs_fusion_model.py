@@ -137,6 +137,7 @@ class TFSFusionModel(BaseModel):
                     feature_map[pair[1]],
                     key,
                 )
+
         return values, valid, attention
 
     def _fuse_groups(
