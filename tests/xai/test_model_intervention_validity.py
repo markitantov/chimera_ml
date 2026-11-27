@@ -2,7 +2,7 @@ import torch
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.inference.steps.xai_steps import explain_batch
-from chimera_ml.models.raav_fusion import RAAVFusionModel
+from chimera_ml.models.raav_fusion_model import RAAVFusionModel
 from chimera_ml.models.tfs_fusion_model import TFSFusionModel
 from chimera_ml.models.tomar_fusion import TOMARFusionModel
 
@@ -29,7 +29,7 @@ class CountingTOMAR(TOMARFusionModel):
 
 class CountingRAAV(RAAVFusionModel):
     def __init__(self):
-        super().__init__({"frame": 2, "context": 2}, 2, 1, ("frame",), "context")
+        super().__init__({"frame": 2, "context": 2}, 2, 1, ("frame",), ("context",))
         self.calls = 0
 
     def forward(self, batch):

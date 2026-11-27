@@ -322,7 +322,7 @@ def test_build_logger_passes_context_when_supported():
                 "shared_dim": 4,
                 "output_dim": 2,
                 "frame_modalities": ("frame",),
-                "context_modality": "context",
+                "context_modalities": ["context"],
             },
         ),
         (

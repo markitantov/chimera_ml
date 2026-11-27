@@ -88,7 +88,7 @@ def _samples(model_name: str, invalid_offset: float = 0.0) -> list[dict[str, obj
                 "shared_dim": 4,
                 "output_dim": 2,
                 "frame_modalities": ["frame_a", "frame_b"],
-                "context_modality": "context",
+                "context_modalities": ["context"],
                 "num_latents": 2,
                 "gate_hidden": 3,
             },
