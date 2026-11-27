@@ -182,7 +182,7 @@ The selected score has `[B, T]`: axis 1 is time. If a score function instead ret
 
 ## Minimal artifact schema and interpretation
 
-`explain_batch` returns schema version 2. `xai_step` returns schema version 3 with `samples` and `summary`. Raw modality entries contain only `status`, optional `reason`, `ablated`, signed `delta`, and `absolute_delta`; selected baseline `diagnostics` are copied from `ModelOutput.aux`. Summary modality entries contain only `mean_signed_delta`, `mean_absolute_delta`, `relative_sensitivity`, and `rank`, plus a simple `ranking` list. Historical coverage counters, tie groups, dominant-modality fields, and automatic metadata are intentionally removed.
+`explain_batch` returns the raw artifact with `ablation_policy`, `modalities`, and `samples`. `xai_step` adds `summary` to the same artifact. Raw modality entries contain only `status`, optional `reason`, `ablated`, signed `delta`, and `absolute_delta`; selected baseline `diagnostics` are copied from `ModelOutput.aux`. Summary modality entries contain only `mean_signed_delta`, `mean_absolute_delta`, and `relative_sensitivity`; the ordered `ranking` list provides modality order. Historical schema/version fields, coverage counters, tie groups, dominant-modality fields, and automatic metadata are intentionally absent.
 
 Relative sensitivity is descriptive:
 
@@ -192,11 +192,11 @@ mean_absolute_delta(modality)
 sum(mean_absolute_delta(all comparable modalities))
 ```
 
-Samples receive equal weight. Unsupported and unavailable comparisons are excluded, never converted to zero. Temporal summaries aggregate all comparable observations at each output position; they do not infer original input timestamps. The schema versions were bumped because earlier public reporting fields were intentionally removed; consumers should treat the new artifact shape as a compatibility change.
+Samples receive equal weight. Unsupported and unavailable comparisons are excluded, never converted to zero. Temporal summaries aggregate all comparable observations at each output position; they do not infer original input timestamps. The artifact deliberately has no schema-version or method fields; consumers should rely on the documented XAI artifact shape.
 
 ## Optional diagnostics and temporal summaries
 
-Set `diagnostic_keys` to copy selected, batch-aligned baseline tensors from `ModelOutput.aux`; XAI does not interpret them as importance. TFS exposes `pair_weights` and `group_weights`, TFS-DCMMOE exposes adaptive interaction weights, RAAV exposes `frame_weights` and `frame_mask`, and TOMAR exposes `rho_<modality>`.
+Set `diagnostic_keys` to copy selected, batch-aligned baseline tensors from `ModelOutput.aux`; XAI does not interpret them as importance. Availability uses the shared model mask semantics for `[B, D]` and `[B, T, D]` inputs; one-dimensional `[B]` custom inputs are treated as present, while other input ranks are rejected explicitly. TFS exposes `pair_weights` and `group_weights`, TFS-DCMMOE exposes adaptive interaction weights, RAAV exposes `frame_weights` and `frame_mask`, and TOMAR exposes `rho_<modality>`.
 
 Set `temporal_axis=1` for `[B, T]` or `[B, T, C]` scores. Supported score shapes are `[B]`, `[B, C]`, `[B, T]`, and `[B, T, C]`; invalid positions are serialized as `null` and excluded from means.
 

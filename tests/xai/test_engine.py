@@ -352,7 +352,8 @@ def test_remove_intervention_clears_nested_legacy_metadata_masks():
     changed = _intervene(batch, "audio", "remove")
     assert changed.get_masks("audio_mask") is None
     assert changed.get_masks("video_mask") is not None
-    assert changed.meta["masks"]["mask"].get("audio") is None
+    assert changed.meta["masks"]["mask"].get("audio") is not None
+    assert batch.meta["masks"]["mask"].get("audio") is not None
 
 
 def test_predictions_are_unchanged_with_xai(tmp_path: Path):
@@ -404,8 +405,6 @@ def test_xai_step_runs_inside_sequential_and_parallel_dags(tmp_path: Path):
 
 def make_explanation(samples, modalities=("audio", "video")):
     return {
-        "schema_version": 1,
-        "method": "leave_one_modality_out",
         "ablation_policy": "zero",
         "modalities": list(modalities),
         "samples": samples,
@@ -555,12 +554,11 @@ def test_temporal_summary_allows_unavailable_samples():
     assert summary["ranking"] == []
 
 
-def test_summary_has_no_singleton_ties_and_consistent_ranks():
+def test_summary_has_no_singleton_ties_and_uses_ordered_ranking():
     artifact = make_explanation([explanation_sample("one", audio=evaluated([2.0]), video=evaluated([1.0]))])
     summary = summarize_explanations(artifact)
     assert "ties" not in summary
-    assert summary["modalities"]["audio"]["rank"] == 1
-    assert summary["modalities"]["video"]["rank"] == 2
+    assert summary["ranking"] == ["audio", "video"]
     assert summary["modalities"]["audio"]["relative_sensitivity"] == pytest.approx(2 / 3)
 
 
