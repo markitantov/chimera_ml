@@ -1,8 +1,8 @@
 # TOMAR fusion
 
 TOMARFusionModel treats one modality as an anchor and adds residual corrections
-from the other configured modalities. Each correction is produced by a
-modality-specific projection and is gated by an MLP conditioned on the
+from the other configured modalities. Each correction is produced by a modality-specific MLP and is gated by a
+separate sigmoid MLP conditioned on the
 concatenation of the anchor and that modality's pooled representation. The
 anchor plus all gated corrections is normalized before the internal prediction
 layer.
@@ -16,12 +16,15 @@ TOMARFusionModel(
     anchor_modality: str,
     output_dim: int,
     gate_hidden: int = 64,
+    legacy_linear_correction: bool = False,
 )
 ~~~
 
 input_dims declares positive feature widths and creates internal projections.
 shared_dim is the residual width, anchor_modality is required, output_dim is
-the prediction width, and gate_hidden controls each extra modality's gate MLP.
+the prediction width, and gate_hidden controls each extra modality's MLPs.
+`legacy_linear_correction=True` selects the backward-compatible linear residual
+variant; it is not the exact theoretical formulation.
 
 ## Inputs, masks, and outputs
 

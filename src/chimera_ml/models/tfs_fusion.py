@@ -7,6 +7,7 @@ from chimera_ml.core.registry import MODELS
 from chimera_ml.core.types import ModelOutput
 from chimera_ml.models._utils import (
     _attention,
+    _attention_with_weights,
     _features,
     _masked_softmax,
     _mean,
@@ -262,6 +263,19 @@ def _directed_pair(
     return value * pair_valid.to(value.dtype).unsqueeze(-1), pair_valid
 
 
+def _directed_sequence(
+    left: tuple[torch.Tensor, torch.Tensor], right: tuple[torch.Tensor, torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute a directed interaction while retaining its temporal sequence."""
+    query, query_valid = left
+    key, key_valid = right
+    attended, coefficients = _attention_with_weights(query, key, key_valid)
+    pair_valid = query_valid & key_valid.any(dim=1, keepdim=True)
+    sequence = (query + attended) * pair_valid.unsqueeze(-1).to(query.dtype)
+    coefficients = coefficients * pair_valid.unsqueeze(-1).to(coefficients.dtype)
+    return sequence, pair_valid, coefficients
+
+
 def _collect_pairs(
     feats: dict[str, tuple[torch.Tensor, torch.Tensor]], groups: tuple[tuple[tuple[str, str], ...], ...], pair_fn
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], tuple[str, ...]]:
@@ -336,6 +350,62 @@ def _hierarchical_fusion(
     return fused, pair_weights, group_weights
 
 
+def _theoretical_fusion(
+    groups: tuple[tuple[tuple[str, str], ...], ...],
+    features: dict[str, tuple[torch.Tensor, torch.Tensor]],
+    group_layers: nn.ModuleList,
+    output: nn.Linear,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Implement (1.4)-(1.5), retaining sequences through inter-group attention."""
+    interactions, validities, pair_attention = {}, {}, {}
+    for group in groups:
+        for pair in group:
+            key = _pair_name(pair)
+            if pair[0] in features and pair[1] in features:
+                interactions[key], validities[key], pair_attention[key] = _directed_sequence(
+                    features[pair[0]], features[pair[1]]
+                )
+
+    group_values, group_validities, group_attention = [], [], {}
+    for group_index, group in enumerate(groups):
+        keys = [_pair_name(pair) for pair in group if _pair_name(pair) in interactions]
+        if not keys:
+            continue
+        query = torch.cat([interactions[key] for key in keys], dim=1)
+        query_valid = torch.cat([validities[key] for key in keys], dim=1)
+        other_keys = [
+            _pair_name(pair)
+            for other_index, other in enumerate(groups)
+            if other_index != group_index
+            for pair in other
+            if _pair_name(pair) in interactions
+        ]
+        if other_keys:
+            key_values = torch.cat([interactions[key] for key in other_keys], dim=1)
+            key_valid = torch.cat([validities[key] for key in other_keys], dim=1)
+            context, coefficients = _attention_with_weights(query, key_values, key_valid)
+            refined = query + context
+        else:
+            coefficients = query.new_zeros(query.shape[0], query.shape[1], 0)
+            refined = query
+        refined = refined * query_valid.unsqueeze(-1).to(refined.dtype)
+        group_values.append(group_layers[group_index](_mean(refined, query_valid)))
+        group_validities.append(query_valid.any(dim=1))
+        coefficients = coefficients * query_valid.unsqueeze(-1).to(coefficients.dtype)
+        group_attention[f"group_attention_{group_index}"] = coefficients
+
+    if not group_values:
+        raise ValueError("Fusion has no directed pair available in batch.inputs.")
+    stacked_values = torch.stack(group_values, dim=1)
+    stacked_valid = torch.stack(group_validities, dim=1)
+    group_count = stacked_valid.sum(dim=1, keepdim=True).clamp_min(1)
+    fused = output((stacked_values * stacked_valid.unsqueeze(-1)).sum(dim=1) / group_count)
+    aux = {f"pair_attention_{key}": value for key, value in pair_attention.items()}
+    aux.update(group_attention)
+    aux["fused"] = fused
+    return fused, aux
+
+
 class TFSFusionModel(BaseModel):
     """Hierarchical fusion of directed pairwise cross-modal interactions.
 
@@ -352,6 +422,7 @@ class TFSFusionModel(BaseModel):
         shared_dim: int,
         output_dim: int,
         groups: tuple[tuple[tuple[str, str], ...], ...] | None = None,
+        theory_aligned: bool = False,
     ):
         super().__init__()
         self.input_dims = _validate_input_dims(input_dims)
@@ -366,6 +437,16 @@ class TFSFusionModel(BaseModel):
         self.proj = _projections(self.names, self.input_dims, shared_dim)
         self.prediction = nn.Linear(shared_dim, output_dim)
         self.groups = _normalize_groups(self.names, groups)
+        if not isinstance(theory_aligned, bool):
+            raise ValueError("theory_aligned must be a bool.")
+        if theory_aligned:
+            configured_pairs = {pair for group in self.groups for pair in group}
+            expected_pairs = {(left, right) for left in self.names for right in self.names if left != right}
+            if configured_pairs != expected_pairs:
+                raise ValueError(
+                    "Theory-aligned TFS requires every ordered modality pair to occur exactly once in groups."
+                )
+        self.theory_aligned = theory_aligned
         self.group_layers = nn.ModuleList(nn.Linear(shared_dim, shared_dim) for _ in self.groups)
         self.output = nn.Linear(shared_dim, shared_dim)
         self.triple_fusion = _TripleFusionBackbone(self.names, shared_dim) if len(self.names) == 3 else None
@@ -397,6 +478,10 @@ class TFSFusionModel(BaseModel):
 
     def forward(self, batch: Batch) -> ModelOutput:
         feats = _features(self, batch, self.names)
+        if self.theory_aligned:
+            fused, aux = _theoretical_fusion(self.groups, feats, self.group_layers, self.output)
+            return ModelOutput(preds=self.prediction(fused), aux=aux)
+
         values, valid, _ = _collect_pairs(feats, self.groups, self._pair)
         if not values:
             raise ValueError("TFSFusionModel needs at least two available modalities.")

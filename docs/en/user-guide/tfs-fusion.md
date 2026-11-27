@@ -13,6 +13,18 @@ groups it follows the MASAI-style hierarchy:
 
 This is hierarchical fusion, not a simple average of pair outputs.
 
+## Theory-aligned configuration
+
+Set `theory_aligned=True` to implement UDKMO equations (1.4)-(1.5). Every
+ordered modality pair must occur exactly once in `groups`. Directed pair
+attention coefficients are retained as `pair_attention_<source>-><target>`;
+inter-group coefficients are retained as `group_attention_<index>`, where the
+group index identifies the query group. The temporal interaction sequences are
+kept until this attention is complete. Each available group is then masked-mean
+pooled and the resulting group vectors are averaged with equal weights. This is
+not availability weighting. The default branch remains a backward-compatible
+legacy TFS mode and is not an exact implementation of equation (1.5).
+
 ## Parameters
 
 ~~~python

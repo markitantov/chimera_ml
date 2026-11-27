@@ -159,6 +159,18 @@ def _attention(query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor) 
     return (weights.to(work_dtype) @ key_work).to(query.dtype)
 
 
+def _attention_with_weights(
+    query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return scaled dot-product attention and its actual coefficients."""
+    work_dtype = torch.float32 if query.dtype in (torch.float16, torch.bfloat16) else query.dtype
+    query_work = query.to(work_dtype)
+    key_work = key.to(work_dtype)
+    scores = query_work @ key_work.transpose(-1, -2) * query.shape[-1] ** -0.5
+    weights = _masked_softmax(scores, key_valid)
+    return (weights.to(work_dtype) @ key_work).to(query.dtype), weights
+
+
 def _features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
     """Read, project and validate configured modality feature sequences."""
     result: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}

@@ -9,7 +9,7 @@ from chimera_ml.models.base import BaseModel
 
 
 class TOMARFusionModel(BaseModel):
-    """Residual refinement of an anchor modality by additional modalities."""
+    """Theory-aligned TOMAR residual refinement from equation (1.8)."""
 
     def __init__(
         self,
@@ -18,6 +18,7 @@ class TOMARFusionModel(BaseModel):
         anchor_modality: str,
         output_dim: int,
         gate_hidden: int = 64,
+        legacy_linear_correction: bool = False,
     ):
         super().__init__()
         self.input_dims = _validate_input_dims(input_dims)
@@ -42,7 +43,21 @@ class TOMARFusionModel(BaseModel):
                 for name in extras
             }
         )
-        self.delta = nn.ModuleDict({name: nn.Linear(shared_dim, shared_dim) for name in extras})
+        self.legacy_linear_correction = legacy_linear_correction
+        if not isinstance(legacy_linear_correction, bool):
+            raise ValueError("legacy_linear_correction must be a bool.")
+        self.delta = nn.ModuleDict(
+            {
+                name: (
+                    nn.Linear(shared_dim, shared_dim)
+                    if legacy_linear_correction
+                    else nn.Sequential(
+                        nn.Linear(shared_dim, gate_hidden), nn.ReLU(), nn.Linear(gate_hidden, shared_dim)
+                    )
+                )
+                for name in extras
+            }
+        )
         self.norm = nn.LayerNorm(shared_dim)
 
     def validate_intervention(self, original: Batch, intervened: Batch, modality: str, policy: str) -> str | None:

@@ -46,6 +46,11 @@ masked context produces zero context latents and zero context contribution.
 An empty context sequence is supported. An empty frame sequence produces an
 empty prediction sequence; at least one frame modality must be available.
 
+Equation (1.7) computes every contextual correction from the same original
+frame-fused representation `V_B`; corrections are summed before LayerNorm.
+`frame_weights` are the actual per-frame `beta(m,t)` coefficients, normalized
+only across available frame modalities at each valid time.
+
 Useful ModelOutput.aux values are frame_weights, frame_mask, fused, context,
 context_mask, context_latent_attention, frame_to_context_attention,
 context_delta, and refined.
