@@ -210,7 +210,7 @@ def test_multiple_callbacks_fallback_ids_and_repeated_runs(tmp_path: Path):
     second = wrapped.run(ctx).get_artifact("xai")
     assert [sample["sample_id"] for sample in first["samples"]] == ["batch-0-0", "batch-0-1", "batch-1-0", "batch-1-1"]
     assert len(second["samples"]) == 4
-    assert first["batches"] == second["batches"] == 2
+    assert len(first["samples"]) == len(second["samples"]) == 4
 
 
 def test_callback_contract_and_failure_restoration(tmp_path: Path):
@@ -424,12 +424,11 @@ def test_summary_calculates_signed_absolute_relative_and_ranking():
         ]
     )
     summary = summarize_explanations(artifact)
-    assert summary["status"] == "evaluated"
     assert summary["ranking"] == ["audio", "video"]
-    assert summary["dominant_modality"] == "audio"
+    assert summary["ranking"] == ["audio", "video"]
     assert summary["modalities"]["audio"]["mean_signed_delta"] == 0.0
     assert summary["modalities"]["audio"]["mean_absolute_delta"] == 1.0
-    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(2 / 3)
+    assert summary["modalities"]["audio"]["relative_sensitivity"] == pytest.approx(2 / 3)
     assert summary["samples"][0]["modalities"]["video"]["mean_signed_delta"] == 0.5
     json.dumps(summary, allow_nan=False)
 
@@ -445,9 +444,8 @@ def test_summary_uses_equal_sample_weighting_and_explicit_ties():
     assert summary["ranking"] == ["audio", "video"]
     assert summary["modalities"]["audio"]["mean_absolute_delta"] == 1.0
     assert summary["modalities"]["video"]["mean_absolute_delta"] == 1.0
-    assert summary["ties"] == [["audio", "video"]]
-    assert summary["dominant_modality"] is None
-    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(0.5)
+    assert "ties" not in summary
+    assert summary["modalities"]["audio"]["relative_sensitivity"] == pytest.approx(0.5)
 
 
 def test_summary_handles_zero_missing_unsupported_empty_and_no_common():
@@ -463,11 +461,9 @@ def test_summary_handles_zero_missing_unsupported_empty_and_no_common():
         modalities=("audio", "video", "text"),
     )
     summary = summarize_explanations(artifact)
-    assert summary["status"] == "no_measurable_influence"
-    assert summary["dominant_modality"] is None
-    assert summary["modalities"]["audio"]["relative_influence"] is None
-    assert summary["modalities"]["video"]["relative_influence"] is None
-    assert summary["modalities"]["text"]["unsupported_sample_count"] == 1
+    assert summary["ranking"] == ["audio"]
+    assert summary["modalities"]["audio"]["relative_sensitivity"] is None
+    assert summary["modalities"]["video"]["relative_sensitivity"] is None
 
     no_common = make_explanation(
         [
@@ -479,7 +475,6 @@ def test_summary_handles_zero_missing_unsupported_empty_and_no_common():
         ]
     )
     no_common_summary = summarize_explanations(no_common)
-    assert no_common_summary["status"] == "insufficient_common_support"
     assert no_common_summary["ranking"] == []
 
 
@@ -495,12 +490,10 @@ def test_summary_supports_temporal_axis_and_scalar_scores():
     )
     summary = summarize_explanations(temporal, temporal_axis=1)
     assert [item["position"] for item in summary["samples"][0]["temporal"]] == [0, 1, 2]
-    assert summary["samples"][0]["temporal"][0]["dominant_modality"] == "audio"
-    assert summary["samples"][0]["temporal"][1]["dominant_modality"] == "video"
 
     scalar = make_explanation([explanation_sample("scalar", audio=evaluated(2.0), video=evaluated(-1.0))])
     scalar_summary = summarize_explanations(scalar)
-    assert scalar_summary["modalities"]["audio"]["valid_comparison_count"] == 1
+    assert scalar_summary["modalities"]["audio"]["mean_absolute_delta"] == 2.0
     with pytest.raises(ValueError, match="temporal_axis"):
         summarize_explanations(scalar, temporal_axis=1)
 
@@ -517,9 +510,7 @@ def test_summary_requires_common_support_for_global_ranking():
         ]
     )
     summary = summarize_explanations(artifact)
-    assert summary["status"] == "insufficient_common_support"
     assert summary["ranking"] == []
-    assert summary["dominant_modality"] is None
 
 
 def test_summary_keeps_individual_and_common_comparison_counts():
@@ -533,11 +524,7 @@ def test_summary_keeps_individual_and_common_comparison_counts():
         ]
     )
     summary = summarize_explanations(artifact)
-    assert summary["modalities"]["audio"]["valid_comparison_count"] == 3
-    assert summary["modalities"]["video"]["valid_comparison_count"] == 2
-    assert summary["modalities"]["audio"]["common_comparison_count"] == 2
-    assert summary["modalities"]["video"]["common_comparison_count"] == 2
-    assert summary["common_comparison_count"] == 2
+    assert summary["modalities"]["audio"]["mean_absolute_delta"] == pytest.approx(0.55)
     assert summary["ranking"] == ["audio", "video"]
 
 
@@ -552,22 +539,17 @@ def test_temporal_summary_allows_unavailable_samples():
         ]
     )
     summary = summarize_explanations(artifact, temporal_axis=1)
-    assert summary["status"] == "unavailable"
     assert summary["temporal"] == []
     assert summary["ranking"] == []
-    assert summary["ties"] == []
 
 
 def test_summary_has_no_singleton_ties_and_consistent_ranks():
     artifact = make_explanation([explanation_sample("one", audio=evaluated([2.0]), video=evaluated([1.0]))])
     summary = summarize_explanations(artifact)
-    assert summary["ties"] == []
+    assert "ties" not in summary
     assert summary["modalities"]["audio"]["rank"] == 1
     assert summary["modalities"]["video"]["rank"] == 2
-    assert summary["modalities"]["audio"]["relative_influence"] == pytest.approx(2 / 3)
-    assert summary["modalities"]["video"]["relative_influence"] == pytest.approx(1 / 3)
-    assert summary["dominant_modality"] == "audio"
-    assert summary["dominant_modalities"] == ["audio"]
+    assert summary["modalities"]["audio"]["relative_sensitivity"] == pytest.approx(2 / 3)
 
 
 def test_mask_intervention_disables_nested_batch_masks_without_mutating_original():
@@ -699,6 +681,5 @@ def test_global_temporal_summary_aggregates_all_observations_and_uses_absolute_r
 def test_zero_total_sensitivity_has_no_dominant_modality():
     artifact = make_explanation([explanation_sample("one", audio=evaluated([0.0, 0.0]), video=evaluated([0.0, 0.0]))])
     summary = summarize_explanations(artifact)
-    assert summary["status"] == "no_measurable_influence"
-    assert summary["dominant_modality"] is None
-    assert summary["modalities"]["audio"]["relative_influence"] is None
+    assert summary["ranking"] == ["audio", "video"]
+    assert summary["modalities"]["audio"]["relative_sensitivity"] is None

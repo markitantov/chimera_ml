@@ -180,80 +180,25 @@ summary = summarize_explanations(raw, temporal_axis=1)
 
 Выбранная оценка имеет форму `[B, T]`, где ось 1 — время. Если `score_fn` возвращает `[B, T, C]`, `temporal_axis=1` всё равно указывает на время, а `C` остаётся осью компонентов результата. Тензор `[B, C]` по умолчанию не считается временным.
 
-## Схема артефакта и интерпретация
+## Минимальная схема артефакта и интерпретация
 
-`explain_batch` возвращает схему версии 1. `xai_step` объединяет батчи в артефакт `xai` схемы версии 2: метод `leave_one_modality_out`, необработанные записи `samples` и аналитическую сводку `summary`. Репрезентативный артефакт для одного образца:
+`explain_batch` возвращает схему версии 1. `xai_step` возвращает схему версии 2 с `samples` и `summary`. Запись модальности содержит только `status`, необязательный `reason`, `ablated`, знаковую `delta` и `absolute_delta`; выбранные baseline-диагностики копируются из `ModelOutput.aux`. Запись сводки содержит только `mean_signed_delta`, `mean_absolute_delta`, `relative_sensitivity` и `rank`, а также простой список `ranking`. Исторические счётчики покрытия, группы равенств, поля доминирующей модальности и автоматические метаданные намеренно удалены.
 
-```json
-{
-  "schema_version": 2,
-  "method": "leave_one_modality_out",
-  "ablation_policy": "zero",
-  "modalities": ["audio", "video"],
-  "samples": [
-    {
-      "sample_id": "toy-0",
-      "baseline": 3.0,
-      "modalities": {
-        "audio": {"status": "evaluated", "ablated": 1.0, "delta": 2.0, "absolute_delta": 2.0},
-        "video": {"status": "evaluated", "ablated": 2.0, "delta": 1.0, "absolute_delta": 1.0}
-      },
-      "diagnostics": {},
-      "metadata": {}
-    }
-  ],
-  "batches": 1,
-  "summary": {
-    "status": "evaluated",
-    "ranking": ["audio", "video"],
-    "ties": [],
-    "dominant_modality": "audio",
-    "dominant_modalities": ["audio"],
-    "total_samples": 1,
-    "comparable_samples": 1,
-    "sample_coverage": 1.0,
-    "modalities": {
-      "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1, "comparable_sample_count": 1, "evaluated_sample_count": 1},
-      "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1, "comparable_sample_count": 1, "evaluated_sample_count": 1}
-    },
-    "samples": [
-      {
-        "sample_id": "toy-0",
-        "status": "evaluated",
-        "ranking": ["audio", "video"],
-        "ties": [],
-        "dominant_modality": "audio",
-        "common_comparison_count": 1,
-        "sample_coverage": 1.0,
-        "modalities": {
-          "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1},
-          "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1}
-        }
-      }
-    ]
-  }
-}
-```
-
-В реальном артефакте могут присутствовать дополнительные поля `availability`, `temporal_axis` и временные сводки; пример показывает основной контракт и соответствующие числа. `mean_signed_delta` — среднее изменение с учётом знака, а `mean_absolute_delta` — среднее абсолютное изменение. Формула относительного влияния:
+Относительная чувствительность — описательная величина:
 
 ```text
 mean_absolute_delta(modality)
---------------------------------
+-------------------------------
 sum(mean_absolute_delta(all comparable modalities))
 ```
 
-Поле `ranking` ранжирует модальности по среднему абсолютному изменению. `dominant_modality` — единственная модальность с максимальным значением. При равенстве максимальных значений создаётся группа `ties`, `dominant_modality` становится `null`, а все имена попадают в `dominant_modalities`. Если все сравнимые величины равны нулю, статус — `no_measurable_influence`, а поля влияния и ранга равны `null`.
-
-В примере `delta` `2.0` означает, что удаление аудио снизило выбранную оценку на 2.0; это не означает причинный вклад ровно в две единицы. Чтобы увидеть изменение влияния, изучайте `summary.samples` для каждого образца и, для временной оценки, каждую позицию `temporal`. Глобальная сводка использует только общие валидные позиции сравнимых модальностей. `valid_comparison_count` относится к отдельной модальности, `common_comparison_count` — к числу позиций, оставшихся для совместного сравнения. Отсутствующие или неподдерживаемые сравнения не превращаются в нули.
-
-Глобальная агрегация даёт образцам одинаковый вес: сначала для каждого образца вычисляются его собственные средние знакового и абсолютного изменения, затем усредняются значения на уровне образцов. `sample_coverage` — доля входных образцов с общим сравнением. Поэтому длинная последовательность автоматически не перевешивает короткую.
+Наблюдения имеют одинаковый вес. Неподдерживаемые и отсутствующие сравнения исключаются, а не превращаются в нули. Временная сводка агрегирует все сопоставимые наблюдения для каждой позиции выхода и не выводит исходные временные метки входа. Изменение схемы намеренное и несовместимо с удалёнными полями отчётности.
 
 ## Диагностика и временные сводки
 
-`diagnostic_keys` выбирает выровненные по батчу значения из `ModelOutput.aux` и копирует их в необработанные записи образцов. Это наблюдения базового прохода, а не автоматически рассчитанная важность.
+`diagnostic_keys` копирует выбранные выровненные по батчу baseline-тензоры из `ModelOutput.aux`; XAI не интерпретирует их как важность. TFS предоставляет `pair_weights` и `group_weights`, TFS-DCMMOE — адаптивные веса взаимодействий, RAAV — `frame_weights` и `frame_mask`, TOMAR — `rho_<modality>`.
 
-Укажите `temporal_axis` в `xai_step` или `summarize_explanations`, если оценка содержит временную размерность в виде списка или тензорной оси. `[B, T]` и `[B, T, C]` получают сводку по позициям, включая сравнения, ранжирование и доминирующую модальность. Важность входного кадра, токена или сегмента из этой чувствительности результата автоматически не выводится.
+Укажите `temporal_axis=1` для оценок `[B, T]` или `[B, T, C]`. Поддерживаются формы `[B]`, `[B, C]`, `[B, T]` и `[B, T, C]`; недействительные позиции сериализуются как `null` и исключаются из средних.
 
 ## Получение и экспорт артефакта XAI
 

@@ -180,108 +180,25 @@ summary = summarize_explanations(raw, temporal_axis=1)
 
 The selected score has `[B, T]`: axis 1 is time. If a score function instead returns `[B, T, C]`, `temporal_axis=1` still identifies the time dimension and `C` remains an output-component dimension. A `[B, C]` tensor is not temporal by default.
 
-## Artifact schema and interpretation
+## Minimal artifact schema and interpretation
 
-`explain_batch` returns schema version 1. `xai_step` combines batches into an `xai` artifact with schema version 2, method `leave_one_modality_out`, the raw `samples`, and an analytical `summary`. A representative single-sample artifact is:
+`explain_batch` returns schema version 1. `xai_step` returns schema version 2 with `samples` and `summary`. Raw modality entries contain only `status`, optional `reason`, `ablated`, signed `delta`, and `absolute_delta`; selected baseline `diagnostics` are copied from `ModelOutput.aux`. Summary modality entries contain only `mean_signed_delta`, `mean_absolute_delta`, `relative_sensitivity`, and `rank`, plus a simple `ranking` list. Historical coverage counters, tie groups, dominant-modality fields, and automatic metadata are intentionally removed.
 
-```json
-{
-  "schema_version": 2,
-  "method": "leave_one_modality_out",
-  "ablation_policy": "zero",
-  "modalities": ["audio", "video"],
-  "samples": [
-    {
-      "sample_id": "toy-0",
-      "baseline": 3.0,
-      "modalities": {
-        "audio": {
-          "status": "evaluated",
-          "ablated": 1.0,
-          "delta": 2.0,
-          "absolute_delta": 2.0
-        },
-        "video": {
-          "status": "evaluated",
-          "ablated": 2.0,
-          "delta": 1.0,
-          "absolute_delta": 1.0
-        }
-      },
-      "diagnostics": {},
-      "metadata": {}
-    }
-  ],
-  "batches": 1,
-  "summary": {
-    "status": "evaluated",
-    "ranking": ["audio", "video"],
-    "ties": [],
-    "dominant_modality": "audio",
-    "dominant_modalities": ["audio"],
-    "total_samples": 1,
-    "comparable_samples": 1,
-    "sample_coverage": 1.0,
-    "modalities": {
-      "audio": {
-        "mean_signed_delta": 2.0,
-        "mean_absolute_delta": 2.0,
-        "relative_influence": 0.6666666667,
-        "rank": 1,
-        "valid_comparison_count": 1,
-        "common_comparison_count": 1,
-        "comparable_sample_count": 1,
-        "evaluated_sample_count": 1
-      },
-      "video": {
-        "mean_signed_delta": 1.0,
-        "mean_absolute_delta": 1.0,
-        "relative_influence": 0.3333333333,
-        "rank": 2,
-        "valid_comparison_count": 1,
-        "common_comparison_count": 1,
-        "comparable_sample_count": 1,
-        "evaluated_sample_count": 1
-      }
-    },
-    "samples": [
-      {
-        "sample_id": "toy-0",
-        "status": "evaluated",
-        "ranking": ["audio", "video"],
-        "ties": [],
-        "dominant_modality": "audio",
-        "common_comparison_count": 1,
-        "sample_coverage": 1.0,
-        "modalities": {
-          "audio": {"mean_signed_delta": 2.0, "mean_absolute_delta": 2.0, "relative_influence": 0.6666666667, "rank": 1, "valid_comparison_count": 1, "common_comparison_count": 1},
-          "video": {"mean_signed_delta": 1.0, "mean_absolute_delta": 1.0, "relative_influence": 0.3333333333, "rank": 2, "valid_comparison_count": 1, "common_comparison_count": 1}
-        }
-      }
-    ]
-  }
-}
-```
-
-The exact artifact may contain additional fields such as `availability`, `temporal_axis`, or temporal summaries; the example shows the important contract and numerical relationship. `mean_signed_delta` is the mean of signed deltas; `mean_absolute_delta` is the mean of absolute deltas. Relative influence is:
+Relative sensitivity is descriptive:
 
 ```text
 mean_absolute_delta(modality)
---------------------------------
+-------------------------------
 sum(mean_absolute_delta(all comparable modalities))
 ```
 
-The ranking orders modalities by mean absolute delta. `dominant_modality` is the sole largest modality. Equal largest values produce a `ties` group, set `dominant_modality` to `null`, and list all tied names in `dominant_modalities`. If all comparable magnitudes are zero, the status is `no_measurable_influence` and influence/rank fields are null.
-
-A raw delta of `2.0` in the example means that removing audio lowered the selected score by 2.0; it does not mean audio contributed exactly two causal units. To understand changing influence, inspect per-sample `summary.samples` and, for temporal scores, each `temporal` position. The global summary uses only common valid positions across comparable modalities. `valid_comparison_count` is modality-specific; `common_comparison_count` counts positions retained for joint comparison. Missing/unsupported positions are excluded, not converted to zero.
-
-Global aggregation gives samples equal weight: each sample first contributes its own mean signed and absolute delta, then those per-sample means are averaged. `sample_coverage` is the fraction of input samples with a common comparison. This prevents a sample with a long sequence from automatically outweighing a shorter sample.
+Samples receive equal weight. Unsupported and unavailable comparisons are excluded, never converted to zero. Temporal summaries aggregate all comparable observations at each output position; they do not infer original input timestamps. This schema change is intentional and is not backward-compatible with the removed reporting fields.
 
 ## Optional diagnostics and temporal summaries
 
-Set `diagnostic_keys` to copy selected, batch-aligned `ModelOutput.aux` values into raw samples. Diagnostics are observations from the baseline output; they are not automatically interpreted as importance.
+Set `diagnostic_keys` to copy selected, batch-aligned baseline tensors from `ModelOutput.aux`; XAI does not interpret them as importance. TFS exposes `pair_weights` and `group_weights`, TFS-DCMMOE exposes adaptive interaction weights, RAAV exposes `frame_weights` and `frame_mask`, and TOMAR exposes `rho_<modality>`.
 
-Set `temporal_axis` on `xai_step` or `summarize_explanations` for scores with a list-like temporal dimension. `[B, T]` and `[B, T, C]` can be summarized by position. The result reports per-position comparisons, rankings, and dominant modalities. No input-frame, token, or segment attribution is inferred from this output sensitivity.
+Set `temporal_axis=1` for `[B, T]` or `[B, T, C]` scores. Supported score shapes are `[B]`, `[B, C]`, `[B, T]`, and `[B, T, C]`; invalid positions are serialized as `null` and excluded from means.
 
 ## Retrieving and exporting the XAI artifact
 

@@ -124,7 +124,7 @@ def _supported(
 ) -> tuple[Tensor, str | None]:
     validator = getattr(model, "validate_intervention", None)
     if not callable(validator):
-        return available, None
+        return torch.ones_like(available), None
     result = validator(batch, changed, modality, policy)
     if not isinstance(result, InterventionValidation):
         raise TypeError("validate_intervention must return InterventionValidation.")
@@ -134,7 +134,7 @@ def _supported(
         supported = supported.expand_as(available)
     if supported.shape != available.shape:
         raise ValueError("validate_intervention must return a bool or a [B] boolean tensor.")
-    return available & supported, reason
+    return supported, reason
 
 
 def _ids(batch: Batch, batch_index: int | None) -> list[str]:
@@ -259,7 +259,6 @@ def explain_batch(
                         for key in (diagnostic_keys or ())
                         if baseline_output.aux and key in baseline_output.aux
                     },
-                    "metadata": {},
                 }
             )
         artifact = {
@@ -284,189 +283,111 @@ def _delta_tensor(item: Mapping[str, Any]) -> tuple[Tensor, Tensor] | None:
         valid = torch.tensor([value is not None for value in raw], dtype=torch.bool)
         values = torch.tensor([float(value) if value is not None else 0.0 for value in raw])
     else:
-        valid = torch.ones(1, dtype=torch.bool)
-        values = torch.tensor([float(raw)])
+        valid, values = torch.ones(1, dtype=torch.bool), torch.tensor([float(raw)])
     return values, valid
 
 
 def _summary(
-    samples: list[Mapping[str, Any]],
-    modalities: list[str],
-    candidates: list[str] | None = None,
-    position: int | None = None,
+    samples: list[Mapping[str, Any]], modalities: list[str], candidates: list[str], position: int | None = None
 ) -> dict[str, Any]:
-    active_names = candidates or modalities
-    signed: dict[str, list[float]] = {name: [] for name in modalities}
-    absolute: dict[str, list[float]] = {name: [] for name in modalities}
-    valid_counts = dict.fromkeys(modalities, 0)
-    common_counts = dict.fromkeys(modalities, 0)
-    statuses = {name: [] for name in modalities}
+    signed = {name: [] for name in candidates}
+    absolute = {name: [] for name in candidates}
     for sample in samples:
         entries = sample.get("modalities") or {}
         data = {}
-        for name in modalities:
+        for name in candidates:
             item = entries.get(name, {})
-            statuses[name].append(item.get("status", "already_missing"))
             if item.get("status") != "evaluated":
-                continue
+                break
             delta = _delta_tensor(item)
             if delta is None:
-                continue
+                break
             values, valid = delta
             if position is not None:
-                if values.ndim == 1:
-                    if position >= values.shape[0]:
-                        continue
-                    values, valid = values[position : position + 1], valid[position : position + 1]
-                elif position < values.shape[0]:
-                    values, valid = values[position], valid[position]
-                else:
-                    continue
-            data[name] = (values, valid)
-            valid_counts[name] += int(valid.sum())
-        if not all(name in data for name in active_names):
+                if position >= values.shape[0]:
+                    break
+                values, valid = values[position], valid[position]
+            data[name] = values, valid
+        if len(data) != len(candidates):
             continue
-        shapes = {values.shape for values, _ in (data[name] for name in active_names)}
+        shapes = {values.shape for values, _ in data.values()}
         if len(shapes) != 1:
             continue
-        common = torch.stack([data[name][1] for name in active_names]).all(0)
+        common = torch.stack([valid for _, valid in data.values()]).all(0)
         if not common.any():
             continue
-        for name in active_names:
-            selected = data[name][0][common]
-            signed[name].append(float(selected.mean()))
-            absolute[name].append(float(selected.abs().mean()))
-            common_counts[name] += int(common.sum())
+        for name, (values, _) in data.items():
+            selected = values[common]
+            signed[name].append(selected.mean())
+            absolute[name].append(selected.abs().mean())
     means = {
-        name: (sum(signed[name]) / len(signed[name]), sum(absolute[name]) / len(absolute[name]))
-        for name in modalities
+        name: (torch.stack(signed[name]).mean(), torch.stack(absolute[name]).mean())
+        for name in candidates
         if signed[name]
     }
-    ranking = sorted(means, key=lambda name: (-means[name][1], name))
-    total = sum(means[name][1] for name in ranking)
-    ties = []
-    for name in ranking:
-        group = [other for other in ranking if means[other][1] == means[name][1]]
-        if len(group) > 1 and group not in ties:
-            ties.append(group)
-    details = {}
-    for name in modalities:
-        mean = means.get(name)
-        details[name] = {
-            "status": "evaluated"
-            if signed[name]
-            else ("unsupported" if "unsupported" in statuses[name] else "already_missing"),
-            "mean_signed_delta": mean[0] if mean else None,
-            "mean_absolute_delta": mean[1] if mean else None,
-            "relative_influence": mean[1] / total if mean and total else None,
-            "rank": next((index + 1 for index, other in enumerate(ranking) if other == name), None),
-            "valid_comparison_count": valid_counts[name],
-            "common_comparison_count": common_counts[name],
-        }
-    if not ranking:
-        status = "unavailable"
-    elif total == 0:
-        status = "no_measurable_influence"
-    else:
-        status = "evaluated"
-    dominant = (
-        ranking[0]
-        if ranking and means[ranking[0]][1] > 0 and (len(ranking) == 1 or means[ranking[0]][1] > means[ranking[1]][1])
-        else None
-    )
+    ranking = sorted(means, key=lambda name: (-float(means[name][1]), name))
+    total = sum((float(means[name][1]) for name in ranking), 0.0)
     return {
-        "status": status,
-        "reason": None,
-        "ranking": [] if status == "no_measurable_influence" else ranking,
-        "ties": [] if status == "no_measurable_influence" else ties,
-        "dominant_modality": dominant,
-        "dominant_modalities": [name for name in ranking if means[name][1] == means[ranking[0]][1]] if ranking else [],
-        "comparable_modalities": ranking,
-        "common_comparison_count": max(common_counts.values(), default=0),
-        "modalities": details,
+        "ranking": ranking,
+        "modalities": {
+            name: {
+                "mean_signed_delta": float(means[name][0]) if name in means else None,
+                "mean_absolute_delta": float(means[name][1]) if name in means else None,
+                "relative_sensitivity": float(means[name][1]) / total if name in means and total else None,
+                "rank": ranking.index(name) + 1 if name in ranking else None,
+            }
+            for name in modalities
+        },
     }
 
 
 def summarize_explanations(explanations: Mapping[str, Any], *, temporal_axis: int | None = None) -> dict[str, Any]:
-    """Summarize signed and absolute sensitivity without model execution."""
+    """Summarize signed, absolute, and relative prediction sensitivity."""
     samples = explanations.get("samples")
     modalities = list(explanations.get("modalities") or [])
     if not isinstance(samples, list):
         raise ValueError("explanations['samples'] must be a list.")
-    if temporal_axis is not None and temporal_axis != 1:
+    if temporal_axis not in (None, 1):
         raise ValueError("temporal_axis must be a positive batch-relative axis or None.")
-    if temporal_axis is not None:
-        for sample in samples:
-            for item in (sample.get("modalities") or {}).values():
-                if (
-                    item.get("status") == "evaluated"
-                    and item.get("delta") is not None
-                    and not isinstance(item.get("delta"), list)
-                ):
-                    raise ValueError("temporal_axis does not identify a list-like score dimension.")
-    sample_summaries = []
-    for sample in samples:
-        entries = sample.get("modalities") or {}
-        sample_names = [name for name in modalities if entries.get(name, {}).get("status") == "evaluated"]
-        summary = _summary([sample], modalities, sample_names)
-        summary["sample_id"] = sample.get("sample_id")
-        if temporal_axis is not None:
-            lengths = []
-            for item in entries.values():
-                delta = _delta_tensor(item)
-                if delta is not None:
-                    lengths.append(delta[0].shape[0])
-            summary["temporal"] = []
-            for position in range(max(lengths, default=0)):
-                position_summary = _summary([sample], modalities, sample_names, position)
-                if position_summary["ranking"]:
-                    summary["temporal"].append({"position": position, **position_summary})
-        sample_summaries.append(summary)
     candidates = [
         name
         for name in modalities
         if any((sample.get("modalities") or {}).get(name, {}).get("status") == "evaluated" for sample in samples)
     ]
     result = _summary(samples, modalities, candidates)
-    joint_count = sum(
-        all((sample.get("modalities") or {}).get(name, {}).get("status") == "evaluated" for name in candidates)
-        for sample in samples
-    )
-    if len(candidates) > 1 and result["status"] == "unavailable":
-        result["status"] = "insufficient_common_support"
-    for name in modalities:
-        statuses = [
-            (sample.get("modalities") or {}).get(name, {}).get("status", "already_missing") for sample in samples
+    result["samples"] = []
+    for sample in samples:
+        names = [
+            name for name in modalities if (sample.get("modalities") or {}).get(name, {}).get("status") == "evaluated"
         ]
-        result["modalities"][name].update(
-            {
-                "availability_count": sum(status != "already_missing" for status in statuses),
-                "evaluated_sample_count": sum(status == "evaluated" for status in statuses),
-                "missing_sample_count": sum(status == "already_missing" for status in statuses),
-                "unsupported_sample_count": sum(status == "unsupported" for status in statuses),
-            }
-        )
-    result.update(
-        {
-            "total_samples": len(samples),
-            "comparable_samples": joint_count,
-            "sample_coverage": joint_count / len(samples) if samples else 0.0,
-            "samples": sample_summaries,
-            "temporal_axis": temporal_axis,
-        }
-    )
+        item = _summary([sample], modalities, names)
+        item["sample_id"] = sample.get("sample_id")
+        if temporal_axis is not None:
+            lengths = []
+            for entry in (sample.get("modalities") or {}).values():
+                delta = _delta_tensor(entry)
+                if delta is not None:
+                    if not isinstance(entry.get("delta"), list):
+                        raise ValueError("temporal_axis does not identify a list-like score dimension.")
+                    lengths.append(delta[0].shape[0])
+            item["temporal"] = []
+            for position in range(max(lengths, default=0)):
+                position_result = _summary([sample], modalities, names, position)
+                if position_result["ranking"]:
+                    item["temporal"].append({"position": position, **position_result})
+        result["samples"].append(item)
     if temporal_axis is not None:
         lengths = []
         for sample in samples:
-            for item in (sample.get("modalities") or {}).values():
-                delta = _delta_tensor(item)
+            for entry in (sample.get("modalities") or {}).values():
+                delta = _delta_tensor(entry)
                 if delta is not None:
                     lengths.append(delta[0].shape[0])
         result["temporal"] = []
         for position in range(max(lengths, default=0)):
-            position_summary = _summary(samples, modalities, candidates, position)
-            if position_summary["ranking"]:
-                result["temporal"].append({"position": position, **position_summary})
+            position_result = _summary(samples, modalities, candidates, position)
+            if position_result["ranking"]:
+                result["temporal"].append({"position": position, **position_result})
     json.dumps(result, allow_nan=False)
     return result
 
@@ -533,7 +454,6 @@ class XAIStep:
                 "ablation_policy": self.ablation_policy,
                 "modalities": modalities,
                 "samples": samples,
-                "batches": len(self._results),
             }
             artifact["summary"] = summarize_explanations(artifact, temporal_axis=self.temporal_axis)
             result.set_artifact("xai", artifact)

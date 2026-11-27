@@ -8,7 +8,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 
-- Simplified XAI aggregation and corrected multidimensional output-mask intersection, global temporal sensitivity aggregation, and signed/absolute modality ranking.
+- Simplified XAI aggregation and reporting to essential prediction sensitivity, correcting multidimensional output-mask intersection, global temporal aggregation, and signed/absolute modality ranking.
 
 ## [0.3.1] - 2026-11-24
 
