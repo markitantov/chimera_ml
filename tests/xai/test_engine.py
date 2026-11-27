@@ -619,9 +619,9 @@ def test_pre_forward_validation_skips_unsupported_rows_and_preserves_order():
     batch = make_batch(mixed=False)
     batch.masks["audio_temporal_mask"][:] = True
     result = explain_batch(model, batch, modalities=("audio",))
-    assert model.calls == 2  # baseline plus the one supported row
+    assert model.calls == 1  # baseline only: mixed-validity interventions are conservative
     entries = [sample["modalities"]["audio"] for sample in result["samples"]]
-    assert entries[0]["status"] == "evaluated"
+    assert entries[0]["status"] == "unsupported"
     assert entries[1]["status"] == "unsupported"
     assert entries[1]["ablated"] is None
     assert entries[1]["delta"] is None

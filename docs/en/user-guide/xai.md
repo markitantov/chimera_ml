@@ -132,7 +132,7 @@ delta          = baseline_score - ablated_score
 absolute_delta = abs(delta)
 ```
 
-Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample. Models may additionally implement the optional pre-forward `validate_intervention(original, intervened, modality, policy)` method, returning `InterventionValidation(supported, reason)`. `supported` may be a per-sample boolean tensor; unsupported rows are excluded from the intervened forward and remain ordered in the artifact. `diagnostic_keys` copies selected batch-aligned tensor values from `ModelOutput.aux` into each raw sample. For mixed-validity batches, only supported tensor rows are sent to the intervention forward and restored to their original sample positions; Batch metadata is not reconstructed.
+Thus a positive delta means that the selected score decreased after ablation; a negative delta means it increased. `output_mask_key` or a callable can restrict comparisons to valid output positions. Baseline and ablated valid positions are intersected. `validity_fn` runs after the ablated forward and may reject a sample. Models may additionally implement the optional pre-forward `validate_intervention(original, intervened, modality, policy)` method, returning `InterventionValidation(supported, reason)`. `supported` may be a per-sample boolean tensor; a mixed-validity intervention is conservatively marked unsupported for the affected batch. `diagnostic_keys` copies selected batch-aligned tensor values from `ModelOutput.aux` into each raw sample. For mixed-validity batches, the implementation conservatively marks the intervention unsupported and does not run a partial-batch forward.
 
 ## Correct score-shape examples
 
@@ -375,6 +375,10 @@ def validate_intervention(self, original, intervened, modality, policy):
 ```
 
 `unsupported` means the proposed intervention cannot produce a valid comparison; `already_missing` means the modality was unavailable in the original sample. Both have null numerical fields, and unsupported rows are excluded from summaries. Zeroing changes tensor values, masking changes availability masks, and removing deletes the input; these policies are not interchangeable. For TFS and TFS-DCMMOE, a supported intervention must preserve the selected computational branch and leave a configured directed pair for each supported sample. TOMAR requires its anchor modality, so removing or masking the anchor is unsupported; zeroing it follows the model's existing contract. RAAV requires at least one valid frame position.
+
+
+
+The sensitivity follows the UDKMO definition `Delta_m(x) = h(f(x_S)) - h(f(x_(S\{m\})))`: the same fixed model produces the baseline and one-modality intervention, `score_fn` is `h`, and signed and absolute deltas are retained. Internal diagnostics remain separate baseline observations: TFS and TFS-DCMMOE expose `pair_weights` and `group_weights`, RAAV exposes `frame_weights` and `frame_mask` (with attention tensors), and TOMAR exposes `rho_<modality>` residual coefficients. XAI does not normalize ablation deltas into attention coefficients or claim causal attribution.
 
 For temporal RAAV predictions, explicitly select the output mask from `ModelOutput.aux` with a callable. The callable mechanism is backward-compatible with string keys that read batch masks:
 
