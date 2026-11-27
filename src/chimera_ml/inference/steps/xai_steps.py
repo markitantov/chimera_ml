@@ -147,43 +147,33 @@ def _intervene(batch: Batch, modality: str, policy: str) -> Batch:
     return Batch(inputs, batch.targets, masks if has_canonical_masks or masks else None, meta)
 
 
-def _select_value(value: Any, indices: Tensor, batch_size: int) -> Any:
-    if torch.is_tensor(value):
-        return value.index_select(0, indices) if value.ndim and value.shape[0] == batch_size else value
-    if isinstance(value, Mapping):
-        return {key: _select_value(item, indices, batch_size) for key, item in value.items()}
-    if isinstance(value, list) and len(value) == batch_size:
-        return [value[int(index)] for index in indices.detach().cpu().tolist()]
-    if isinstance(value, tuple) and len(value) == batch_size:
-        return tuple(value[int(index)] for index in indices.detach().cpu().tolist())
-    return value
-
-
 def _select_batch(batch: Batch, indices: Tensor, batch_size: int) -> Batch:
+    """Select supported rows from the tensor-valued Batch contract."""
     return Batch(
-        _select_value(batch.inputs, indices, batch_size),
-        _select_value(batch.targets, indices, batch_size),
-        _select_value(batch.masks, indices, batch_size),
-        _select_value(batch.meta, indices, batch_size),
+        {name: value.index_select(0, indices) for name, value in batch.inputs.items()},
+        batch.targets.index_select(0, indices) if batch.targets is not None else None,
+        {
+            key: value.index_select(0, indices)
+            if torch.is_tensor(value) and value.ndim and value.shape[0] == batch_size
+            else value
+            for key, value in (batch.masks or {}).items()
+        },
+        batch.meta,
     )
 
 
-def _expand_value(value: Any, indices: Tensor, batch_size: int) -> Any:
-    if torch.is_tensor(value):
-        if not value.ndim or value.shape[0] != indices.numel():
-            return value
-        shape = (batch_size, *value.shape[1:])
-        expanded = value.new_zeros(shape)
-        return expanded.index_copy(0, indices, value)
-    if isinstance(value, Mapping):
-        return {key: _expand_value(item, indices, batch_size) for key, item in value.items()}
-    return value
-
-
 def _expand_output(output: ModelOutput, indices: Tensor, batch_size: int) -> ModelOutput:
+    """Restore selected forward results to the original batch shape."""
+
+    def expand(value: Tensor) -> Tensor:
+        if value.ndim == 0 or value.shape[0] != indices.numel():
+            return value
+        expanded = value.new_zeros((batch_size, *value.shape[1:]))
+        return expanded.index_copy(0, indices, value)
+
     return ModelOutput(
-        preds=_expand_value(output.preds, indices, batch_size),
-        aux=_expand_value(output.aux, indices, batch_size) if output.aux is not None else None,
+        preds=expand(output.preds),
+        aux=None if output.aux is None else {key: expand(value) for key, value in output.aux.items()},
     )
 
 
@@ -231,27 +221,6 @@ def _sample(value: Any, index: int) -> Any:
         return value[index]
 
     return value
-
-
-def _validate_batch_aligned(value: Any, batch_size: int, name: str) -> None:
-    if torch.is_tensor(value):
-        if value.ndim == 0 or value.shape[0] != batch_size:
-            raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
-
-        return
-
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            _validate_batch_aligned(item, batch_size, f"{name}.{key}")
-
-        return
-    if isinstance(value, (list, tuple)):
-        if len(value) != batch_size:
-            raise ValueError(f"Diagnostic '{name}' must be batch-aligned with size {batch_size}.")
-
-        return
-
-    raise ValueError(f"Diagnostic '{name}' must be a batch-aligned tensor, mapping, or sequence.")
 
 
 def _masked_json(value: Any, valid: Any) -> Any:
@@ -390,8 +359,10 @@ def explain_batch(
             if not baseline.aux or key not in baseline.aux:
                 continue
 
-            _validate_batch_aligned(baseline.aux[key], size, key)
-            diagnostics[key] = baseline.aux[key]
+            value = baseline.aux[key]
+            if not torch.is_tensor(value) or value.ndim == 0 or value.shape[0] != size:
+                raise ValueError(f"Diagnostic '{key}' must be batch-aligned with size {size}.")
+            diagnostics[key] = value
 
         availability = {name: _availability(batch, name, size) for name in names}
         results: dict[str, list[dict[str, Any]]] = {}
