@@ -13,10 +13,10 @@ from chimera_ml.models.common_layers import (
     TransformerCrossAttention,
 )
 from chimera_ml.models.utils import (
-    features,
-    modality_validity,
-    projections,
-    validate_input_dims,
+    build_projections,
+    get_modality_validity,
+    prepare_projected_features,
+    validate_input_dimensions,
 )
 
 
@@ -47,7 +47,9 @@ def normalize_groups(
                 raise ValueError(f"Invalid directed pair {pair!r} in groups.")
             if pair in seen:
                 raise ValueError(f"Directed pair {pair_name(pair)!r} occurs more than once in groups.")
+
             seen.add(pair)
+
     return normalized
 
 
@@ -64,7 +66,7 @@ class TFSFusionModel(BaseModel):
         max_position_length: int = 5000,
     ):
         super().__init__()
-        self.input_dims = validate_input_dims(input_dims)
+        self.input_dims = validate_input_dimensions(input_dims)
         if shared_dim <= 0:
             raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
         if output_dim <= 0:
@@ -74,7 +76,7 @@ class TFSFusionModel(BaseModel):
 
         self.names = tuple(self.input_dims)
         self.shared_dim = shared_dim
-        self.proj = projections(self.names, self.input_dims, shared_dim)
+        self.proj = build_projections(self.names, self.input_dims, shared_dim)
         self.groups = normalize_groups(self.names, groups)
         pairs = tuple(pair for group in self.groups for pair in group)
         self.pair_blocks = nn.ModuleDict(
@@ -204,11 +206,11 @@ class TFSFusionModel(BaseModel):
         for group in self.groups:
             for left, right in group:
                 if left in intervened.inputs and right in intervened.inputs:
-                    supported |= modality_validity(intervened, left) & modality_validity(intervened, right)
+                    supported |= get_modality_validity(intervened, left) & get_modality_validity(intervened, right)
         return None if bool(supported.all()) else "no configured directed pair remains available"
 
     def forward(self, batch: Batch) -> ModelOutput:
-        feature_map = features(self, batch, self.names)
+        feature_map = prepare_projected_features(self, batch, self.names)
         values, valid, pair_attention = self._interactions(feature_map)
         fused, group_weights, group_attention = self._fuse_groups(values, valid)
         fused = self.fusion(fused)

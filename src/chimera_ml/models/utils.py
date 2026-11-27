@@ -4,9 +4,9 @@ import torch.nn as nn
 from chimera_ml.core.batch import Batch
 
 
-def mask(batch: Batch, name: str, values: torch.Tensor) -> torch.Tensor:
+def get_modality_mask(batch: Batch, name: str, values: torch.Tensor) -> torch.Tensor:
     if values.ndim != 3:
-        raise ValueError(f"Expected normalized features for '{name}' to have shape [B, T, D].")
+        raise ValueError(f"Expected normalized prepare_projected_features for '{name}' to have shape [B, T, D].")
 
     batch_size, time_steps = values.shape[:2]
     dedicated = batch.get_masks(f"{name}_temporal_mask")
@@ -33,10 +33,11 @@ def mask(batch: Batch, name: str, values: torch.Tensor) -> torch.Tensor:
             sequence = sequence[:, None]
         if sequence.shape == result.shape:
             result = result & sequence
+
     return result
 
 
-def sequence(values: torch.Tensor) -> torch.Tensor:
+def normalize_sequence(values: torch.Tensor) -> torch.Tensor:
     if not torch.is_tensor(values):
         raise ValueError(f"Expected [B, D] or [B, T, D], got {type(values).__name__}.")
     if values.ndim == 2:
@@ -46,25 +47,27 @@ def sequence(values: torch.Tensor) -> torch.Tensor:
     raise ValueError(f"Expected [B, D] or [B, T, D], got {tuple(values.shape)}.")
 
 
-def modality_validity(batch: Batch, name: str) -> torch.Tensor:
+def get_modality_validity(batch: Batch, name: str) -> torch.Tensor:
     values = batch.inputs.get(name)
     if values is None:
         return torch.zeros(0, dtype=torch.bool)
-    return mask(batch, name, sequence(values)).any(dim=1)
+    return get_modality_mask(batch, name, normalize_sequence(values)).any(dim=1)
 
 
-def mean(values: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
+def masked_mean(values: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     weights = valid.to(values.dtype).unsqueeze(-1)
     return (values * weights).sum(dim=1) / weights.sum(dim=1).clamp_min(1)
 
 
-def features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+def prepare_projected_features(
+    model: nn.Module, batch: Batch, names: tuple[str, ...]
+) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
     result: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
     batch_size: int | None = None
     for name in names:
         if name not in batch.inputs:
             continue
-        values = sequence(batch.inputs[name])
+        values = normalize_sequence(batch.inputs[name])
         if batch_size is not None and values.shape[0] != batch_size:
             raise ValueError(f"Modality '{name}' has an incompatible batch dimension.")
         batch_size = values.shape[0]
@@ -72,13 +75,13 @@ def features(model: nn.Module, batch: Batch, names: tuple[str, ...]) -> dict[str
         if values.shape[-1] != expected:
             raise ValueError(f"Feature '{name}' has width {values.shape[-1]}, expected {expected}.")
         projected = model.proj[name](values)
-        result[name] = projected, mask(batch, name, projected)
+        result[name] = projected, get_modality_mask(batch, name, projected)
     if not result:
         raise ValueError("No configured modalities are present in batch.inputs.")
     return result
 
 
-def validate_input_dims(input_dims: dict[str, int]) -> dict[str, int]:
+def validate_input_dimensions(input_dims: dict[str, int]) -> dict[str, int]:
     if not isinstance(input_dims, dict) or not input_dims:
         raise ValueError("input_dims must be a non-empty dictionary.")
     if any(not isinstance(name, str) or not name for name in input_dims):
@@ -88,10 +91,10 @@ def validate_input_dims(input_dims: dict[str, int]) -> dict[str, int]:
     return dict(input_dims)
 
 
-def projections(names: tuple[str, ...], input_dims: dict[str, int], shared_dim: int) -> nn.ModuleDict:
+def build_projections(names: tuple[str, ...], input_dims: dict[str, int], shared_dim: int) -> nn.ModuleDict:
     if shared_dim <= 0:
         raise ValueError(f"shared_dim must be positive, got {shared_dim}.")
-    validate_input_dims(input_dims)
+    validate_input_dimensions(input_dims)
     missing = [name for name in names if name not in input_dims]
     if missing:
         raise ValueError(f"Missing input dimensions for modalities: {missing!r}.")
@@ -120,12 +123,12 @@ def masked_softmax(scores: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
     return (weights / weights.sum(dim=-1, keepdim=True).clamp_min(1)).to(scores.dtype)
 
 
-def attention(query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor) -> torch.Tensor:
-    values, _ = attention_with_weights(query, key, key_valid)
+def scaled_dot_product_attention(query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor) -> torch.Tensor:
+    values, _ = scaled_dot_product_attention_with_weights(query, key, key_valid)
     return values
 
 
-def attention_with_weights(
+def scaled_dot_product_attention_with_weights(
     query: torch.Tensor, key: torch.Tensor, key_valid: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     work_dtype = torch.float32 if query.dtype in (torch.float16, torch.bfloat16) else query.dtype
