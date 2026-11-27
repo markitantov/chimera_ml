@@ -66,7 +66,7 @@ chimera-ml inference \
 
 ## XAI and troubleshooting
 
-ORAGEN fusion_step does not expose the on_prediction callback required by xai_step, so XAI is not enabled. Use the [XAI guide](../user-guide/xai.md) and [custom inference steps](../inference/custom-steps.md) for the generic mechanism. Common failures are missing plugin/cache/checkpoints, torchcodec/ffmpeg, invalid media, no face/speech, and unwritable work-dir.
+ORAGEN fusion_step does not expose the on_prediction callback required by xai_step, so XAI is not enabled by default. Use the [XAI guide](../user-guide/xai.md) and [custom inference steps](../inference/custom-steps.md) for the generic mechanism. Common failures are missing plugin/cache/checkpoints, torchcodec/ffmpeg, invalid media, no face/speech, and unwritable work-dir.
 
 
 ## Prediction artifact and JSON envelope

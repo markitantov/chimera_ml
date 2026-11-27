@@ -48,10 +48,8 @@ def test_tfs_supports_explicit_groups_and_missing_modalities():
         groups=((("text", "audio"),), (("audio", "text"),)),
     )
 
-    output = model(Batch(inputs={"text": torch.randn(2, 3)}, targets=None))
-
-    assert output.preds.shape == (2, 2)
-    assert "pair_text->audio" not in output.aux
+    with pytest.raises(ValueError, match="at least two available modalities"):
+        model(Batch(inputs={"text": torch.randn(2, 3)}, targets=None))
 
 
 def test_tfs_rejects_invalid_groups():

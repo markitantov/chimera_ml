@@ -84,7 +84,7 @@ def test_validate_input_dimensions_and_build_projections_reject_invalid_config()
     with pytest.raises(ValueError, match="positive"):
         validate_input_dimensions({"audio": 0})
 
-    with pytest.raises(ValueError, match="Missing input dimensions"):
+    with pytest.raises(ValueError, match="non-empty dictionary"):
         build_projections(("audio",), {}, 4)
 
     projections = build_projections(("audio",), {"audio": 4}, 3)

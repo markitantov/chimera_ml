@@ -57,27 +57,39 @@ def intervene_batch(batch: Batch, modality: str, policy: str) -> Batch:
     if modality not in changed.inputs:
         return changed
 
-    mask_keys = (f"{modality}_mask", f"{modality}_temporal_mask")
+    mask_keys = (modality, f"{modality}_mask", f"{modality}_temporal_mask")
+    mask_maps: list[dict[str, Any]] = []
+    if isinstance(changed.masks, dict):
+        mask_maps.append(changed.masks)
+
+    legacy_masks = (changed.meta or {}).get("masks")
+    if isinstance(legacy_masks, dict):
+        nested_masks = legacy_masks.get("mask")
+        if isinstance(nested_masks, dict):
+            mask_maps.append(nested_masks)
+        elif legacy_masks is not changed.masks:
+            mask_maps.append(legacy_masks)
+
     if policy == "remove":
         changed.inputs.pop(modality)
 
-        if changed.masks is not None:
+        for masks in mask_maps:
             for key in mask_keys:
-                changed.masks.pop(key, None)
+                masks.pop(key, None)
 
     elif policy == "zero":
         changed.inputs[modality] = torch.zeros_like(changed.inputs[modality])
 
-        if changed.masks is not None:
+        for masks in mask_maps:
             for key in mask_keys:
-                if key in changed.masks:
-                    changed.masks[key] = torch.zeros_like(changed.masks[key], dtype=torch.bool)
+                if key in masks:
+                    masks[key] = torch.zeros_like(masks[key], dtype=torch.bool)
 
     else:
-        if changed.masks is not None:
+        for masks in mask_maps:
             for key in mask_keys:
-                if key in changed.masks:
-                    changed.masks[key] = torch.zeros_like(changed.masks[key], dtype=torch.bool)
+                if key in masks:
+                    masks[key] = torch.zeros_like(masks[key], dtype=torch.bool)
 
     return changed
 
@@ -196,6 +208,9 @@ def explain_batch(
         intervention = intervene_batch(batch, name, ablation_policy)
         validator = getattr(model, "validate_intervention", None)
         reason = validator(batch, intervention, name, ablation_policy) if callable(validator) else None
+
+        if reason is None and ablation_policy != "zero" and getattr(model, "anchor_modality", None) == name:
+            reason = "anchor modality cannot be removed"
 
         if reason is not None:
             for explanation in explanations:
@@ -345,4 +360,10 @@ class XAIStep:
 
 @INFERENCE_STEPS.register("xai_step")
 def xai_step(**params: Any) -> XAIStep:
+    step = params.get("step")
+    if isinstance(step, dict):
+        from chimera_ml.inference.builders import build_inference_step
+
+        params["step"] = build_inference_step(step)
+
     return XAIStep(**params)

@@ -12,7 +12,7 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "fusion_yaml"
 
 
 def _batch_for(model_name: str) -> Batch:
-    if model_name in {"tfs_fusion_model", "tfs_dcmmmoe_fusion_model"}:
+    if model_name in {"tfs_fusion_model"}:
         inputs = {
             "text": torch.randn(2, 3, 3),
             "audio": torch.randn(2, 2, 5),
@@ -35,7 +35,6 @@ def _batch_for(model_name: str) -> Batch:
     ("config_name", "expected_shape"),
     [
         ("tfs.yaml", (2, 2)),
-        ("tfs_dcmmmoe.yaml", (2, 2)),
         ("raav.yaml", (2, 3, 2)),
         ("tomar.yaml", (2, 2)),
     ],

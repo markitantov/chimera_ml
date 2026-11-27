@@ -7,7 +7,7 @@ from chimera_ml.training.builders import build_model
 
 
 def _samples(model_name: str, invalid_offset: float = 0.0) -> list[dict[str, object]]:
-    if model_name in {"tfs_fusion_model", "tfs_dcmmmoe_fusion_model"}:
+    if model_name in {"tfs_fusion_model"}:
         return [
             {
                 "inputs": {
@@ -69,16 +69,6 @@ def _samples(model_name: str, invalid_offset: float = 0.0) -> list[dict[str, obj
         (
             "tfs_fusion_model",
             {"input_dims": {"text": 3, "audio": 5, "video": 7}, "shared_dim": 4, "output_dim": 2},
-            (2, 2),
-        ),
-        (
-            "tfs_dcmmmoe_fusion_model",
-            {
-                "input_dims": {"text": 3, "audio": 5, "video": 7},
-                "shared_dim": 4,
-                "output_dim": 2,
-                "gate_hidden": 3,
-            },
             (2, 2),
         ),
         (

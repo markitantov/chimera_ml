@@ -10,4 +10,4 @@
 - **Dependency error**: check spelling and IDs in `after`; repeated step names need explicit IDs; remove cycles and self-dependencies.
 - **Artifact conflict**: two unrelated DAG branches wrote the same key. Rename the artifact or add an ordered dependency and make the later step the owner.
 - **XAI callback error**: the wrapped step must expose a callable-or-`None` `on_prediction` attribute and the model plus all nested modules must already be in evaluation mode.
-- **Unsupported XAI comparison**: inspect missing modalities, masks, `output_mask_key`, and `validity_fn`; unsupported values are not zeros.
+- **Unsupported XAI comparison**: inspect missing modalities, masks, `output_mask; unsupported values are not zeros.
