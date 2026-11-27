@@ -4,8 +4,8 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
 from chimera_ml.callbacks._utils import resolve_splits
+
 from chimera_ml.callbacks.base import BaseCallback
 from chimera_ml.callbacks.plot_confusion_matrix_callback import (
     _fig_to_png_bytes,
