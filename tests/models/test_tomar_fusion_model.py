@@ -3,7 +3,7 @@ import torch
 
 from chimera_ml.core.batch import Batch
 from chimera_ml.core.registry import MODELS
-from chimera_ml.models.tomar_fusion import TOMARFusionModel, tomar_fusion_model
+from chimera_ml.models.tomar_fusion_model import TOMARFusionModel, tomar_fusion_model
 
 
 def test_tomar_refines_anchor_with_available_modalities():
@@ -102,8 +102,6 @@ def test_tomar_residual_matches_manual_reference_and_masks_coefficients():
         for projection in model.proj.values():
             projection.weight.copy_(torch.eye(2))
             projection.bias.zero_()
-        model.delta["audio"].weight.copy_(torch.eye(2))
-        model.delta["audio"].bias.zero_()
         model.rho["audio"][0].weight.zero_()
         model.rho["audio"][0].bias.zero_()
         model.rho["audio"][2].weight.zero_()
@@ -119,7 +117,8 @@ def test_tomar_residual_matches_manual_reference_and_masks_coefficients():
     )
 
     output = model(batch)
-    expected_first = model.norm(torch.tensor([[1.0, 3.0]]) + 0.5 * torch.tensor([[4.0, 1.0]]))
+    delta = model.delta["audio"](torch.tensor([[4.0, 1.0]]))
+    expected_first = model.norm(torch.tensor([[1.0, 3.0]]) + 0.5 * delta)
     expected_second = model.norm(torch.tensor([[2.0, 2.0]]))
 
     assert torch.allclose(output.aux["fused"][0], expected_first)
