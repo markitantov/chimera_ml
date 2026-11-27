@@ -45,6 +45,7 @@ def normalize_groups(
         for pair in group:
             if len(pair) != 2 or pair[0] == pair[1] or pair[0] not in known or pair[1] not in known:
                 raise ValueError(f"Invalid directed pair {pair!r} in groups.")
+
             if pair in seen:
                 raise ValueError(f"Directed pair {pair_name(pair)!r} occurs more than once in groups.")
 

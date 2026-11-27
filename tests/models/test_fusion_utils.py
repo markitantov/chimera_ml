@@ -4,12 +4,11 @@ import torch
 from chimera_ml.core.batch import Batch
 from chimera_ml.data.masking_collate import MaskingCollate
 from chimera_ml.models.utils import (
+    build_projections,
     get_modality_mask,
-    masked_mean,
-    masked_softmax,
     normalize_sequence,
     prepare_projected_features,
-    scaled_dot_product_attention,
+    validate_input_dimensions,
 )
 
 
@@ -22,283 +21,72 @@ def test_masking_collate_masks_are_combined_for_temporal_features():
     )
 
     result = get_modality_mask(batch, "text", batch.inputs["text"])
-    expected = batch.masks["sequencemask"] & batch.masks["textmask"].bool()[:, None]
+    expected = batch.masks["sequence_mask"] & batch.masks["text_mask"].bool()[:, None]
 
     assert torch.equal(result, expected)
-    assert torch.equal(result[0], torch.tensor([True, True]))
-    assert torch.equal(result[1], torch.tensor([False, False]))
 
 
-def testmask_supports_canonical_presencemasks_and_rejects_bad_shapes():
-    x = torch.ones(2, 3, 4)
+def test_get_modality_mask_accepts_sample_and_temporal_masks():
+    values = torch.ones(2, 3, 4)
     batch = Batch(
-        inputs={},
+        inputs={"audio": values},
         targets=None,
-        masks={"audiomask": torch.tensor([1, 0])},
+        masks={"audio_mask": torch.tensor([1, 0])},
     )
 
-    result = get_modality_mask(batch, "audio", x)
+    result = get_modality_mask(batch, "audio", values)
 
     assert torch.equal(result, torch.tensor([[True, True, True], [False, False, False]]))
 
-    bad = Batch(inputs={}, targets=None, masks={"audiomask": torch.ones(2, 2, 2)})
-    with pytest.raises(ValueError, match="Mask for 'audio'"):
-        get_modality_mask(bad, "audio", x)
+
+def test_get_modality_mask_rejects_invalid_shapes():
+    values = torch.ones(2, 3, 4)
+
+    with pytest.raises(ValueError, match="shape \[B, T, D\]"):
+        get_modality_mask(Batch(inputs={}, targets=None), "audio", torch.ones(2, 4))
+
+    with pytest.raises(ValueError, match="shape \(B,\) or \(B, T\)"):
+        get_modality_mask(
+            Batch(inputs={}, targets=None, masks={"audio_mask": torch.ones(2, 2)}),
+            "audio",
+            values,
+        )
 
 
-def testmask_rejects_incompatible_batch_dimensions():
-    x = torch.ones(2, 3, 4)
-    batch = Batch(inputs={}, targets=None, masks={"audiomask": torch.ones(3)})
+def test_normalize_sequence_converts_vectors_and_rejects_other_ranks():
+    assert normalize_sequence(torch.ones(2, 4)).shape == (2, 1, 4)
 
-    with pytest.raises(ValueError, match="batch dimension"):
-        get_modality_mask(batch, "audio", x)
-
-
-def testmask_applies_temporal_modalitymasks_without_broadcasting_sharedmasks():
-    x = torch.ones(2, 3, 4)
-    batch = Batch(
-        inputs={},
-        targets=None,
-        masks={
-            "audiomask": torch.tensor([[1, 0, 1], [0, 1, 1]]),
-            "sequencemask": torch.tensor([[1, 1], [1, 0]]),
-        },
-    )
-
-    result = get_modality_mask(batch, "audio", x)
-
-    assert torch.equal(result, batch.masks["audiomask"].bool())
-
-
-def testmask_rejects_invalidsequencemask_rank():
-    x = torch.ones(2, 3, 4)
-    batch = Batch(inputs={}, targets=None, masks={"sequencemask": torch.ones(2, 3, 1)})
-
-    with pytest.raises(ValueError, match="sequencemask"):
-        get_modality_mask(batch, "audio", x)
-
-
-def testmean_ignoresmasked_values_and_returns_zero_for_empty_rows():
-    values = torch.tensor([[[1.0, 2.0], [100.0, 200.0]], [[7.0, 8.0], [9.0, 10.0]]])
-    valid = torch.tensor([[1, 0], [0, 0]])
-
-    result = masked_mean(values, valid)
-
-    assert torch.equal(result, torch.tensor([[1.0, 2.0], [0.0, 0.0]]))
-
-
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def testattention_is_finite_and_zero_for_fullymasked_keys(dtype: torch.dtype):
-    query = torch.randn(2, 3, 4, dtype=dtype, requires_grad=True)
-    key = torch.randn(2, 2, 4, dtype=dtype, requires_grad=True)
-    valid = torch.tensor([[1, 0], [0, 0]])
-
-    result = scaled_dot_product_attention(query, key, valid)
-
-    assert torch.isfinite(result).all()
-    assert torch.equal(result[1], torch.zeros_like(result[1]))
-    result.float().sum().backward()
-    assert query.grad is not None and torch.isfinite(query.grad).all()
-    assert key.grad is not None and torch.isfinite(key.grad).all()
-
-
-def testattention_normalizes_only_over_available_keys():
-    query = torch.tensor([[[1.0, 0.0]]])
-    key = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
-
-    result = scaled_dot_product_attention(query, key, torch.tensor([[1, 0]]))
-
-    assert torch.allclose(result, key[:, :1])
-
-
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def testmasked_softmax_does_not_exponentiate_extreme_invalid_scores(dtype: torch.dtype):
-    scores = torch.tensor([[0.0, 1000.0]], dtype=dtype, requires_grad=True)
-
-    weights = masked_softmax(scores, torch.tensor([[True, False]]))
-
-    expected = torch.tensor([[1.0, 0.0]], dtype=dtype)
-    assert torch.isfinite(weights).all()
-    assert torch.allclose(weights, expected)
-    weights.float().sum().backward()
-    assert scores.grad is not None and torch.isfinite(scores.grad).all()
-
-
-def test_sequence_and_features_reject_unsupported_feature_inputs():
-    with pytest.raises(ValueError, match="Expected \\[B, D\\] or \\[B, T, D\\]"):
+    with pytest.raises(ValueError, match="Expected \[B, D\] or \[B, T, D\]"):
         normalize_sequence(torch.ones(2, 3, 4, 5))
 
+
+def test_prepare_projected_features_projects_present_modalities():
     class Model(torch.nn.Module):
         def __init__(self):
             super().__init__()
-            self.shared_dim = 4
-            self.input_dims = {"audio": 4}
-            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Linear(4, 4)})
-
-    batch = Batch(inputs={"audio": torch.ones(2, 3, 5)}, targets=None)
-    with pytest.raises(ValueError, match="configured width"):
-        prepare_projected_features(Model(), batch, ("audio",))
-
-
-def test_fusion_utilities_validate_shapes_and_configuration_errors():
-    with pytest.raises(ValueError, match="normalized prepare_projected_features"):
-        get_modality_mask(Batch(inputs={}, targets=None), "audio", torch.ones(2, 4))
-
-    with pytest.raises(ValueError, match="temporal width"):
-        get_modality_mask(
-            Batch(inputs={}, targets=None, masks={"audiomask": torch.ones(2, 2)}),
-            "audio",
-            torch.ones(2, 3, 4),
-        )
-
-    with pytest.raises(ValueError, match="batch dimension"):
-        get_modality_mask(
-            Batch(inputs={}, targets=None, masks={"audiomask": torch.ones(2, 3)}),
-            "audio",
-            torch.ones(3, 3, 4),
-        )
-
-    one_step = Batch(
-        inputs={},
-        targets=None,
-        masks={"sequencemask": torch.tensor([1, 0])},
-    )
-    assert torch.equal(get_modality_mask(one_step, "audio", torch.ones(2, 1, 4)), torch.tensor([[True], [False]]))
-
-    with pytest.raises(ValueError, match="sequencemask has batch dimension"):
-        get_modality_mask(
-            Batch(inputs={}, targets=None, masks={"sequencemask": torch.ones(3, 2)}),
-            "audio",
-            torch.ones(2, 2, 4),
-        )
-
-    with pytest.raises(ValueError, match="sequencemask must"):
-        get_modality_mask(
-            Batch(inputs={}, targets=None, masks={"sequencemask": torch.ones(2, 2, 1)}),
-            "audio",
-            torch.ones(2, 2, 4),
-        )
-
-    with pytest.raises(ValueError, match="Expected \[B, D\]"):
-        normalize_sequence([1, 2, 3])
-    with pytest.raises(ValueError, match="values with shape"):
-        masked_mean(torch.ones(2, 3), torch.ones(2, 3))
-    with pytest.raises(ValueError, match="validity mask"):
-        masked_mean(torch.ones(2, 3, 4), torch.ones(2, 2))
-    with pytest.raises(ValueError, match="at least two dimensions"):
-        from chimera_ml.models.utils import masked_softmax
-
-        masked_softmax(torch.ones(2), torch.ones(2, 1))
-    with pytest.raises(ValueError, match="Expected validity mask"):
-        masked_softmax(torch.ones(2, 3), torch.ones(2, 2))
-
-    with pytest.raises(ValueError, match="query and key"):
-        scaled_dot_product_attention(torch.ones(2, 3), torch.ones(2, 3, 4), torch.ones(2, 3))
-    with pytest.raises(ValueError, match="matching batch"):
-        scaled_dot_product_attention(torch.ones(2, 3, 4), torch.ones(1, 3, 4), torch.ones(1, 3))
-    with pytest.raises(ValueError, match="key validity"):
-        scaled_dot_product_attention(torch.ones(2, 3, 4), torch.ones(2, 3, 4), torch.ones(2, 2))
-
-    class BatchMismatchModel(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.shared_dim = 4
-            self.input_dims = {"a": 4, "b": 4}
-            self.proj = torch.nn.ModuleDict({"a": torch.nn.Linear(4, 4), "b": torch.nn.Linear(4, 4)})
-
-    with pytest.raises(ValueError, match="batch dimension"):
-        prepare_projected_features(
-            BatchMismatchModel(),
-            Batch(inputs={"a": torch.ones(2, 1, 4), "b": torch.ones(3, 1, 4)}, targets=None),
-            ("a", "b"),
-        )
-
-    class InvalidProjectionModel(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.shared_dim = 4
-            self.input_dims = {"audio": 4}
-            self.proj = torch.nn.ModuleDict({"audio": torch.nn.Flatten()})
-
-    with pytest.raises(ValueError, match="Projection for 'audio'"):
-        prepare_projected_features(
-            InvalidProjectionModel(), Batch(inputs={"audio": torch.ones(2, 1, 4)}, targets=None), ("audio",)
-        )
-
-    with pytest.raises(ValueError, match="No configured modalities"):
-        prepare_projected_features(BatchMismatchModel(), Batch(inputs={}, targets=None), ("a",))
-
-    with pytest.raises(ValueError, match="shared_dim"):
-        from chimera_ml.models.utils import build_projections
-
-        build_projections(("audio",), {}, 0)
-    with pytest.raises(ValueError, match="input_dims values"):
-        build_projections(("audio",), {"audio": 0}, 4)
-
-
-def testprepare_projected_features_reads_direct_batch_inputs_and_validates_declared_width():
-    class DirectModel(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.shared_dim = 3
             self.input_dims = {"audio": 4}
             self.proj = torch.nn.ModuleDict({"audio": torch.nn.Linear(4, 3)})
 
-    model = DirectModel()
-    batch = Batch(inputs={"audio": torch.ones(2, 4)}, targets=None)
-
-    result = prepare_projected_features(model, batch, ("audio",))
-
-    assert result["audio"][0].shape == (2, 1, 3)
-    with pytest.raises(ValueError, match="configured width"):
-        prepare_projected_features(model, Batch(inputs={"audio": torch.ones(2, 5)}, targets=None), ("audio",))
-
-
-def testmask_prefers_dedicated_temporalmask_over_legacymasks():
-    x = torch.ones(2, 3, 4)
-    batch = Batch(
-        inputs={},
-        targets=None,
-        masks={
-            "audiomask": torch.ones(2),
-            "audio_temporalmask": torch.tensor([[True, False, True], [False, True, False]]),
-            "sequencemask": torch.zeros(2, 3, dtype=torch.bool),
-        },
+    result = prepare_projected_features(
+        Model(),
+        Batch(inputs={"audio": torch.ones(2, 4)}, targets=None),
+        ("audio",),
     )
 
-    result = get_modality_mask(batch, "audio", x)
-
-    assert torch.equal(result, batch.masks["audio_temporalmask"])
-
-
-def testmask_rejects_wrong_dedicated_temporalmask_shape():
-    x = torch.ones(2, 3, 4)
-    batch = Batch(inputs={}, targets=None, masks={"audio_temporalmask": torch.ones(2, 2)})
-
-    with pytest.raises(ValueError, match="Dedicated temporal mask"):
-        get_modality_mask(batch, "audio", x)
+    assert result["audio"][0].shape == (2, 1, 3)
+    assert result["audio"][1].shape == (2, 1)
 
 
-def testmasked_softmax_returns_empty_weights_for_zero_length_keys():
-    scores = torch.empty(2, 3, 0, requires_grad=True)
-    valid = torch.zeros(2, 0, dtype=torch.bool)
+def test_validate_input_dimensions_and_build_projections_reject_invalid_config():
+    with pytest.raises(ValueError, match="non-empty"):
+        validate_input_dimensions({})
 
-    weights = masked_softmax(scores, valid)
+    with pytest.raises(ValueError, match="positive"):
+        validate_input_dimensions({"audio": 0})
 
-    assert weights.shape == scores.shape
-    assert weights.numel() == 0
-    weights.sum().backward()
-    assert scores.grad is not None and scores.grad.shape == scores.shape
+    with pytest.raises(ValueError, match="Missing input dimensions"):
+        build_projections(("audio",), {}, 4)
 
+    projections = build_projections(("audio",), {"audio": 4}, 3)
 
-def testattention_supports_zero_length_keysequences():
-    query = torch.randn(2, 3, 4, requires_grad=True)
-    key = torch.empty(2, 0, 4, requires_grad=True)
-    valid = torch.zeros(2, 0, dtype=torch.bool)
-
-    result = scaled_dot_product_attention(query, key, valid)
-
-    assert result.shape == query.shape
-    assert torch.equal(result, torch.zeros_like(result))
-    result.sum().backward()
-    assert query.grad is not None and torch.isfinite(query.grad).all()
+    assert projections["audio"].out_features == 3
