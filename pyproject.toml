@@ -37,6 +37,10 @@ chimera_ml = "chimera_ml.cli:app"
 [tool.poetry]
 packages = [{ include = "chimera_ml", from = "src" }]
 
+include = [
+  { path = "src/chimera_ml/studio/assets/timeline.js", format = ["sdist", "wheel"] },
+]
+
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.2,<9.0"
 pytest-cov = ">=5.0,<6.0"
