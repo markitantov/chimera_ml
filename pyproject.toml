@@ -27,6 +27,9 @@ dependencies = [
     "requests>=2.31,<3.0",
 ]
 
+[project.optional-dependencies]
+studio = ["gradio>=5.0,<7.0"]
+
 [project.scripts]
 chimera_ml = "chimera_ml.cli:app"
 "chimera-ml" = "chimera_ml.cli:app"

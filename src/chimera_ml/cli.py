@@ -350,6 +350,25 @@ def inference(
         typer.echo("[inference] Done.")
 
 
+@app.command("studio")
+def studio(
+    config_paths: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--config-path",
+        "-c",
+        help="Inference YAML path; repeat for multiple choices.",
+    ),
+    search_root: str = typer.Option("examples", "--search-root", help="Directory scanned for inference.yaml files."),
+    host: str | None = typer.Option(None, "--host"),
+    port: int | None = typer.Option(None, "--port"),
+    share: bool = typer.Option(False, "--share"),
+):
+    """Launch the optional Gradio Studio interface."""
+    from chimera_ml.studio.app import launch_studio
+
+    launch_studio(config_paths, search_root=search_root, host=host, port=port, share=share)
+
+
 @registry_app.command("list")
 def registry_list(
     kind: str | None = typer.Option(
