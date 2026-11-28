@@ -5921,4 +5921,4 @@ studio = ["gradio", "jinja2"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "351a78302468bd3b98af573c9a5e5af7be73c3b9511b627f5258361b9d32e7bb"
+content-hash = "d903ca5b00b446412ce85d558a1491b4e6ff0db58d0685ceb9944923d4236b18"
