@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - master
+      - feat/studio
   workflow_dispatch:
 
 jobs:
@@ -14,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout
@@ -29,7 +30,10 @@ jobs:
         run: pip install poetry
 
       - name: Install dependencies
-        run: poetry install --with dev,docs
+        run: poetry install --with dev,docs --extras studio
+
+      - name: Check installed dependencies
+        run: poetry run pip check
 
       - name: Poetry Check
         run: poetry check
@@ -40,6 +44,15 @@ jobs:
       - name: Pytest
         run: poetry run pytest -q
 
+      - name: Ruff lint
+        run: poetry run ruff check .
+
+      - name: Ruff format
+        run: poetry run ruff format --check src tests
+
+      - name: Studio CLI
+        run: poetry run chimera-ml studio --help
+
       - name: Build documentation
         run: poetry run mkdocs build --strict --config-file mkdocs.en.yml
 
@@ -48,3 +61,31 @@ jobs:
 
       - name: Build package
         run: poetry build
+
+  dependency-modes:
+    name: ${{ matrix.mode }} / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+        mode: ["minimum", "latest"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Install direct dependencies
+        run: |
+          uv pip install --system --resolution ${{ matrix.mode == 'minimum' && 'lowest-direct' || 'highest' }} -e '.[studio]'
+          uv pip install --system pytest pytest-cov scikit-learn
+      - name: Dependency check
+        run: python -m pip check
+      - name: Pytest
+        run: pytest -q
+      - name: Studio CLI
+        run: chimera-ml studio --help

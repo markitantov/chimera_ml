@@ -2,7 +2,7 @@
 
 ## Requirements and installation choices
 
-CHIMERA-ML supports Python `>=3.12,<3.13`. The core project declares PyTorch `>=2.2,<3.0`, plus NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna, and requests. PyTorch's CUDA wheel and driver must be selected for the target machine; CHIMERA-ML does not install a CUDA driver.
+CHIMERA-ML supports Python `>=3.12`. The core project declares PyTorch `>=2.2,<3.0`, plus NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna, and requests. PyTorch's CUDA wheel and driver must be selected for the target machine; CHIMERA-ML does not install a CUDA driver.
 
 Install the published package into a virtual environment:
 
@@ -46,6 +46,10 @@ chimera-ml registry list
 ```
 
 `doctor` reports Python, PyTorch, CUDA availability, MLflow, registry counts, and discovered plugins. `plugins list` shows entry points; `registry list` shows the keys actually loaded in the current environment.
+
+## Dependency reproducibility
+
+The version ranges in package metadata describe supported installations. `poetry.lock` records the reproducible development environment and is used by CI in locked mode. Scientific experiments should preserve their own environment lock or export alongside checkpoints; the development lock is not a replacement for an experiment snapshot. CI also checks lowest-direct and latest resolved dependency sets independently of the lock.
 
 ## CPU and CUDA
 

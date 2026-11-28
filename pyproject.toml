@@ -3,7 +3,7 @@ name = "chimera-ml"
 version = "0.3.2"
 description = "Chimera ML (Cross-modal Hierarchical Merging of Embeddings and Representations) - a lightweight training framework for configurable uni-modal and multi-modal experiments."
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Maxim Markitantov", email = "m.markitantov@yandex.ru" }]
 keywords = ["machine-learning", "pytorch", "multimodal", "training", "deep-learning"]
@@ -12,6 +12,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Typing :: Typed",
 ]
@@ -28,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-studio = ["gradio>=6.0,<7.0"]
+studio = ["gradio>=6.0,<7.0", "jinja2>=3.1"]
 
 [project.scripts]
 chimera_ml = "chimera_ml.cli:app"
@@ -38,7 +40,9 @@ chimera_ml = "chimera_ml.cli:app"
 packages = [{ include = "chimera_ml", from = "src" }]
 
 include = [
-  { path = "src/chimera_ml/studio/assets/timeline.js", format = ["sdist", "wheel"] },
+  { path = "src/chimera_ml/studio/assets/templates/*.html", format = ["sdist", "wheel"] },
+  { path = "src/chimera_ml/studio/assets/css/*.css", format = ["sdist", "wheel"] },
+  { path = "src/chimera_ml/studio/assets/js/*.js", format = ["sdist", "wheel"] },
 ]
 
 [tool.poetry.group.dev.dependencies]

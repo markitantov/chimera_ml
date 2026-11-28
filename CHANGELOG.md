@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+
+- Extended the declared Python support range through Python 3.14 and added Jinja2 to the optional Studio dependency set.
+
 ## [0.3.2] - 2026-11-27
 
 ### Added
