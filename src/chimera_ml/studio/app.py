@@ -71,6 +71,8 @@ def run_inference(
         "artifacts": artifacts,
         "overview": build_prediction_overview(predictions),
         "timeline": extract_timeline(artifacts, predictions),
+        "xai": artifacts.get("xai") if isinstance(artifacts, dict) else None,
+        "xai_timeline": extract_xai_timeline(artifacts.get("xai"), artifacts, predictions),
         "timeline_duration": duration_sec,
         "work_dir": str(work_dir),
     }
@@ -182,6 +184,194 @@ def numeric_outputs(
             yield output, float(value), probability
 
 
+def iter_xai_values(value: Any, prefix: str = "") -> Iterable[tuple[str, float | None]]:
+    """Yield labeled scalar values without changing nulls into numeric values."""
+    if value is None:
+        yield prefix or "value", None
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            label = f"{prefix}.{key}" if prefix else str(key)
+            yield from iter_xai_values(item, label)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            label = f"{prefix}[{index}]" if prefix else str(index)
+            yield from iter_xai_values(item, label)
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        yield prefix or "value", float(value)
+
+
+def render_xai_overview(xai: Any) -> str:
+    """Render existing XAI samples as a non-causal signed-delta overview."""
+    if not isinstance(xai, dict) or not xai.get("samples"):
+        return '<div class="studio-empty-xai">No XAI artifacts available for this inference.</div>'
+    policy = html.escape(str(xai.get("ablation_policy", "unknown")))
+    parts = [f'<div class="studio-xai-overview"><p>Ablation policy: <code>{policy}</code></p>']
+    for sample in xai["samples"]:
+        sample_id = html.escape(str(sample.get("sample_id", "unknown")))
+        baseline = ", ".join(
+            f"{html.escape(label)}={value if value is not None else 'null'}"
+            for label, value in iter_xai_values(sample.get("baseline"))
+        )
+        parts.append(f'<section class="studio-xai-sample"><h4>Sample {sample_id}</h4><p>Baseline: {baseline}</p>')
+        modalities = sample.get("modalities", {})
+        numeric_deltas = [
+            value
+            for result in modalities.values()
+            for _, value in iter_xai_values(result.get("delta"))
+            if value is not None
+        ]
+        scale = max((abs(value) for value in numeric_deltas), default=1.0)
+        for modality, result in modalities.items():
+            status = str(result.get("status", "unknown"))
+            reason = result.get("reason")
+            reason_text = f" — {html.escape(str(reason))}" if reason else ""
+            parts.append(
+                f"<div><strong>{html.escape(str(modality))}</strong> <em>{html.escape(status)}</em>{reason_text}"
+            )
+            for label, value in iter_xai_values(result.get("delta")):
+                if value is None:
+                    parts.append(f"<p>{html.escape(label)}: null</p>")
+                    continue
+                width = min(abs(value) / scale * 45.0, 45.0)
+                side = "positive" if value >= 0 else "negative"
+                left = "50%" if value >= 0 else f"calc(50% - {width:.2f}%)"
+                parts.append(
+                    f'<div class="studio-xai-bar-row"><span>{html.escape(label)}</span>'
+                    '<span class="studio-xai-bar-track" style="display:inline-block;position:relative;'
+                    'width:180px;height:12px;background:#e5e7eb">'
+                    '<span class="studio-xai-zero" style="position:absolute;left:50%;top:0;'
+                    'height:100%;border-left:1px solid #111827"></span>'
+                    f'<span class="studio-xai-bar {side}" style="position:absolute;top:0;height:100%;'
+                    f'left:{left};width:{width:.2f}%"></span></span>'
+                    f"<span>{value:+.6g}</span></div>"
+                )
+            parts.append("</div>")
+        parts.append("</section>")
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def collect_temporal_records(value: Any, result: dict[str, tuple[float, float]]) -> None:
+    """Collect explicit sample-id time ranges from inference artifacts."""
+    if isinstance(value, dict):
+        sample_id = value.get("sample_id", value.get("id"))
+        start = value.get("start_sec", value.get("start", value.get("time_sec", value.get("timestamp"))))
+        end = value.get("end_sec", value.get("end", start))
+        if sample_id is not None and isinstance(start, (int, float)) and isinstance(end, (int, float)):
+            result[str(sample_id)] = (float(start), float(end))
+        for item in value.values():
+            collect_temporal_records(item, result)
+    elif isinstance(value, list):
+        for item in value:
+            collect_temporal_records(item, result)
+
+
+def extract_xai_timeline(xai: Any, artifacts: Any, predictions: Any) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Extract temporal XAI only when samples have explicit ID-based time ranges."""
+    if not isinstance(xai, dict) or not isinstance(xai.get("samples"), list):
+        return {}
+    temporal: dict[str, tuple[float, float]] = {}
+    for source in (artifacts, predictions):
+        if isinstance(source, dict):
+            for key, value in source.items():
+                if key != "xai":
+                    collect_temporal_records(value, temporal)
+    result: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for sample in xai["samples"]:
+        if not isinstance(sample, dict):
+            continue
+        sample_id = str(sample.get("sample_id", ""))
+        bounds = temporal.get(sample_id)
+        if bounds is None:
+            start = sample.get("start_sec", sample.get("start", sample.get("time_sec")))
+            end = sample.get("end_sec", sample.get("end", start))
+            bounds = (
+                (float(start), float(end))
+                if isinstance(start, (int, float)) and isinstance(end, (int, float))
+                else None
+            )
+        if bounds is None:
+            continue
+        for modality, explanation in sample.get("modalities", {}).items():
+            if not isinstance(explanation, dict) or explanation.get("status") != "evaluated":
+                continue
+            for output, value in iter_xai_values(explanation.get("delta")):
+                result.setdefault(str(modality), {}).setdefault(output, []).append(
+                    {"start": bounds[0], "end": bounds[1], "value": value, "sample_id": sample_id}
+                )
+    return result
+
+
+def build_xai_timeline_html(
+    timeline: dict[str, dict[str, list[dict[str, Any]]]], start: float = 0.0, end: float | None = None
+) -> str:
+    """Render signed temporal XAI deltas using explicit sample intervals."""
+    if not timeline:
+        return '<div class="studio-empty-xai">No temporally linked XAI samples available.</div>'
+    all_points = [point for series in timeline.values() for points in series.values() for point in points]
+    maximum = end if end is not None else max(point["end"] for point in all_points)
+    maximum = max(maximum, start + 1e-6)
+    width, height = 960, 360
+    left, right, top, bottom = 70, 25, 30, 55
+    plot_width, plot_height = width - left - right, height - top - bottom
+    outputs = sorted({output for series in timeline.values() for output in series})
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#d97706", "#0891b2"]
+    source_colors = {source: colors[index % len(colors)] for index, source in enumerate(sorted(timeline))}
+    values = [point["value"] for point in all_points if point["value"] is not None]
+    if not values:
+        return '<div class="studio-empty-xai">XAI samples have no numeric temporal delta.</div>'
+    low, high = min(min(values), 0.0), max(max(values), 0.0)
+    if low == high:
+        low, high = -1.0, 1.0
+    span = max(maximum - start, 1e-6)
+    value_span = high - low
+    parts = ['<div class="studio-xai-timeline-controls"><span>XAI output</span><select data-studio-xai-output>']
+    parts.extend(
+        f'<option value="{html.escape(output, quote=True)}">{html.escape(output)}</option>' for output in outputs
+    )
+    parts.append("</select></div>")
+    zero_y = height - bottom - (-low / value_span) * plot_height
+    parts.append(
+        f'<svg data-studio-xai-timeline viewBox="0 0 {width} {height}" data-start="{start}" data-end="{maximum}" '
+        f'data-plot-left="{left}" data-plot-width="{plot_width}">'
+        f'<line data-studio-xai-zero x1="{left}" x2="{width - right}" y1="{zero_y}" y2="{zero_y}" '
+        'stroke="#6b7280" stroke-dasharray="4 3" />'
+        f'<line data-studio-xai-cursor x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" '
+        'stroke="#111827" stroke-width="2" />'
+        f'<line x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" stroke="#374151" />'
+        f'<line x1="{left}" x2="{width - right}" y1="{height - bottom}" y2="{height - bottom}" stroke="#374151" />'
+        f'<text x="12" y="{top - 8}">signed delta</text>'
+    )
+    for tick in range(6):
+        value = low + value_span * tick / 5
+        y = height - bottom - (value - low) / value_span * plot_height
+        x = left + plot_width * tick / 5
+        parts.append(
+            f'<line x1="{x:.3f}" x2="{x:.3f}" y1="{height - bottom}" y2="{height - bottom + 4}" stroke="#374151" />'
+            f'<text x="{x:.3f}" y="{height - bottom + 18}" text-anchor="middle" font-size="11">'
+            f"{start + span * tick / 5:.3g}</text>"
+            f'<text x="{left - 8}" y="{y + 4:.3f}" text-anchor="end" font-size="11">{value:.3g}</text>'
+        )
+    for source, series in sorted(timeline.items()):
+        for output, points in sorted(series.items()):
+            path = []
+            for point in points:
+                if point["value"] is None:
+                    continue
+                x1 = left + (point["start"] - start) / span * plot_width
+                x2 = left + (point["end"] - start) / span * plot_width
+                y = height - bottom - (point["value"] - low) / value_span * plot_height
+                path.append(f"M{x1:.3f},{y:.3f} L{x2:.3f},{y:.3f}")
+            data = html.escape(json.dumps(points, separators=(",", ":")), quote=True)
+            parts.append(
+                f'<path data-studio-xai-series data-source="{html.escape(source, quote=True)}" '
+                f'data-output="{html.escape(output, quote=True)}" data-points="{data}" d="{" ".join(path)}" '
+                f'fill="none" stroke="{source_colors[source]}" stroke-width="2" />'
+            )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
 def build_timeline_html(
     timeline: dict[str, dict[str, list[dict[str, float]]]], duration_sec: float | None = None
 ) -> str:
@@ -189,7 +379,7 @@ def build_timeline_html(
     if not timeline:
         return '<div class="studio-empty-timeline">No temporal predictions available.</div>'
     all_points = [point for series in timeline.values() for points in series.values() for point in points]
-    minimum = min(point["start"] for point in all_points)
+    minimum = 0.0
     maximum = max(point["end"] for point in all_points)
     if duration_sec is not None and duration_sec > maximum:
         maximum = duration_sec
@@ -232,7 +422,8 @@ def build_timeline_html(
     parts.append("</div>")
     parts.append(
         f'<svg data-studio-timeline viewBox="0 0 {width} {height}" role="img" '
-        f'data-start="{minimum}" data-end="{maximum}" data-video-duration="{duration_sec or maximum}">'
+        f'data-start="{minimum}" data-end="{maximum}" data-video-duration="{duration_sec or maximum}" '
+        f'data-plot-left="{left}" data-plot-width="{plot_width}">'
     )
     for output in output_names:
         low, high = output_ranges[output]
@@ -250,6 +441,14 @@ def build_timeline_html(
             parts.append(
                 f'<line x1="{left - 4}" x2="{left}" y1="{y:.3f}" y2="{y:.3f}" stroke="#374151" />'
                 f'<text x="{left - 8}" y="{y + 4:.3f}" text-anchor="end" font-size="11">{value:.3g}</text>'
+            )
+        for tick in range(6):
+            x = left + plot_width * tick / 5
+            time_value = minimum + span * tick / 5
+            parts.append(
+                f'<line x1="{x:.3f}" x2="{x:.3f}" y1="{height - bottom}" y2="{height - bottom + 4}" stroke="#374151" />'
+                f'<text x="{x:.3f}" y="{height - bottom + 18}" text-anchor="middle" font-size="11">'
+                f"{time_value:.3g}</text>"
             )
         parts.append(f'<text x="{(left + width - right) / 2}" y="{height - 8}" text-anchor="middle">time (s)</text>')
         parts.append("</g>")
@@ -296,72 +495,86 @@ def build_timeline_html(
 
 
 def timeline_sync_js() -> str:
-    """Return browser-side video/timeline synchronization with teardown-safe binding."""
+    """Return one teardown-safe browser synchronizer for prediction and XAI timelines."""
     return r"""
     () => {
-      const root = document.querySelector('#studio-timeline');
       const videoRoot = document.querySelector('#studio-video');
-      if (!root || !videoRoot) return;
-      const state = root.__chimeraStudioSync || (root.__chimeraStudioSync = {});
-      const applyVisibility = () => {
-        const output = root.querySelector('[data-studio-output]')?.value;
-        const active = new Set([...root.querySelectorAll('[data-studio-source]:checked')].map(
-          (box) => box.dataset.studioSource
-        ));
-        root.querySelectorAll('[data-studio-series]').forEach((series) => {
-          series.style.display = series.dataset.output === output && active.has(series.dataset.source) ? '' : 'none';
-        });
-        root.querySelectorAll('[data-studio-axis-output]').forEach((axis) => {
-          axis.style.display = axis.dataset.studioAxisOutput === output ? '' : 'none';
-        });
-      };
-      const bind = () => {
-        const video = videoRoot.querySelector('video');
-        const svg = root.querySelector('[data-studio-timeline]');
-        if (!video || !svg) return;
-        if (state.video !== video) {
-          state.video?.removeEventListener('timeupdate', state.updateCursor);
-          state.video?.removeEventListener('seeking', state.updateCursor);
-          state.video = video;
-          state.updateCursor = () => {
+      if (!videoRoot) return;
+      const roots = [...document.querySelectorAll('#studio-timeline, #studio-xai-timeline')];
+      const bindRoot = (root) => {
+        const state = root.__chimeraStudioSync || (root.__chimeraStudioSync = {});
+        const outputSelector = '[data-studio-output], [data-studio-xai-output]';
+        const seriesSelector = '[data-studio-series], [data-studio-xai-series]';
+        const applyVisibility = () => {
+          const output = root.querySelector(outputSelector)?.value;
+          const active = new Set([...root.querySelectorAll('[data-studio-source]:checked')].map(
+            (box) => box.dataset.studioSource
+          ));
+          root.querySelectorAll(seriesSelector).forEach((series) => {
+            const source = series.dataset.source;
+            const sourceAllowed = !root.querySelector('[data-studio-source]') || active.has(source);
+            series.style.display = series.dataset.output === output && sourceAllowed ? '' : 'none';
+          });
+          root.querySelectorAll('[data-studio-axis-output]').forEach((axis) => {
+            axis.style.display = axis.dataset.studioAxisOutput === output ? '' : 'none';
+          });
+        };
+        const bind = () => {
+          const video = videoRoot.querySelector('video');
+          const svg = root.querySelector('[data-studio-timeline], [data-studio-xai-timeline]');
+          if (!video || !svg) return;
+          if (state.video !== video) {
+            state.video?.removeEventListener('timeupdate', state.updateCursor);
+            state.video?.removeEventListener('seeking', state.updateCursor);
+            state.video = video;
+            state.updateCursor = () => {
+              const currentSvg = state.svg || svg;
+              const start = Number(currentSvg.dataset.start), end = Number(currentSvg.dataset.end);
+              const duration = Number(video.duration);
+              const limit = Number.isFinite(duration) && duration > 0 ? duration : end;
+              const time = Math.max(0, Math.min(limit, Number(video.currentTime || 0)));
+              const plotLeft = Number(currentSvg.dataset.plotLeft || 0);
+              const plotWidth = Number(currentSvg.dataset.plotWidth || currentSvg.viewBox.baseVal.width);
+              const progress = Math.max(0, Math.min(1, (time - start) / Math.max(end - start, 1e-9)));
+              const x = plotLeft + progress * plotWidth;
+              const cursor = currentSvg.querySelector('[data-studio-cursor], [data-studio-xai-cursor]');
+              cursor?.setAttribute('x1', String(x)); cursor?.setAttribute('x2', String(x));
+            };
+            video.addEventListener('timeupdate', state.updateCursor);
+            video.addEventListener('seeking', state.updateCursor);
+          }
+          if (state.svg === svg && state.clickVideo === video) {
+            applyVisibility(); state.updateCursor(); return;
+          }
+          state.svg?.removeEventListener('click', state.clickSvg);
+          state.svg = svg; state.clickVideo = video;
+          state.clickSvg = (event) => {
+            const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+            const matrix = svg.getScreenCTM(); if (!matrix) return;
+            const transformed = point.matrixTransform(matrix.inverse());
             const start = Number(svg.dataset.start), end = Number(svg.dataset.end);
             const duration = Number(video.duration);
             const limit = Number.isFinite(duration) && duration > 0 ? duration : end;
-            const time = Math.max(0, Math.min(limit, Number(video.currentTime || 0)));
-            const viewBox = svg.viewBox.baseVal;
-            const progress = Math.max(0, Math.min(1, (time - start) / Math.max(end - start, 1e-9)));
-            const x = viewBox.x + progress * viewBox.width;
-            const cursor = svg.querySelector('[data-studio-cursor]');
-            cursor?.setAttribute('x1', String(x)); cursor?.setAttribute('x2', String(x));
+            const plotLeft = Number(svg.dataset.plotLeft || 0);
+            const plotWidth = Number(svg.dataset.plotWidth || svg.viewBox.baseVal.width);
+            const progress = (transformed.x - plotLeft) / plotWidth;
+            const target = start + progress * (end - start);
+            video.currentTime = Math.max(0, Math.min(limit, target));
           };
-          video.addEventListener('timeupdate', state.updateCursor);
-          video.addEventListener('seeking', state.updateCursor);
-        }
-        if (state.svg === svg && state.clickVideo === video) {
-          applyVisibility(); state.updateCursor(); return;
-        }
-        state.svg?.removeEventListener('click', state.clickSvg);
-        state.svg = svg; state.clickVideo = video;
-        state.clickSvg = (event) => {
-          const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
-          const matrix = svg.getScreenCTM(); if (!matrix) return;
-          const transformed = point.matrixTransform(matrix.inverse());
-          const start = Number(svg.dataset.start), end = Number(svg.dataset.end);
-          const duration = Number(video.duration);
-          const limit = Number.isFinite(duration) && duration > 0 ? duration : end;
-          const target = start + (transformed.x - svg.viewBox.baseVal.x) / svg.viewBox.baseVal.width * (end - start);
-          video.currentTime = Math.max(0, Math.min(limit, target));
+          svg.addEventListener('click', state.clickSvg);
+          root.querySelector(outputSelector)?.addEventListener('change', applyVisibility);
+          root.querySelectorAll('[data-studio-source]').forEach((box) =>
+            box.addEventListener('change', applyVisibility)
+          );
+          applyVisibility(); state.updateCursor();
         };
-        svg.addEventListener('click', state.clickSvg);
-        root.querySelector('[data-studio-output]')?.addEventListener('change', applyVisibility);
-        root.querySelectorAll('[data-studio-source]').forEach((box) => box.addEventListener('change', applyVisibility));
-        applyVisibility(); state.updateCursor();
+        bind();
+        if (!state.observer) {
+          state.observer = new MutationObserver(bind);
+          state.observer.observe(root, {childList: true, subtree: true});
+        }
       };
-      bind();
-      if (!state.observer) {
-        state.observer = new MutationObserver(bind);
-        state.observer.observe(root, {childList: true, subtree: true});
-      }
+      roots.forEach(bindRoot);
     }
     """
 
@@ -375,19 +588,34 @@ def create_demo(config_paths: list[str] | None = None, *, search_root: str | Pat
 
     choices = config_paths or discover_inference_configs(search_root)
 
-    def execute(input_path: str | None, config_path: str | None, device: str) -> tuple[Any, Any, str, str, str]:
+    def execute(
+        input_path: str | None, config_path: str | None, device: str
+    ) -> tuple[Any, Any, str, str, str, str, str]:
         if not input_path:
-            return None, None, "", "", "Select a video before starting inference."
+            return None, None, "", "", "", "", "Select a video before starting inference."
         if not config_path:
-            return None, None, "", "", "Select an inference YAML configuration."
+            return None, None, "", "", "", "", "Select an inference YAML configuration."
         try:
             result = run_inference(input_path, config_path, device=device)
         except Exception as exc:
-            return None, None, "", "", f"{type(exc).__name__}: {exc}"
+            return None, None, "", "", "", "", f"{type(exc).__name__}: {exc}"
+        timeline_end = result.get("timeline_duration")
+        if timeline_end is None:
+            timeline_end = max(
+                (
+                    point["end"]
+                    for series in result["timeline"].values()
+                    for points in series.values()
+                    for point in points
+                ),
+                default=0.0,
+            )
         return (
             result["overview"],
             result["predictions"],
             build_timeline_html(result["timeline"], result.get("timeline_duration")),
+            render_xai_overview(result.get("xai")),
+            build_xai_timeline_html(result["xai_timeline"], 0.0, timeline_end),
             json.dumps(result["artifacts"], indent=2, ensure_ascii=False),
             "",
         )
@@ -402,10 +630,14 @@ def create_demo(config_paths: list[str] | None = None, *, search_root: str | Pat
         overview = gr.JSON(label="Prediction overview")
         raw_predictions = gr.JSON(label="Raw predictions")
         timeline = gr.HTML(value=build_timeline_html({}), elem_id="studio-timeline")
+        xai_overview = gr.HTML(value=render_xai_overview(None), label="XAI overview")
+        xai_timeline = gr.HTML(value=build_xai_timeline_html({}), elem_id="studio-xai-timeline")
         artifacts = gr.Code(label="Raw inference artifacts", language="json")
         errors = gr.Textbox(label="Errors", interactive=False)
         run_button.click(
-            execute, inputs=[video, config, device], outputs=[overview, raw_predictions, timeline, artifacts, errors]
+            execute,
+            inputs=[video, config, device],
+            outputs=[overview, raw_predictions, timeline, xai_overview, xai_timeline, artifacts, errors],
         )
         run_button.click(None, js=timeline_sync_js())
     return demo
