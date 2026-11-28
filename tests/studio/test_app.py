@@ -113,3 +113,48 @@ def test_create_demo_registers_browser_sync() -> None:
     assert "currentTime" in serialized
     assert "currentTime" in timeline_sync_js()
     assert "timeupdate" in timeline_sync_js()
+
+
+def test_timeline_uses_common_output_scale_and_video_duration() -> None:
+    timeline = {
+        "audio": {"probability": [{"start": 0.0, "end": 1.0, "value": 0.2}]},
+        "video": {"probability": [{"start": 2.0, "end": 2.0, "value": 0.8}]},
+    }
+    markup = build_timeline_html(timeline, duration_sec=5.0)
+    assert 'data-end="5.0"' in markup
+    assert ">0</text>" in markup
+    assert ">1</text>" in markup
+    assert 'stroke="#2563eb"' in markup
+    assert 'stroke="#dc2626"' in markup
+    assert "data-studio-cursor" in markup
+    assert "cx=" in markup
+    assert "time (s)" in markup
+
+
+def test_timeline_excludes_service_numeric_fields() -> None:
+    timeline = extract_timeline(
+        {},
+        {
+            "segments": [
+                {
+                    "start_sec": 0.0,
+                    "end_sec": 1.0,
+                    "duration_sec": 1.0,
+                    "num_frames": 20,
+                    "has_faces": True,
+                    "emotion": {"probabilities": {"happy": 0.7}},
+                }
+            ]
+        },
+    )
+    assert "emotion.happy" in timeline["fusion"]
+    assert all("duration" not in key and "num_" not in key for key in timeline["fusion"])
+
+
+def test_timeline_sync_tears_down_by_reusing_single_observer() -> None:
+    script = timeline_sync_js()
+    assert "root.__chimeraStudioSync" in script
+    assert "if (!state.observer)" in script
+    assert "data-studio-source]:checked" in script
+    assert "Math.min(limit, target)" in script
+    assert "data-studio-axis-output" in script

@@ -53,6 +53,17 @@ def run_inference(
         config=config.raw,
     )
     result = build_inference_pipeline(config).run(context)
+    try:
+        import cv2
+
+        capture = cv2.VideoCapture(str(input_file))
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        frame_rate = capture.get(cv2.CAP_PROP_FPS)
+        capture.release()
+        duration_sec = frame_count / frame_rate if frame_count > 0 and frame_rate > 0 else None
+    except (ImportError, OSError):
+        duration_sec = None
+
     predictions = json_safe(result.predictions)
     artifacts = json_safe(result.artifacts)
     return {
@@ -60,6 +71,7 @@ def run_inference(
         "artifacts": artifacts,
         "overview": build_prediction_overview(predictions),
         "timeline": extract_timeline(artifacts, predictions),
+        "timeline_duration": duration_sec,
         "work_dir": str(work_dir),
     }
 
@@ -122,9 +134,9 @@ def extract_timeline(artifacts: Any, predictions: Any) -> dict[str, dict[str, li
                 end = start
             if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
                 continue
-            for output, value in numeric_outputs(record):
+            for output, value, probability in numeric_outputs(record):
                 result.setdefault(source_name, {}).setdefault(output, []).append(
-                    {"start": float(start), "end": float(end), "value": float(value)}
+                    {"start": float(start), "end": float(end), "value": float(value), "probability": probability}
                 )
     return result
 
@@ -138,30 +150,76 @@ def iter_sources(name: str, value: Any) -> Iterable[tuple[str, Any]]:
         yield name.removesuffix("_predictions"), value
 
 
-def numeric_outputs(record: dict[str, Any], prefix: str = "") -> Iterable[tuple[str, float]]:
+def numeric_outputs(
+    record: dict[str, Any], prefix: str = "", probability: bool = False
+) -> Iterable[tuple[str, float, bool]]:
     for key, value in record.items():
-        if key in {"start", "end", "start_sec", "end_sec", "time_sec", "timestamp", "index", "weight"}:
+        if key in {
+            "start",
+            "end",
+            "start_sec",
+            "end_sec",
+            "time_sec",
+            "timestamp",
+            "index",
+            "weight",
+            "duration_sec",
+            "speech_duration_sec",
+            "num_windows",
+            "num_faces",
+            "num_frames",
+            "source_frame_index",
+            "class_index",
+        } or key.startswith("has_"):
             continue
         output = f"{prefix}.{key}" if prefix else str(key)
         if isinstance(value, dict):
             if isinstance(value.get("probabilities"), dict):
-                yield from numeric_outputs(value["probabilities"], output)
+                yield from numeric_outputs(value["probabilities"], output, True)
             else:
                 yield from numeric_outputs(value, output)
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
-            yield output, float(value)
+            yield output, float(value), probability
 
 
-def build_timeline_html(timeline: dict[str, dict[str, list[dict[str, float]]]]) -> str:
+def build_timeline_html(
+    timeline: dict[str, dict[str, list[dict[str, float]]]], duration_sec: float | None = None
+) -> str:
     """Render interval series and browser-side controls as an SVG timeline."""
     if not timeline:
         return '<div class="studio-empty-timeline">No temporal predictions available.</div>'
     all_points = [point for series in timeline.values() for points in series.values() for point in points]
     minimum = min(point["start"] for point in all_points)
     maximum = max(point["end"] for point in all_points)
+    if duration_sec is not None and duration_sec > maximum:
+        maximum = duration_sec
     span = max(maximum - minimum, 1e-6)
-    width, height = 960, 360
+    width, height = 960, 420
+    left, right, top, bottom = 70, 25, 30, 55
+    plot_width, plot_height = width - left - right, height - top - bottom
     output_names = sorted({output for series in timeline.values() for output in series})
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#d97706", "#0891b2"]
+    source_colors = {source: colors[index % len(colors)] for index, source in enumerate(sorted(timeline))}
+    output_ranges: dict[str, tuple[float, float]] = {}
+    for output in output_names:
+        output_points = [
+            point
+            for series in timeline.values()
+            for name, points in series.items()
+            if name == output
+            for point in points
+        ]
+        values = [point["value"] for point in output_points]
+        is_probability = (
+            any(point.get("probability", False) for point in output_points)
+            or "probabil" in output
+            or output.endswith(("_prob", "_probs"))
+        )
+        low, high = (0.0, 1.0) if is_probability else (min(values), max(values))
+        if high <= low:
+            padding = max(abs(low) * 0.05, 1.0)
+            low, high = low - padding, high + padding
+        output_ranges[output] = (low, high)
     parts = [
         '<div class="studio-timeline-controls">',
         "<label>Output <select data-studio-output>",
@@ -174,73 +232,136 @@ def build_timeline_html(timeline: dict[str, dict[str, list[dict[str, float]]]]) 
     parts.append("</div>")
     parts.append(
         f'<svg data-studio-timeline viewBox="0 0 {width} {height}" role="img" '
-        f'data-start="{minimum}" data-end="{maximum}"><line data-studio-cursor x1="0" x2="0" y1="0" y2="{height}" />'
+        f'data-start="{minimum}" data-end="{maximum}" data-video-duration="{duration_sec or maximum}">'
+    )
+    for output in output_names:
+        low, high = output_ranges[output]
+        display = "" if output == output_names[0] else "none"
+        escaped_output = html.escape(output, quote=True)
+        parts.append(f'<g data-studio-axis-output="{escaped_output}" style="display:{display}">')
+        parts.append(
+            f'<line x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" stroke="#374151" />'
+            f'<line x1="{left}" x2="{width - right}" y1="{height - bottom}" y2="{height - bottom}" stroke="#374151" />'
+            f'<text x="12" y="{top - 8}" font-size="12">{html.escape(output)}</text>'
+        )
+        for tick in range(6):
+            value = low + (high - low) * tick / 5
+            y = height - bottom - plot_height * tick / 5
+            parts.append(
+                f'<line x1="{left - 4}" x2="{left}" y1="{y:.3f}" y2="{y:.3f}" stroke="#374151" />'
+                f'<text x="{left - 8}" y="{y + 4:.3f}" text-anchor="end" font-size="11">{value:.3g}</text>'
+            )
+        parts.append(f'<text x="{(left + width - right) / 2}" y="{height - 8}" text-anchor="middle">time (s)</text>')
+        parts.append("</g>")
+    parts.append(
+        f'<line data-studio-cursor x1="{left}" x2="{left}" y1="{top}" '
+        f'y2="{height - bottom}" stroke="#111827" stroke-width="2" />'
     )
     for source, series in sorted(timeline.items()):
         for output, points in sorted(series.items()):
-            values = [point["value"] for point in points]
-            low, high = min(values), max(values)
-            value_span = max(high - low, 1e-6)
+            low, high = output_ranges[output]
             path_parts: list[str] = []
+            point_parts: list[str] = []
             for point in points:
-                x1 = (point["start"] - minimum) / span * width
-                x2 = (point["end"] - minimum) / span * width
-                y = height - (point["value"] - low) / value_span * (height - 30) - 15
-                path_parts.append(f"M{x1:.3f},{y:.3f} L{x2:.3f},{y:.3f}")
+                x1 = left + (point["start"] - minimum) / span * plot_width
+                x2 = left + (point["end"] - minimum) / span * plot_width
+                y = height - bottom - (point["value"] - low) / max(high - low, 1e-9) * plot_height
+                if point["start"] == point["end"]:
+                    point_parts.append(f'<circle cx="{x1:.3f}" cy="{y:.3f}" r="4" />')
+                else:
+                    path_parts.append(f"M{x1:.3f},{y:.3f} L{x2:.3f},{y:.3f}")
             data = html.escape(json.dumps(points, separators=(",", ":")), quote=True)
+            source_attr = html.escape(source, quote=True)
+            output_attr = html.escape(output, quote=True)
             parts.append(
-                f'<path data-studio-series data-source="{html.escape(source, quote=True)}" '
-                f'data-output="{html.escape(output, quote=True)}" data-points="{data}" '
-                f'd="{" ".join(path_parts)}" fill="none" stroke-width="2" />'
+                f'<path data-studio-series data-source="{source_attr}" data-output="{output_attr}" '
+                f'data-points="{data}" d="{" ".join(path_parts)}" fill="none" '
+                f'stroke="{source_colors[source]}" stroke-width="2" />'
             )
-    parts.append("</svg>")
+            if point_parts:
+                parts.append(
+                    f'<g data-studio-series data-source="{source_attr}" data-output="{output_attr}" '
+                    f'fill="{source_colors[source]}">' + "".join(point_parts) + "</g>"
+                )
+    parts.append('<g data-studio-legend transform="translate(70,15)">')
+    for index, (source, color) in enumerate(source_colors.items()):
+        x = index * 145
+        parts.append(
+            f'<rect x="{x}" y="-10" width="12" height="12" fill="{color}" />'
+            f'<text x="{x + 17}" y="0">{html.escape(source)}</text>'
+        )
+    parts.append("</g></svg>")
     parts.append("<script>window.__chimeraStudioTimeline = true;</script>")
     return "".join(parts)
 
 
 def timeline_sync_js() -> str:
-    """Return the minimal browser-side video/timeline synchronization script."""
+    """Return browser-side video/timeline synchronization with teardown-safe binding."""
     return r"""
     () => {
       const root = document.querySelector('#studio-timeline');
       const videoRoot = document.querySelector('#studio-video');
       if (!root || !videoRoot) return;
+      const state = root.__chimeraStudioSync || (root.__chimeraStudioSync = {});
+      const applyVisibility = () => {
+        const output = root.querySelector('[data-studio-output]')?.value;
+        const active = new Set([...root.querySelectorAll('[data-studio-source]:checked')].map(
+          (box) => box.dataset.studioSource
+        ));
+        root.querySelectorAll('[data-studio-series]').forEach((series) => {
+          series.style.display = series.dataset.output === output && active.has(series.dataset.source) ? '' : 'none';
+        });
+        root.querySelectorAll('[data-studio-axis-output]').forEach((axis) => {
+          axis.style.display = axis.dataset.studioAxisOutput === output ? '' : 'none';
+        });
+      };
       const bind = () => {
         const video = videoRoot.querySelector('video');
         const svg = root.querySelector('[data-studio-timeline]');
-        if (!video || !svg || svg.dataset.bound === 'true') return;
-        svg.dataset.bound = 'true';
-        const cursor = svg.querySelector('[data-studio-cursor]');
-        const updateCursor = () => {
-          const start = Number(svg.dataset.start), end = Number(svg.dataset.end);
-          const time = Number(video.currentTime || 0);
-          const x = Math.max(0, Math.min(1, (time - start) / Math.max(end - start, 1e-9))) * 960;
-          cursor.setAttribute('x1', String(x)); cursor.setAttribute('x2', String(x));
-        };
-        video.addEventListener('timeupdate', updateCursor);
-        video.addEventListener('seeking', updateCursor);
-        svg.addEventListener('click', (event) => {
+        if (!video || !svg) return;
+        if (state.video !== video) {
+          state.video?.removeEventListener('timeupdate', state.updateCursor);
+          state.video?.removeEventListener('seeking', state.updateCursor);
+          state.video = video;
+          state.updateCursor = () => {
+            const start = Number(svg.dataset.start), end = Number(svg.dataset.end);
+            const duration = Number(video.duration);
+            const limit = Number.isFinite(duration) && duration > 0 ? duration : end;
+            const time = Math.max(0, Math.min(limit, Number(video.currentTime || 0)));
+            const viewBox = svg.viewBox.baseVal;
+            const progress = Math.max(0, Math.min(1, (time - start) / Math.max(end - start, 1e-9)));
+            const x = viewBox.x + progress * viewBox.width;
+            const cursor = svg.querySelector('[data-studio-cursor]');
+            cursor?.setAttribute('x1', String(x)); cursor?.setAttribute('x2', String(x));
+          };
+          video.addEventListener('timeupdate', state.updateCursor);
+          video.addEventListener('seeking', state.updateCursor);
+        }
+        if (state.svg === svg && state.clickVideo === video) {
+          applyVisibility(); state.updateCursor(); return;
+        }
+        state.svg?.removeEventListener('click', state.clickSvg);
+        state.svg = svg; state.clickVideo = video;
+        state.clickSvg = (event) => {
           const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
-          const transformed = point.matrixTransform(svg.getScreenCTM().inverse());
+          const matrix = svg.getScreenCTM(); if (!matrix) return;
+          const transformed = point.matrixTransform(matrix.inverse());
           const start = Number(svg.dataset.start), end = Number(svg.dataset.end);
-          video.currentTime = start + (transformed.x / 960) * (end - start);
-        });
-        root.querySelector('[data-studio-output]')?.addEventListener('change', (event) => {
-          root.querySelectorAll('[data-studio-series]').forEach((path) => {
-            path.style.display = path.dataset.output === event.target.value ? '' : 'none';
-          });
-        });
-        root.querySelectorAll('[data-studio-source]').forEach((box) => box.addEventListener('change', () => {
-          const selectedOutput = root.querySelector('[data-studio-output]').value;
-          const selector = `[data-studio-series][data-source="${box.dataset.studioSource}"]`;
-          root.querySelectorAll(selector).forEach((path) => {
-            path.style.display = box.checked && path.dataset.output === selectedOutput ? '' : 'none';
-          });
-        }));
-        updateCursor();
+          const duration = Number(video.duration);
+          const limit = Number.isFinite(duration) && duration > 0 ? duration : end;
+          const target = start + (transformed.x - svg.viewBox.baseVal.x) / svg.viewBox.baseVal.width * (end - start);
+          video.currentTime = Math.max(0, Math.min(limit, target));
+        };
+        svg.addEventListener('click', state.clickSvg);
+        root.querySelector('[data-studio-output]')?.addEventListener('change', applyVisibility);
+        root.querySelectorAll('[data-studio-source]').forEach((box) => box.addEventListener('change', applyVisibility));
+        applyVisibility(); state.updateCursor();
       };
       bind();
-      new MutationObserver(bind).observe(root, {childList: true, subtree: true});
+      if (!state.observer) {
+        state.observer = new MutationObserver(bind);
+        state.observer.observe(root, {childList: true, subtree: true});
+      }
     }
     """
 
@@ -266,7 +387,7 @@ def create_demo(config_paths: list[str] | None = None, *, search_root: str | Pat
         return (
             result["overview"],
             result["predictions"],
-            build_timeline_html(result["timeline"]),
+            build_timeline_html(result["timeline"], result.get("timeline_duration")),
             json.dumps(result["artifacts"], indent=2, ensure_ascii=False),
             "",
         )
