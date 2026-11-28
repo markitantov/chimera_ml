@@ -1,0 +1,14 @@
+.studio-timeline, .studio-xai-timeline, .studio-xai-overview { color: var(--body-text-color, #111827); }
+.studio-timeline svg, .studio-xai-timeline svg { width: 100%; max-width: 960px; height: auto; }
+.studio-axis-line, .studio-axis-tick { stroke: var(--border-color-primary, #374151); fill: none; }
+.studio-axis-label, .studio-axis-number { fill: currentColor; }
+.studio-timeline-cursor, .studio-xai-cursor { stroke: #111827; stroke-width: 2; }
+.studio-xai-zero-line { stroke: #6b7280; stroke-dasharray: 4 3; }
+.studio-timeline-line, .studio-xai-line { vector-effect: non-scaling-stroke; }
+.studio-xai-bar-row { display: flex; align-items: center; gap: .5rem; margin: .25rem 0; }
+.studio-xai-bar-track { display: inline-block; position: relative; width: 180px; height: 12px; background: var(--block-background-fill, #e5e7eb); }
+.studio-xai-zero { position: absolute; left: 50%; top: 0; height: 100%; border-left: 1px solid currentColor; }
+.studio-xai-bar { position: absolute; top: 0; height: 100%; }
+.studio-xai-bar.positive { background: #2563eb; }
+.studio-xai-bar.negative { background: #dc2626; }
+.studio-empty-timeline, .studio-empty-xai { padding: 1rem; color: var(--body-text-color-subdued, #6b7280); }

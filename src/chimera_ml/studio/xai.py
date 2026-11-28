@@ -1,8 +1,9 @@
 """Rendering and extraction of existing XAI artifacts."""
 
-import html
 from collections.abc import Iterable
 from typing import Any
+
+from .timeline import render_template
 
 
 def iter_xai_values(value: Any, prefix: str = "") -> Iterable[tuple[str, float | None]]:
@@ -25,15 +26,8 @@ def render_xai_overview(xai: Any) -> str:
     """Render existing XAI samples as a non-causal signed-delta overview."""
     if not isinstance(xai, dict) or not xai.get("samples"):
         return '<div class="studio-empty-xai">No XAI artifacts available for this inference.</div>'
-    policy = html.escape(str(xai.get("ablation_policy", "unknown")))
-    parts = [f'<div class="studio-xai-overview"><p>Ablation policy: <code>{policy}</code></p>']
+    rendered_samples = []
     for sample in xai["samples"]:
-        sample_id = html.escape(str(sample.get("sample_id", "unknown")))
-        baseline = ", ".join(
-            f"{html.escape(label)}={value if value is not None else 'null'}"
-            for label, value in iter_xai_values(sample.get("baseline"))
-        )
-        parts.append(f'<section class="studio-xai-sample"><h4>Sample {sample_id}</h4><p>Baseline: {baseline}</p>')
         modalities = sample.get("modalities", {})
         numeric_deltas = [
             value
@@ -44,35 +38,38 @@ def render_xai_overview(xai: Any) -> str:
         scale = max((abs(value) for value in numeric_deltas), default=1.0)
         if scale == 0.0:
             scale = 1.0
-
+        rendered_modalities = []
         for modality, result in modalities.items():
-            status = str(result.get("status", "unknown"))
-            reason = result.get("reason")
-            reason_text = f" — {html.escape(str(reason))}" if reason else ""
-            parts.append(
-                f"<div><strong>{html.escape(str(modality))}</strong> <em>{html.escape(status)}</em>{reason_text}"
-            )
+            values = []
             for label, value in iter_xai_values(result.get("delta")):
-                if value is None:
-                    parts.append(f"<p>{html.escape(label)}: null</p>")
-                    continue
-                width = min(abs(value) / scale * 45.0, 45.0)
-                side = "positive" if value >= 0 else "negative"
-                left = "50%" if value >= 0 else f"calc(50% - {width:.2f}%)"
-                parts.append(
-                    f'<div class="studio-xai-bar-row"><span>{html.escape(label)}</span>'
-                    '<span class="studio-xai-bar-track" style="display:inline-block;position:relative;'
-                    'width:180px;height:12px;background:#e5e7eb">'
-                    '<span class="studio-xai-zero" style="position:absolute;left:50%;top:0;'
-                    'height:100%;border-left:1px solid #111827"></span>'
-                    f'<span class="studio-xai-bar {side}" style="position:absolute;top:0;height:100%;'
-                    f'left:{left};width:{width:.2f}%"></span></span>'
-                    f"<span>{value:+.6g}</span></div>"
+                width = min(abs(value) / scale * 45.0, 45.0) if value is not None else 0.0
+                values.append(
+                    {
+                        "label": label,
+                        "value": value,
+                        "width": width,
+                        "side": "positive" if value is not None and value >= 0 else "negative",
+                        "left": "50%" if value is not None and value >= 0 else f"calc(50% - {width:.2f}%)",
+                    }
                 )
-            parts.append("</div>")
-        parts.append("</section>")
-    parts.append("</div>")
-    return "".join(parts)
+            rendered_modalities.append(
+                {
+                    "name": str(modality),
+                    "status": str(result.get("status", "unknown")),
+                    "reason": result.get("reason"),
+                    "entries": values,
+                }
+            )
+        rendered_samples.append(
+            {
+                "sample_id": str(sample.get("sample_id", "unknown")),
+                "baseline": list(iter_xai_values(sample.get("baseline"))),
+                "modalities": rendered_modalities,
+            }
+        )
+    return render_template(
+        "xai_overview.html", {"policy": str(xai.get("ablation_policy", "unknown")), "samples": rendered_samples}
+    )
 
 
 def collect_temporal_records(value: Any, result: dict[str, tuple[float, float]]) -> None:

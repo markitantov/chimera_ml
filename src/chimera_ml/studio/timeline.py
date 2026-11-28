@@ -1,14 +1,28 @@
 """Prediction and XAI timeline rendering."""
 
-import html
 import json
 from importlib import resources
 from typing import Any
 
 
+def render_template(template_name: str, context: dict[str, Any]) -> str:
+    """Render a packaged Studio template with escaped dynamic values."""
+    from jinja2 import DictLoader, Environment, select_autoescape
+
+    resource = resources.files("chimera_ml.studio").joinpath("assets", "templates", template_name)
+    source = resource.read_text(encoding="utf-8")
+    environment = Environment(loader=DictLoader({template_name: source}), autoescape=select_autoescape(("html", "xml")))
+    return environment.get_template(template_name).render(**context)
+
+
 def load_timeline_js() -> str:
     """Load browser synchronization code from package resources."""
-    return resources.files("chimera_ml.studio").joinpath("assets/timeline.js").read_text(encoding="utf-8")
+    return resources.files("chimera_ml.studio").joinpath("assets", "js", "timeline.js").read_text(encoding="utf-8")
+
+
+def load_studio_css() -> str:
+    """Load Studio component styles from package resources."""
+    return resources.files("chimera_ml.studio").joinpath("assets", "css", "studio.css").read_text(encoding="utf-8")
 
 
 def build_xai_timeline_html(
@@ -34,35 +48,9 @@ def build_xai_timeline_html(
         low, high = -1.0, 1.0
     span = max(maximum - start, 1e-6)
     value_span = high - low
-    parts = ['<div class="studio-xai-timeline-controls"><span>XAI output</span><select data-studio-xai-output>']
-    parts.extend(
-        f'<option value="{html.escape(output, quote=True)}">{html.escape(output)}</option>' for output in outputs
-    )
-    parts.append("</select></div>")
-    zero_y = height - bottom - (-low / value_span) * plot_height
-    parts.append(
-        f'<svg data-studio-xai-timeline viewBox="0 0 {width} {height}" data-start="{start}" data-end="{maximum}" '
-        f'data-plot-left="{left}" data-plot-width="{plot_width}">'
-        f'<line data-studio-xai-zero x1="{left}" x2="{width - right}" y1="{zero_y}" y2="{zero_y}" '
-        'stroke="#6b7280" stroke-dasharray="4 3" />'
-        f'<line data-studio-xai-cursor x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" '
-        'stroke="#111827" stroke-width="2" />'
-        f'<line x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" stroke="#374151" />'
-        f'<line x1="{left}" x2="{width - right}" y1="{height - bottom}" y2="{height - bottom}" stroke="#374151" />'
-        f'<text x="12" y="{top - 8}">signed delta</text>'
-    )
-    for tick in range(6):
-        value = low + value_span * tick / 5
-        y = height - bottom - (value - low) / value_span * plot_height
-        x = left + plot_width * tick / 5
-        parts.append(
-            f'<line x1="{x:.3f}" x2="{x:.3f}" y1="{height - bottom}" y2="{height - bottom + 4}" stroke="#374151" />'
-            f'<text x="{x:.3f}" y="{height - bottom + 18}" text-anchor="middle" font-size="11">'
-            f"{start + span * tick / 5:.3g}</text>"
-            f'<text x="{left - 8}" y="{y + 4:.3f}" text-anchor="end" font-size="11">{value:.3g}</text>'
-        )
-    for source, series in sorted(timeline.items()):
-        for output, points in sorted(series.items()):
+    series = []
+    for source, source_series in sorted(timeline.items()):
+        for output, points in sorted(source_series.items()):
             path = []
             for point in points:
                 if point["value"] is None:
@@ -71,14 +59,40 @@ def build_xai_timeline_html(
                 x2 = left + (point["end"] - start) / span * plot_width
                 y = height - bottom - (point["value"] - low) / value_span * plot_height
                 path.append(f"M{x1:.3f},{y:.3f} L{x2:.3f},{y:.3f}")
-            data = html.escape(json.dumps(points, separators=(",", ":")), quote=True)
-            parts.append(
-                f'<path data-studio-xai-series data-source="{html.escape(source, quote=True)}" '
-                f'data-output="{html.escape(output, quote=True)}" data-points="{data}" d="{" ".join(path)}" '
-                f'fill="none" stroke="{source_colors[source]}" stroke-width="2" />'
+            series.append(
+                {
+                    "source": source,
+                    "output": output,
+                    "points_json": json.dumps(points, separators=(",", ":")),
+                    "path": " ".join(path),
+                    "color": source_colors[source],
+                }
             )
-    parts.append("</svg>")
-    return "".join(parts)
+    ticks = []
+    for tick in range(6):
+        value = low + value_span * tick / 5
+        y = height - bottom - (value - low) / value_span * plot_height
+        x = left + plot_width * tick / 5
+        ticks.append({"x": x, "y": y, "time": start + span * tick / 5, "value": value})
+    zero_y = height - bottom - (-low / value_span) * plot_height
+    return render_template(
+        "xai_timeline.html",
+        {
+            "width": width,
+            "height": height,
+            "left": left,
+            "right": right,
+            "top": top,
+            "bottom": bottom,
+            "plot_width": plot_width,
+            "start": start,
+            "maximum": maximum,
+            "outputs": outputs,
+            "series": series,
+            "ticks": ticks,
+            "zero_y": zero_y,
+        },
+    )
 
 
 def build_timeline_html(
@@ -119,85 +133,61 @@ def build_timeline_html(
             padding = max(abs(low) * 0.05, 1.0)
             low, high = low - padding, high + padding
         output_ranges[output] = (low, high)
-    parts = [
-        '<div class="studio-timeline-controls">',
-        "<label>Output <select data-studio-output>",
-        *[f'<option value="{html.escape(name, quote=True)}">{html.escape(name)}</option>' for name in output_names],
-        "</select></label>",
-    ]
-    for source in sorted(timeline):
-        escaped = html.escape(source, quote=True)
-        parts.append(f'<label><input type="checkbox" data-studio-source="{escaped}" checked> {escaped}</label>')
-    parts.append("</div>")
-    parts.append(
-        f'<svg data-studio-timeline viewBox="0 0 {width} {height}" role="img" '
-        f'data-start="{minimum}" data-end="{maximum}" data-video-duration="{duration_sec or maximum}" '
-        f'data-plot-left="{left}" data-plot-width="{plot_width}">'
-    )
-    for output in output_names:
+    axes = []
+    for index, output in enumerate(output_names):
         low, high = output_ranges[output]
-        display = "" if output == output_names[0] else "none"
-        escaped_output = html.escape(output, quote=True)
-        parts.append(f'<g data-studio-axis-output="{escaped_output}" style="display:{display}">')
-        parts.append(
-            f'<line x1="{left}" x2="{left}" y1="{top}" y2="{height - bottom}" stroke="#374151" />'
-            f'<line x1="{left}" x2="{width - right}" y1="{height - bottom}" y2="{height - bottom}" stroke="#374151" />'
-            f'<text x="12" y="{top - 8}" font-size="12">{html.escape(output)}</text>'
-        )
+        y_ticks = []
         for tick in range(6):
             value = low + (high - low) * tick / 5
-            y = height - bottom - plot_height * tick / 5
-            parts.append(
-                f'<line x1="{left - 4}" x2="{left}" y1="{y:.3f}" y2="{y:.3f}" stroke="#374151" />'
-                f'<text x="{left - 8}" y="{y + 4:.3f}" text-anchor="end" font-size="11">{value:.3g}</text>'
-            )
-        for tick in range(6):
-            x = left + plot_width * tick / 5
-            time_value = minimum + span * tick / 5
-            parts.append(
-                f'<line x1="{x:.3f}" x2="{x:.3f}" y1="{height - bottom}" y2="{height - bottom + 4}" stroke="#374151" />'
-                f'<text x="{x:.3f}" y="{height - bottom + 18}" text-anchor="middle" font-size="11">'
-                f"{time_value:.3g}</text>"
-            )
-        parts.append(f'<text x="{(left + width - right) / 2}" y="{height - 8}" text-anchor="middle">time (s)</text>')
-        parts.append("</g>")
-    parts.append(
-        f'<line data-studio-cursor x1="{left}" x2="{left}" y1="{top}" '
-        f'y2="{height - bottom}" stroke="#111827" stroke-width="2" />'
-    )
-    for source, series in sorted(timeline.items()):
-        for output, points in sorted(series.items()):
+            y_ticks.append({"value": value, "y": height - bottom - plot_height * tick / 5})
+        axes.append({"output": output, "display": "" if index == 0 else "none", "y_ticks": y_ticks})
+    series = []
+    for source, source_series in sorted(timeline.items()):
+        for output, points in sorted(source_series.items()):
             low, high = output_ranges[output]
-            path_parts: list[str] = []
-            point_parts: list[str] = []
+            path_parts = []
+            point_parts = []
             for point in points:
                 x1 = left + (point["start"] - minimum) / span * plot_width
                 x2 = left + (point["end"] - minimum) / span * plot_width
                 y = height - bottom - (point["value"] - low) / max(high - low, 1e-9) * plot_height
                 if point["start"] == point["end"]:
-                    point_parts.append(f'<circle cx="{x1:.3f}" cy="{y:.3f}" r="4" />')
+                    point_parts.append({"x": x1, "y": y})
                 else:
                     path_parts.append(f"M{x1:.3f},{y:.3f} L{x2:.3f},{y:.3f}")
-            data = html.escape(json.dumps(points, separators=(",", ":")), quote=True)
-            source_attr = html.escape(source, quote=True)
-            output_attr = html.escape(output, quote=True)
-            parts.append(
-                f'<path data-studio-series data-source="{source_attr}" data-output="{output_attr}" '
-                f'data-points="{data}" d="{" ".join(path_parts)}" fill="none" '
-                f'stroke="{source_colors[source]}" stroke-width="2" />'
+            series.append(
+                {
+                    "source": source,
+                    "output": output,
+                    "points_json": json.dumps(points, separators=(",", ":")),
+                    "path": " ".join(path_parts),
+                    "point_parts": point_parts,
+                    "color": source_colors[source],
+                }
             )
-            if point_parts:
-                parts.append(
-                    f'<g data-studio-series data-source="{source_attr}" data-output="{output_attr}" '
-                    f'fill="{source_colors[source]}">' + "".join(point_parts) + "</g>"
-                )
-    parts.append('<g data-studio-legend transform="translate(70,15)">')
-    for index, (source, color) in enumerate(source_colors.items()):
-        x = index * 145
-        parts.append(
-            f'<rect x="{x}" y="-10" width="12" height="12" fill="{color}" />'
-            f'<text x="{x + 17}" y="0">{html.escape(source)}</text>'
-        )
-    parts.append("</g></svg>")
-    parts.append("<script>window.__chimeraStudioTimeline = true;</script>")
-    return "".join(parts)
+    x_ticks = [{"x": left + plot_width * tick / 5, "time": minimum + span * tick / 5} for tick in range(6)]
+    legend = [
+        {"source": source, "color": color, "x": index * 145}
+        for index, (source, color) in enumerate(source_colors.items())
+    ]
+    return render_template(
+        "prediction_timeline.html",
+        {
+            "width": width,
+            "height": height,
+            "left": left,
+            "right": right,
+            "top": top,
+            "bottom": bottom,
+            "plot_width": plot_width,
+            "plot_height": plot_height,
+            "minimum": minimum,
+            "maximum": maximum,
+            "duration": duration_sec or maximum,
+            "output_names": output_names,
+            "axes": axes,
+            "series": series,
+            "x_ticks": x_ticks,
+            "legend": legend,
+        },
+    )

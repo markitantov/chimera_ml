@@ -6,7 +6,7 @@ from typing import Any
 
 from .inference import discover_inference_configs, json_safe, run_inference
 from .predictions import build_prediction_overview, extract_timeline
-from .timeline import build_timeline_html, build_xai_timeline_html, load_timeline_js
+from .timeline import build_timeline_html, build_xai_timeline_html, load_studio_css, load_timeline_js
 from .xai import extract_xai_timeline, render_xai_overview
 
 __all__ = [
@@ -104,7 +104,7 @@ def launch_studio(
 ) -> None:
     """Build and launch the Studio app."""
     demo = create_demo(config_paths, search_root=search_root)
-    kwargs: dict[str, Any] = {"share": share}
+    kwargs: dict[str, Any] = {"share": share, "css": load_studio_css()}
     if host is not None:
         kwargs["server_name"] = host
     if port is not None:
