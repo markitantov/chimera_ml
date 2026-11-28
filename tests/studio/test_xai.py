@@ -106,3 +106,22 @@ def test_run_inference_collects_existing_xai_step_artifact(tmp_path: Path) -> No
     assert result["xai"]["samples"][0]["sample_id"] == "sample-1"
     assert result["xai"]["samples"][0]["modalities"]["audio"]["status"] == "evaluated"
     assert result["xai"]["samples"][0]["modalities"]["audio"]["delta"] == [2.0]
+
+
+def test_xai_overview_handles_all_zero_deltas() -> None:
+    markup = render_xai_overview(
+        {
+            "samples": [
+                {
+                    "sample_id": "zero",
+                    "baseline": 0.5,
+                    "modalities": {
+                        "audio": {"status": "evaluated", "delta": 0.0},
+                        "video": {"status": "evaluated", "delta": [0.0, 0.0]},
+                    },
+                }
+            ]
+        }
+    )
+    assert "width:0.00%" in markup
+    assert "nan" not in markup.lower()

@@ -42,6 +42,9 @@ def render_xai_overview(xai: Any) -> str:
             if value is not None
         ]
         scale = max((abs(value) for value in numeric_deltas), default=1.0)
+        if scale == 0.0:
+            scale = 1.0
+
         for modality, result in modalities.items():
             status = str(result.get("status", "unknown"))
             reason = result.get("reason")
