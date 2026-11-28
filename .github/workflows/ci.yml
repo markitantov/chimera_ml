@@ -84,7 +84,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
       - name: Install direct dependencies
         run: |
-          uv pip install --system --resolution ${{ matrix.mode == 'minimum' && 'lowest-direct' || 'highest' }} -e '.[studio]' pytest pytest-cov scikit-learn
+          uv pip install --system --resolution ${{ matrix.mode == 'minimum' && 'lowest-direct' || 'highest' }} -e '.[studio]' 'pytest>=8.2,<9' 'pytest-cov>=5,<6' 'scikit-learn>=1.4,<2'
       - name: Verify core-only installation
         run: |
           python -m venv /tmp/chimera-core
