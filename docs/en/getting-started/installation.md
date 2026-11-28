@@ -2,7 +2,7 @@
 
 ## Requirements and installation choices
 
-CHIMERA-ML supports Python `>=3.12`. The core project declares PyTorch `>=2.2,<3.0`, plus NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna, and requests. PyTorch's CUDA wheel and driver must be selected for the target machine; CHIMERA-ML does not install a CUDA driver.
+CHIMERA-ML supports Python `>=3.12`. The core project declares PyTorch `>=2.4` on Python 3.12, `>=2.6` on Python 3.13, and `>=2.9` on Python 3.14, plus NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna, and requests. PyTorch's CUDA wheel and driver must be selected for the target machine; CHIMERA-ML does not install a CUDA driver.
 
 Install the published package into a virtual environment:
 

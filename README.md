@@ -7,7 +7,7 @@ The framework provides infrastructure: a Trainer, logging, callbacks, registry b
 ## Requirements
 
 - Python `>=3.12`
-- PyTorch `>=2.2,<3.0`
+- PyTorch `>=2.4` on Python 3.12, `>=2.6` on Python 3.13, and `>=2.9` on Python 3.14
 
 ## Installation
 

@@ -2,7 +2,7 @@
 
 ## Требования и варианты установки
 
-CHIMERA-ML поддерживает Python `>=3.12`. Ядро объявляет зависимости PyTorch `>=2.2,<3.0`, NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna и requests. CUDA-сборка и драйвер PyTorch выбираются под конкретную машину; CHIMERA-ML не устанавливает драйвер CUDA.
+CHIMERA-ML поддерживает Python `>=3.12`. Минимальные версии PyTorch зависят от Python: 2.4 для 3.12, 2.6 для 3.13 и 2.9 для 3.14, NumPy, PyYAML, Typer, tqdm, matplotlib, MLflow, Optuna и requests. CUDA-сборка и драйвер PyTorch выбираются под конкретную машину; CHIMERA-ML не устанавливает драйвер CUDA.
 
 Установка опубликованного пакета в виртуальное окружение:
 

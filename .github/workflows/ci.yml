@@ -35,6 +35,9 @@ jobs:
       - name: Check installed dependencies
         run: poetry run pip check
 
+      - name: Show resolved runtime versions
+        run: poetry run python -c "import mlflow, numpy, torch; print(\"python=\", __import__(\"sys\").version); print(\"torch=\", torch.__version__); print(\"numpy=\", numpy.__version__); print(\"mlflow=\", mlflow.__version__)"
+
       - name: Poetry Check
         run: poetry check
 
@@ -81,10 +84,17 @@ jobs:
         uses: astral-sh/setup-uv@v6
       - name: Install direct dependencies
         run: |
-          uv pip install --system --resolution ${{ matrix.mode == 'minimum' && 'lowest-direct' || 'highest' }} -e '.[studio]'
-          uv pip install --system pytest pytest-cov scikit-learn
+          uv pip install --system --resolution ${{ matrix.mode == 'minimum' && 'lowest-direct' || 'highest' }} -e '.[studio]' pytest pytest-cov scikit-learn
+      - name: Verify core-only installation
+        run: |
+          python -m venv /tmp/chimera-core
+          /tmp/chimera-core/bin/pip install .
+          /tmp/chimera-core/bin/pip check
+          /tmp/chimera-core/bin/python -c "import importlib.util; import chimera_ml; raise SystemExit(1 if importlib.util.find_spec('gradio') else 0)"
       - name: Dependency check
         run: python -m pip check
+      - name: Show resolved runtime versions
+        run: python -c "import mlflow, numpy, torch; print(\"python=\", __import__(\"sys\").version); print(\"torch=\", torch.__version__); print(\"numpy=\", numpy.__version__); print(\"mlflow=\", mlflow.__version__)"
       - name: Pytest
         run: pytest -q
       - name: Studio CLI
